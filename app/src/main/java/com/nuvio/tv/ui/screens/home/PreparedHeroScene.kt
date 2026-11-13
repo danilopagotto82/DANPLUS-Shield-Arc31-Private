@@ -56,7 +56,7 @@ internal fun rememberPreparedHeroScene(
                     val logo = async {
                         target.preview?.logo?.takeIf(String::isNotBlank)?.let { url ->
                             withTimeoutOrNull(1200) {
-                                (context.imageLoader.execute(HeroImageRequests.logo(context, url).build()) as? SuccessResult)?.image
+                                (context.imageLoader.execute(HeroImageRequests.logo(context, url, target.preview?.isCollectionFolder == true).build()) as? SuccessResult)?.image
                             }
                         }
                     }
@@ -103,13 +103,14 @@ internal fun rememberPreparedHeroScene(
             }
     }
     val logoUrl = latest.preview?.logo
+    val collectionFolderLogo = latest.preview?.isCollectionFolder == true
     val displayed = presentation.displayed
-    LaunchedEffect(identity, logoUrl, displayed?.preparedImage, displayed?.artwork?.ownerKey, displayed?.preparedLogo == null) {
+    LaunchedEffect(identity, logoUrl, collectionFolderLogo, displayed?.preparedImage, displayed?.artwork?.ownerKey, displayed?.preparedLogo == null) {
         val ticket = presentation.ticket
         if (displayed == null || ticket.identity != identity || displayed.artwork.ownerKey != owner ||
             displayed.preparedLogo != null || logoUrl.isNullOrBlank()) return@LaunchedEffect
         val image = withTimeoutOrNull(1500) {
-            (context.imageLoader.execute(HeroImageRequests.logo(context, logoUrl).build()) as? SuccessResult)?.image
+            (context.imageLoader.execute(HeroImageRequests.logo(context, logoUrl, collectionFolderLogo).build()) as? SuccessResult)?.image
         } ?: return@LaunchedEffect
         HeroSceneTrace.event("late-logo-ready", owner)
         presentation = presentation.revise(ticket) { scene ->

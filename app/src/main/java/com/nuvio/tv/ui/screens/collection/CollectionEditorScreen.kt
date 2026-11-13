@@ -80,6 +80,16 @@ import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Switch
 import androidx.tv.material3.SwitchDefaults
 import androidx.tv.material3.Text
+import com.nuvio.tv.domain.model.CollectionHighlight
+import com.nuvio.tv.ui.components.collectionHighlight
+import com.nuvio.tv.ui.screens.settings.ThemeSwatchChip
+import com.nuvio.tv.ui.membership.Membership
+import com.nuvio.tv.ui.theme.ThemeColors
+import com.nuvio.tv.domain.model.AppTheme
+import com.nuvio.tv.domain.model.CustomThemeColors
+import com.nuvio.tv.domain.model.availableAppThemes
+import com.nuvio.tv.domain.model.resolveCustomThemeColors
+import androidx.compose.ui.graphics.toArgb
 import coil3.compose.AsyncImage
 import com.nuvio.tv.domain.model.AddonCatalogCollectionSource
 import com.nuvio.tv.domain.model.CollectionFolder
@@ -334,6 +344,67 @@ fun CollectionEditorScreen(
                 }
             }
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
+        }
+
+        item(key = "collection_highlight") {
+            var showColorPicker by rememberSaveable { mutableStateOf(false) }
+            Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
+                Text(
+                    stringResource(R.string.collection_highlight_title),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
+                    val options = listOf(
+                        null to R.string.collection_highlight_off,
+                        CollectionHighlight.SOLID to R.string.collection_highlight_solid,
+                        CollectionHighlight.GRADIENT to R.string.collection_highlight_gradient
+                    )
+                    options.forEach { (style, label) ->
+                        val selected = uiState.highlight == style
+                        Button(
+                            onClick = { viewModel.setHighlight(style) },
+                            modifier = Modifier.semantics { this.selected = selected },
+                            colors = ButtonDefaults.colors(
+                                containerColor = if (selected) NuvioTheme.colors.FocusBackground
+                                    else NuvioTheme.colors.BackgroundCard
+                            )
+                        ) { Text(stringResource(label)) }
+                    }
+                }
+                uiState.highlight?.let { style ->
+                    val rgb = uiState.highlightColors.forStyle(style)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+                    ) {
+                        Button(onClick = { showColorPicker = !showColorPicker }) {
+                            Text(stringResource(R.string.collection_highlight_color))
+                        }
+                        Box(Modifier.width(104.dp).height(36.dp).collectionHighlight(style, rgb, 52.dp))
+                    }
+                    if (showColorPicker) {
+                        val access = Membership.access
+                        val selection by viewModel.themeSelection.collectAsStateWithLifecycle(initialValue = null)
+                        val customColors = resolveCustomThemeColors(
+                            selection?.customColors ?: CustomThemeColors.Default, access.tier
+                        )
+                        val themes = remember(access.entitlements) {
+                            availableAppThemes(access.entitlements).sortedBy { if (it == AppTheme.GLASS) 0 else 1 }
+                        }
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
+                            items(themes, key = { it.name }) { theme ->
+                                val themeRgb = ThemeColors.getColorPalette(theme, customColors).secondary.toArgb() and 0xFFFFFF
+                                ThemeSwatchChip(
+                                    theme = theme,
+                                    customColors = customColors,
+                                    isSelected = themeRgb == rgb,
+                                    onClick = { viewModel.setHighlightColor(style, themeRgb) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         item(key = "view_mode") {

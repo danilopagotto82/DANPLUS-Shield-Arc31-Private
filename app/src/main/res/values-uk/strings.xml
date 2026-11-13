@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="tv_channel_continue_watching">Продовжити перегляд</string>
     <string name="type_movie">Фільм</string>
     <string name="type_movies">Фільми</string>
@@ -1978,7 +1978,7 @@
     <string name="cd_preview">Попередній перегляд</string>
     <string name="cd_test">Тест</string>
     <string name="cd_unlink">Від\'єднати</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">Логотип Trakt</string>
     <string name="cd_trakt_qr">QR-код активації Trakt</string>
     <string name="cd_imdb">IMDb</string>

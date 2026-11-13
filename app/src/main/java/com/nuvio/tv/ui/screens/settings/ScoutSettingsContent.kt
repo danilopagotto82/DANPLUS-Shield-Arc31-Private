@@ -64,6 +64,8 @@ internal fun ScoutSettingsContent(
     val context = androidx.compose.ui.platform.LocalContext.current
     val askHasKey by askAccess.hasKey.collectAsStateWithLifecycle()
     val profile by viewModel.profile.collectAsStateWithLifecycle()
+    val showWatched by remember(profile.profileId) { viewModel.observeShowWatched(profile.profileId) }
+        .collectAsStateWithLifecycle(initialValue = null)
     val trackerSignedIn by viewModel.trackerSignedIn.collectAsStateWithLifecycle()
     val settings = profile.settings
     var showThumbs by rememberSaveable { mutableStateOf(false) }
@@ -180,6 +182,13 @@ internal fun ScoutSettingsContent(
             )
         }
         SettingsGroupCard(title = stringResource(R.string.scout_settings_tune)) {
+            SettingsToggleRow(
+                title = stringResource(R.string.scout_settings_show_watched),
+                subtitle = stringResource(R.string.scout_settings_show_watched_sub),
+                checked = showWatched == true,
+                enabled = showWatched != null,
+                onToggle = { viewModel.setShowWatched(profile.profileId, showWatched != true) }
+            )
             SettingsActionRow(
                 title = stringResource(R.string.scout_leave_out),
                 leadingIcon = Icons.Default.Block,

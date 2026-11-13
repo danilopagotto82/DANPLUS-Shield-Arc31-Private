@@ -10,11 +10,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,14 +75,10 @@ import com.nuvio.tv.ui.support.SupportNuvioDialog
 import com.nuvio.tv.ui.support.SupportNuvioViewModel
 import com.nuvio.tv.ui.support.SupportStatus
 import com.nuvio.tv.domain.model.AuthState
-import com.nuvio.tv.ui.components.BrandWordmark
+import com.nuvio.tv.ui.components.DanPlusWordmark
 import com.nuvio.tv.ui.components.SkeletonBar
 import com.nuvio.tv.ui.components.rememberShimmerFill
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlinx.coroutines.delay
 
 private val AuthTextPrimary = Color(0xFFF5F7F8)
@@ -191,8 +184,7 @@ fun AuthQrSignInScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .authGradientBackground()
+            .background(Color(0xFF0C0F16))
     ) {
         Row(
             modifier = Modifier
@@ -202,6 +194,7 @@ fun AuthQrSignInScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .danPlusSignInBackdrop()
                     .padding(start = 56.dp, end = 56.dp),
                 isSignedIn = isSignedIn,
                 fullAccount = fullAccount,
@@ -319,11 +312,7 @@ private fun AuthQrBrandPanel(
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Center
     ) {
-        BrandWordmark(
-            contentDescription = stringResource(R.string.cd_nuvio_logo),
-            modifier = Modifier.height(60.dp),
-            contentScale = ContentScale.Fit
-        )
+        DanPlusWordmark(height = 74.dp)
         Spacer(modifier = Modifier.height(32.dp))
         Text(
             text = stringResource(R.string.auth_qr_tagline),
@@ -369,7 +358,7 @@ private fun AuthQrBrandPanel(
         if (showRestore) {
             Spacer(modifier = Modifier.height(18.dp))
             Text(
-                text = stringResource(R.string.backup_signin_hint),
+                text = stringResource(R.string.danplus_qr_backup_hint),
                 modifier = Modifier.widthIn(max = 400.dp),
                 style = MaterialTheme.typography.bodyLarge.copy(
                     color = AuthTextSecondary,
@@ -822,27 +811,30 @@ private fun AuthTermsAcknowledgement() {
     ) {
         Text(
             text = stringResource(R.string.auth_qr_terms_prefix),
-            style = MaterialTheme.typography.bodyMedium.copy(
-                color = AuthTextSecondary,
-                fontSize = 13.sp,
-                lineHeight = 18.sp
-            )
+            modifier = Modifier.weight(1f, fill = false),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
+            color = AuthTextSecondary,
+            textAlign = TextAlign.End
         )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = stringResource(R.string.auth_qr_terms_link),
-            modifier = Modifier
-                .clickable {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://nuvio.tv/terms")))
-                }
-                .semantics { role = Role.Button },
-            style = MaterialTheme.typography.bodyMedium.copy(
-                color = AuthTextPrimary,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                fontWeight = FontWeight.SemiBold
+        Spacer(Modifier.width(6.dp))
+        Button(
+            onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://nuvio.tv/terms"))) },
+            modifier = Modifier.widthIn(min = 64.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            colors = ButtonDefaults.colors(
+                containerColor = AuthSecondaryButtonBackground,
+                contentColor = AuthTextPrimary,
+                focusedContainerColor = Color.White,
+                focusedContentColor = Color.Black
             )
-        )
+        ) {
+            Text(
+                text = stringResource(R.string.auth_qr_terms_link),
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
     }
 }
 
@@ -958,36 +950,22 @@ private fun AccountStatItem(
     }
 }
 
-private fun Modifier.authGradientBackground(): Modifier = drawWithCache {
-    val angleRadians = 122.0 * PI / 180.0
-    val directionX = sin(angleRadians).toFloat()
-    val directionY = (-cos(angleRadians)).toFloat()
-    val halfLength = (abs(size.width * directionX) + abs(size.height * directionY)) / 2f
-    val center = Offset(size.width / 2f, size.height / 2f)
-    val start = Offset(
-        x = center.x - directionX * halfLength,
-        y = center.y - directionY * halfLength
+private fun Modifier.danPlusSignInBackdrop(): Modifier = drawWithCache {
+    val ground = Brush.verticalGradient(listOf(Color(0xFF1C1A24), Color(0xFF0A0C13)))
+    val light = Brush.radialGradient(
+        colors = listOf(Color(0x566F4E24), Color(0x20785432), Color.Transparent),
+        center = Offset(size.width * 0.04f, size.height * 0.84f),
+        radius = (size.width * 0.95f).coerceAtLeast(1f)
     )
-    val end = Offset(
-        x = center.x + directionX * halfLength,
-        y = center.y + directionY * halfLength
-    )
-    val brush = Brush.linearGradient(
-        colorStops = arrayOf(
-            0f to Color(0xFF21113B),
-            0.14f to Color(0xFF21113B),
-            0.26f to Color(0xFF1A0E2F),
-            0.36f to Color(0xFF130A23),
-            0.48f to Color(0xFF0A060F),
-            0.60f to Color(0xFF050408),
-            0.70f to Color.Black,
-            1f to Color.Black
-        ),
-        start = start,
-        end = end
+    val vignette = Brush.horizontalGradient(
+        0f to Color.Transparent,
+        0.72f to Color.Transparent,
+        1f to Color(0xA30C0F16)
     )
     onDrawBehind {
-        drawRect(brush = brush)
+        drawRect(ground)
+        drawRect(light)
+        drawRect(vignette)
     }
 }
 

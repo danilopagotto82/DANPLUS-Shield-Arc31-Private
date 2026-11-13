@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="tv_channel_continue_watching">Continue watching</string>
     <string name="type_movie">Movie</string>
     <string name="type_movies">Movies</string>
@@ -2384,6 +2384,13 @@
 
     <string name="pause_you_are_watching">You\'re watching</string>
     <string name="pause_cast_label">Cast</string>
+    <string name="pause_remaining_minutes">%1$d min left</string>
+    <string name="pause_ends_in_minutes">Ends in %1$d min</string>
+    <string name="pause_ends_in_hours">Ends in %1$d h</string>
+    <string name="pause_ends_in_hours_minutes">Ends in %1$d h %2$d min</string>
+    <string name="pause_imdb_score">IMDb %1$.1f</string>
+    <string name="pause_direction_label">Direction</string>
+    <string name="pause_people_label">Direction and cast</string>
     <string name="pause_back_to_details">Back to details</string>
     <string name="pause_as_character">as %1$s</string>
 
@@ -2837,7 +2844,7 @@
     <string name="discover_empty_no_catalog_title">Select a catalog</string>
     <string name="discover_empty_no_catalog_subtitle">Choose a discover catalog to browse</string>
     <string name="discover_empty_no_content_title">No content found</string>
-    <string name="discover_empty_no_content_subtitle">Try a different genre or catalog</string>
+    <string name="discover_empty_no_content_subtitle">Try changing the catalog or filters</string>
 
     <!-- AddonManagerScreen -->
 
@@ -2988,7 +2995,7 @@
     <string name="cd_trailer_controls">Trailer controls</string>
     <string name="cd_seek_bar">Seek bar</string>
     <string name="cd_unlink">Unlink</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">Trakt logo</string>
     <string name="cd_trakt_qr">Trakt activation QR</string>
     <string name="cd_imdb">IMDb</string>
@@ -4060,7 +4067,7 @@
     <string name="subtitle_bitmap_mpv_note">MPV does not support image subtitle resizing. Use ExoPlayer to adjust image subtitle size independently from text.</string>
     <string name="subtitle_style_image_size">Image subtitle size</string>
     <string name="v2_accent_fixed_hint">Uses Color theme unless artwork accent is selected.</string>
-    <string name="about_fork_updates_subtitle">Updates from the Nuvio Arc releases on GitHub.</string>
+    <string name="about_fork_updates_subtitle">Updates from the DANPLUS repository on GitHub.</string>
     <string name="playback_speculative_stream_search">Search sources before Play</string>
     <string name="playback_speculative_stream_search_sub">Search addons while browsing to speed up source selection. Some addons may add or grab content during searches. Off waits until Play. Media links and provider resolution wait for playback selection, except near the end of an episode when seek thumbnails prepare the next one.</string>
     <string name="playback_source_line_badges">Source badges on the details page</string>
@@ -4506,6 +4513,19 @@
     <string name="addon_health_debrid">Debrid</string>
     <string name="addon_health_metadata">Metadata</string>
     <string name="addon_health_ok">OK</string>
+    <string name="addon_health_setting">Add-on status</string>
+    <string name="tmdb_comments_setting_description">Show Portuguese reviews on movie and series details when available.</string>
+    <string name="tmdb_personal_key_title">TMDB API key</string>
+    <string name="tmdb_personal_key_description">Enter your 32-character TMDB API key. It is saved only on this device.</string>
+    <string name="tmdb_personal_key_configured">Configured</string>
+    <string name="tmdb_personal_key_missing">Not configured</string>
+    <string name="tmdb_personal_key_remove">Remove personal key</string>
+    <string name="tmdb_personal_key_error">Could not save the TMDB API key.</string>
+    <string name="scout_settings_show_watched">Show watched titles</string>
+    <string name="scout_settings_show_watched_sub">Include titles this profile has already watched in For You.</string>
+    <string name="calendar_setting_br_movies">Movie releases in Brazil</string>
+    <string name="calendar_setting_br_movies_sub">Include selected upcoming movies from TMDB, even when you do not follow them.</string>
+    <string name="addon_health_setting_description">Show OK, Slow, or Down on add-ons and resolvers based on recent use.</string>
     <string name="addon_health_slow">Slow</string>
     <string name="addon_health_down">Down</string>
     <string name="addon_health_setup">Setup</string>
@@ -4551,12 +4571,13 @@
     <string name="plugin_summary_running">%1$d still searching</string>
     <string name="plugin_breakdown_title">Plugin search</string>
     <string name="d12_recommend_action">Recommend to profiles</string>
+    <string name="d12_recommend_action_recorded">Recommendation recorded. Open profile selection</string>
     <string name="d12_select_title">Recommend to profiles</string>
     <string name="d12_select_hint">Choose one, several, or all profiles. Nothing is sent until confirmed.</string>
     <string name="d12_no_profiles">Create another profile to send recommendations.</string>
     <string name="d12_selected_count">Selected: %1$d</string>
     <string name="d12_send_error">Unable to send. Please try again.</string>
-    <string name="d12_send_success">Sent to %1$d profile(s). Check Sent in Recommendations.</string>
+    <string name="d12_send_queued">Queued for %1$d profile(s). Check sync status in Recommendations › Sent.</string>
     <string name="d12_all_profiles">Select all</string>
     <string name="d12_review_send">Review selection</string>
     <string name="d12_close">Close</string>
@@ -4566,7 +4587,9 @@
     <string name="d12_confirm_send">Send to %1$d</string>
     <string name="d12_screen_title">Recommendations</string>
     <string name="d12_find_to_send">Find a title</string>
-    <string name="d12_local_only">Recommendations on this device</string>
+    <string name="d12_sync_unavailable">Sync between devices is unavailable in this version.</string>
+    <string name="d12_sync_profile_required">Sign in and select a synced profile to send recommendations.</string>
+    <string name="d12_sync_recipient_required">One or more selected profiles still need to sync.</string>
     <string name="d12_all_profiles_filter">All profiles</string>
     <string name="d12_pending_sync">Sync pending</string>
     <string name="d12_received">Received</string>
@@ -4578,4 +4601,59 @@
     <string name="d12_remove">Remove</string>
     <string name="d12_remove_confirm">Remove this recommendation?</string>
     <string name="d12_empty">No recommendations for this profile.</string>
+    <string name="detail_tab_where_to_watch">Where to watch</string>
+    <string name="detail_watch_subscription">Subscription</string>
+    <string name="detail_watch_free">Free or with ads</string>
+    <string name="detail_watch_rent">Rent</string>
+    <string name="detail_watch_buy">Buy</string>
+    <string name="detail_watch_loading">Checking availability in Brazil…</string>
+    <string name="detail_watch_error">Availability could not be checked right now.</string>
+    <string name="detail_watch_empty">No offers found for this title in Brazil.</string>
+    <string name="detail_watch_attribution">Availability in Brazil · JustWatch data via TMDB</string>
+    <string name="detail_watch_open_tmdb">See all options on TMDB</string>
+    <string name="detail_watch_brazil">Brazil</string>
+    <string name="network_estimate_general">What can this connection play?</string>
+    <string name="network_estimate_profiles">Example two-hour files. Your result can vary by server and bitrate peaks.</string>
+    <string name="network_estimate_profile_row">%1$s · %2$d Mbps · %3$.1f GB</string>
+    <string name="network_estimate_720">720p compressed</string>
+    <string name="network_estimate_1080">1080p compressed</string>
+    <string name="network_estimate_4k">4K compressed</string>
+    <string name="network_estimate_1080_remux">1080p REMUX</string>
+    <string name="network_estimate_4k_remux">4K REMUX</string>
+    <string name="network_estimate_heavy_remux">High-bitrate 4K REMUX</string>
+    <string name="network_estimate_favorable">Favorable</string>
+    <string name="network_estimate_marginal">On the limit</string>
+    <string name="network_estimate_unfavorable">Unfavorable</string>
+    <string name="network_estimate_unknown">Undetermined</string>
+    <string name="network_estimate_file">File on the measured server · %1$s</string>
+    <string name="network_estimate_file_size">File size · %1$.1f GB</string>
+    <string name="network_estimate_file_missing">A server measurement and the total file bitrate are needed.</string>
+    <string name="collection_highlight_title">Highlight this collection</string>
+    <string name="collection_highlight_off">Off</string>
+    <string name="collection_highlight_solid">Solid</string>
+    <string name="collection_highlight_gradient">Gradient</string>
+    <string name="detail_tmdb_comments_title">TMDB Comments</string>
+    <string name="detail_tmdb_comments_rating">%1$s/10</string>
+    <string name="detail_tmdb_comments_loading">Loading more comments…</string>
+    <string name="assessment_summary_title">Playback at a glance</string>
+    <string name="assessment_summary_source">Estimate for the tested source (%1$.1f Mbps). File bitrates vary.</string>
+    <string name="assessment_summary_measure">Play a demanding title and run the assessment again to check this source.</string>
+    <string name="assessment_summary_check_network">For heavy files, try Ethernet or a better Wi-Fi signal and retest the same source before increasing the buffer.</string>
+    <string name="assessment_summary_review">Review the suggested changes below before applying them.</string>
+    <string name="assessment_summary_keep">Keep your current settings for the tested conditions.</string>
+    <string name="player_slow_source_next">The source is taking too long. Trying another from the same add-on (%1$d/%2$d).</string>
+    <string name="player_slow_source_next_named">The source is taking too long. Trying %3$s from the same add-on (%1$d/%2$d).</string>
+    <string name="danplus_loading_preparing">Preparing playback</string>
+    <string name="discover_filter_year">Year</string>
+    <string name="discover_year_all">All years</string>
+    <string name="discover_filter_watch_status">Watch status</string>
+    <string name="discover_watch_all">All</string>
+    <string name="discover_watch_watched">Watched</string>
+    <string name="calendar_film_br_release">Brazilian release · TMDB</string>
+    <string name="calendar_br_release_days">%1$d days</string>
+    <string name="calendar_br_release_loading">Checking Brazilian movie releases…</string>
+    <string name="calendar_br_release_retry">Retry Brazilian movie releases</string>
+    <string name="danplus_qr_backup_hint">Moving to another device or reinstalling DAN+? Restore your profiles and settings.</string>
+    <string name="network_estimate_profile_rate">%1$d Mbps</string>
+    <string name="collection_highlight_color">Choose color</string>
 </resources>

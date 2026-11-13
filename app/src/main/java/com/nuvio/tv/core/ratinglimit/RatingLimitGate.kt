@@ -2,7 +2,6 @@ package com.nuvio.tv.core.ratinglimit
 
 import android.content.Context
 import android.util.Log
-import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.data.remote.api.TmdbApi
@@ -164,7 +163,7 @@ class RatingLimitGate @Inject constructor(
 
     private suspend fun lookUp(id: String, tv: Boolean): TitleRating {
         val tmdb = tmdbService.ensureTmdbId(id, if (tv) "tv" else "movie")?.toIntOrNull() ?: return TitleRating(null, null)
-        val key = BuildConfig.TMDB_API_KEY
+        val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
         val certification = if (tv) {
             val response = tmdbApi.getTvContentRatings(tmdb, key)
             if (!response.isSuccessful) throw java.io.IOException("TMDB ${response.code()}")

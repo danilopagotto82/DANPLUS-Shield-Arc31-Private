@@ -49,7 +49,8 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.ui.components.ProfileAvatarCircle
 import com.nuvio.tv.ui.screens.settings.settingsFocusFillColor
 import com.nuvio.tv.ui.theme.NuvioTheme
-import com.nuvio.tv.ui.brand.ArcBrandArt
+import com.nuvio.tv.ui.components.BrandMarkAspect
+import com.nuvio.tv.ui.components.BrandWordmarkAspect
 import com.nuvio.tv.ui.components.BrandMark
 import com.nuvio.tv.ui.components.BrandWordmark
 import com.nuvio.tv.ui.util.contentTextDirection
@@ -144,7 +145,7 @@ internal fun V2MainMenuPanel(
                 .align(Alignment.BottomStart)
                 .padding(start = 20.dp)
                 .height(MenuWordmarkHeight)
-                .aspectRatio(ArcBrandArt.LockupAspect)
+                .aspectRatio(BrandWordmarkAspect)
         )
     }
 }
@@ -190,7 +191,7 @@ internal fun V2MainMenuRail(
         }
         BrandMark(
             modifier = Modifier.align(Alignment.BottomStart).padding(start = 21.dp, bottom = 2.dp).height(22.dp)
-                .aspectRatio(ArcBrandArt.MarkAspect)
+                .aspectRatio(BrandMarkAspect)
         )
     }
 }

@@ -799,7 +799,8 @@ object DeviceAssessmentEngine {
             stabilityPassCount = sweep?.stabilityPassCount ?: 0,
             applyPlan = plan,
             errorText = sweep?.errorText,
-            deviceFacts = facts
+            deviceFacts = facts,
+            measuredBaselineMbps = sweep?.baselineMbps?.takeIf { sweepUsable && it > 0.0 }
         )
     }
 

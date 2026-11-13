@@ -82,9 +82,13 @@ internal fun PlayerRuntimeController.applyMetaDetails(meta: Meta) {
     _uiState.update { state ->
         state.copy(
             description = description ?: state.description,
+            poster = state.poster ?: meta.poster,
             currentEpisodeTitle = episodeTitle ?: state.currentEpisodeTitle,
-            releaseYear = if (contentType == "movie") playerMovieYear(meta.releaseInfo) ?: state.releaseYear else state.releaseYear,
+            releaseYear = playerMovieYear(meta.releaseInfo) ?: state.releaseYear,
+            pauseGenres = meta.genres.ifEmpty { state.pauseGenres },
+            pauseImdbRating = meta.imdbRating ?: state.pauseImdbRating,
             castMembers = if (meta.castMembers.isNotEmpty()) meta.castMembers else state.castMembers,
+            directors = meta.director,
             isNextEpisodeMetadataResolved = true
         )
     }
@@ -194,12 +198,13 @@ private suspend fun PlayerRuntimeController.enrichDescriptionFromTmdb(id: String
         }
     }
 
-    // Enrich cast from TMDB if addon didn't provide any.
-    if (settings.useBasicInfo && enrichment.castMembers.isNotEmpty()) {
-        _uiState.update { state ->
-            if (state.castMembers.isEmpty()) state.copy(castMembers = enrichment.castMembers)
-            else state
-        }
+    _uiState.update { state ->
+        state.copy(
+            poster = state.poster ?: enrichment.poster.takeIf { settings.useArtwork },
+            pauseGenres = state.pauseGenres.ifEmpty { enrichment.genres },
+            pauseDirectorMembers = enrichment.directorMembers,
+            castMembers = mergePauseCast(state.castMembers, enrichment.castMembers)
+        )
     }
 
     // Fill in content language from TMDB if still unknown, so "original

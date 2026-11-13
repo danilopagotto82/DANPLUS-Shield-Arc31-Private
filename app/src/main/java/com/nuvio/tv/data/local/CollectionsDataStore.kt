@@ -2,6 +2,7 @@ package com.nuvio.tv.data.local
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -11,6 +12,8 @@ import com.nuvio.tv.domain.model.AddonCatalogCollectionSource
 import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.CollectionCatalogSource
 import com.nuvio.tv.domain.model.CollectionFolder
+import com.nuvio.tv.domain.model.CollectionHighlight
+import com.nuvio.tv.domain.model.CollectionHighlightColors
 import com.nuvio.tv.domain.model.CollectionSource
 import com.nuvio.tv.domain.model.FolderViewMode
 import com.nuvio.tv.domain.model.PosterShape
@@ -53,12 +56,24 @@ class CollectionsDataStore @Inject constructor(
 
     private val gson = Gson()
     private val collectionsKey = stringPreferencesKey("collections_json")
+    private val highlightIdKey = stringPreferencesKey("collection_highlight_id")
+    private val highlightStyleKey = stringPreferencesKey("collection_highlight_style")
+    private val highlightSolidColorKey = intPreferencesKey("collection_highlight_solid_rgb")
+    private val highlightGradientColorKey = intPreferencesKey("collection_highlight_gradient_rgb")
     private fun string(resId: Int, vararg args: Any): String = appContext.getString(resId, *args)
 
     val collections: Flow<List<Collection>> =
         profileManager.activeProfileId.flatMapLatest { pid ->
             factory.get(pid, FEATURE).data.map { prefs ->
-                parseCollections(prefs[collectionsKey])
+                val id = prefs[highlightIdKey]
+                val style = CollectionHighlight.entries.firstOrNull { it.name == prefs[highlightStyleKey] }
+                val colors = CollectionHighlightColors(
+                    solid = prefs[highlightSolidColorKey],
+                    gradient = prefs[highlightGradientColorKey]
+                )
+                parseCollections(prefs[collectionsKey]).map {
+                    if (it.id == id) it.copy(highlight = style, highlightColors = colors) else it
+                }
             }
         }
 
@@ -72,20 +87,22 @@ class CollectionsDataStore @Inject constructor(
         }
     }
 
-    suspend fun addCollection(collection: Collection) {
+    suspend fun addCollection(collection: Collection, saveHighlight: Boolean = false) {
         store().edit { prefs ->
             val current = parseCollections(prefs[collectionsKey]).toMutableList()
             current.add(collection)
             prefs[collectionsKey] = gson.toJson(current.map { it.toSerializable() })
+            if (saveHighlight) prefs.updateHighlight(collection)
         }
     }
 
-    suspend fun updateCollection(collection: Collection) {
+    suspend fun updateCollection(collection: Collection, saveHighlight: Boolean = false) {
         store().edit { prefs ->
             val current = parseCollections(prefs[collectionsKey]).toMutableList()
             val index = current.indexOfFirst { it.id == collection.id }
             if (index >= 0) {
                 current[index] = collection
+                if (saveHighlight) prefs.updateHighlight(collection)
             }
             prefs[collectionsKey] = gson.toJson(current.map { it.toSerializable() })
         }
@@ -95,11 +112,32 @@ class CollectionsDataStore @Inject constructor(
         store().edit { prefs ->
             val current = parseCollections(prefs[collectionsKey]).toMutableList()
             current.removeAll { it.id == collectionId }
+            if (prefs[highlightIdKey] == collectionId) {
+                prefs.remove(highlightIdKey)
+                prefs.remove(highlightStyleKey)
+                prefs.remove(highlightSolidColorKey)
+                prefs.remove(highlightGradientColorKey)
+            }
             if (current.isEmpty()) {
                 prefs.remove(collectionsKey)
             } else {
                 prefs[collectionsKey] = gson.toJson(current.map { it.toSerializable() })
             }
+        }
+    }
+
+    private fun androidx.datastore.preferences.core.MutablePreferences.updateHighlight(collection: Collection) {
+        val highlight = collection.highlight
+        if (highlight != null) {
+            this[highlightIdKey] = collection.id
+            this[highlightStyleKey] = highlight.name
+        } else if (this[highlightIdKey] == collection.id) {
+            remove(highlightStyleKey)
+        }
+        if (this[highlightIdKey] == collection.id) {
+            val (solid, gradient) = collection.highlightColors
+            if (solid == null) remove(highlightSolidColorKey) else this[highlightSolidColorKey] = solid
+            if (gradient == null) remove(highlightGradientColorKey) else this[highlightGradientColorKey] = gradient
         }
     }
 

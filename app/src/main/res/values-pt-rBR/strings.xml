@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="tv_channel_continue_watching">Continuar Assistindo</string>
     <string name="type_movie">Filme</string>
     <string name="type_movies">Filmes</string>
@@ -1983,6 +1983,12 @@
 
     <string name="pause_you_are_watching">Você está assistindo</string>
     <string name="pause_cast_label">Elenco</string>
+    <string name="pause_remaining_minutes">Restam %1$d min</string>
+    <string name="pause_ends_in_minutes">Termina em %1$d min</string>
+    <string name="pause_ends_in_hours">Termina em %1$d h</string>
+    <string name="pause_ends_in_hours_minutes">Termina em %1$d h %2$d min</string>
+    <string name="pause_direction_label">Direção</string>
+    <string name="pause_people_label">Direção e elenco</string>
     <string name="pause_back_to_details">Voltar para detalhes</string>
     <string name="pause_as_character">como %1$s</string>
 
@@ -2402,7 +2408,7 @@
     <string name="discover_empty_no_catalog_title">Escolha um catálogo</string>
     <string name="discover_empty_no_catalog_subtitle">Selecione uma categoria para navegar</string>
     <string name="discover_empty_no_content_title">Nenhum resultado encontrado</string>
-    <string name="discover_empty_no_content_subtitle">Tente mudar o gênero ou o catálogo</string>
+    <string name="discover_empty_no_content_subtitle">Tente mudar o catálogo ou os filtros</string>
 
     <!-- AddonManagerScreen -->
 
@@ -2546,7 +2552,7 @@
     <string name="cd_test">Testar</string>
     <string name="cd_seek_bar">Barra de reprodução</string>
     <string name="cd_unlink">Desvincular</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">Logo Trakt</string>
     <string name="cd_trakt_qr">QR de ativação Trakt</string>
     <string name="cd_imdb">IMDb</string>
@@ -3849,7 +3855,7 @@
     <string name="subtitle_bitmap_mpv_note">O MPV não permite redimensionar legendas em imagem. Use o ExoPlayer para ajustar o tamanho das legendas em imagem independentemente do texto.</string>
     <string name="subtitle_style_image_size">Tamanho das legendas em imagem</string>
     <string name="v2_accent_fixed_hint">Usa o Tema de Cores, exceto se o destaque adaptado à arte estiver selecionado.</string>
-    <string name="about_fork_updates_subtitle">Atualizações das versões do Nuvio Arc no GitHub.</string>
+    <string name="about_fork_updates_subtitle">Atualizações do repositório DANPLUS no GitHub.</string>
     <string name="playback_speculative_stream_search">Buscar fontes antes de Reproduzir</string>
     <string name="playback_speculative_stream_search_sub">Busca nos addons enquanto você navega para agilizar a seleção de fontes. Alguns addons podem adicionar ou obter conteúdo durante as buscas. Desativado espera até o Reproduzir. Os links de mídia e a resolução pelo provedor esperam pela escolha da fonte, exceto perto do fim de um episódio, quando as miniaturas da barra de progresso preparam o próximo.</string>
     <string name="playback_source_line_badges">Selos da fonte na tela de detalhes</string>
@@ -4339,6 +4345,19 @@
     <string name="addon_health_debrid">Debrid</string>
     <string name="addon_health_metadata">Metadados</string>
     <string name="addon_health_ok">OK</string>
+    <string name="addon_health_setting">Status dos add-ons</string>
+    <string name="tmdb_comments_setting_description">Mostra comentários em português nos detalhes de filmes e séries quando disponíveis.</string>
+    <string name="tmdb_personal_key_title">Chave de API do TMDB</string>
+    <string name="tmdb_personal_key_description">Digite sua chave de API do TMDB de 32 caracteres. Ela fica salva somente neste aparelho.</string>
+    <string name="tmdb_personal_key_configured">Configurada</string>
+    <string name="tmdb_personal_key_missing">Não configurada</string>
+    <string name="tmdb_personal_key_remove">Remover chave pessoal</string>
+    <string name="tmdb_personal_key_error">Não foi possível salvar a chave do TMDB.</string>
+    <string name="scout_settings_show_watched">Mostrar títulos assistidos</string>
+    <string name="scout_settings_show_watched_sub">Inclui no Para você os títulos que este perfil já assistiu.</string>
+    <string name="calendar_setting_br_movies">Estreias de filmes no Brasil</string>
+    <string name="calendar_setting_br_movies_sub">Inclui próximos filmes selecionados pelo TMDB, mesmo sem seguir o título.</string>
+    <string name="addon_health_setting_description">Mostra OK, Lento ou Fora do ar nos add-ons e resolvedores com base no uso recente.</string>
     <string name="addon_health_slow">Lento</string>
     <string name="addon_health_down">Fora do ar</string>
     <string name="addon_health_setup">Configurar</string>
@@ -4519,12 +4538,13 @@
     <string name="qms_hint_off_hint_qms">O Arc então para de pedir a frequência do filme. Sua TV ainda pode mudar a frequência sozinha.</string>
     <string name="qms_hint_ok">OK</string>
     <string name="d12_recommend_action">Indicar para perfis</string>
+    <string name="d12_recommend_action_recorded">Indicação registrada. Abrir seleção de perfis</string>
     <string name="d12_select_title">Indicar para perfis</string>
     <string name="d12_select_hint">Selecione um, vários ou todos os perfis. Nada será enviado sem confirmação.</string>
     <string name="d12_no_profiles">Crie outro perfil para enviar indicações.</string>
     <string name="d12_selected_count">Selecionados: %1$d</string>
     <string name="d12_send_error">Não foi possível enviar. Tente novamente.</string>
-    <string name="d12_send_success">Enviado para %1$d perfil(is). Veja em Indicações › Enviadas.</string>
+    <string name="d12_send_queued">Na fila para %1$d perfil(is). Confira a sincronização em Indicações › Enviadas.</string>
     <string name="d12_all_profiles">Selecionar todos</string>
     <string name="d12_review_send">Revisar seleção</string>
     <string name="d12_close">Fechar</string>
@@ -4534,7 +4554,9 @@
     <string name="d12_confirm_send">Enviar para %1$d</string>
     <string name="d12_screen_title">Indicações</string>
     <string name="d12_find_to_send">Buscar título</string>
-    <string name="d12_local_only">Indicações neste aparelho</string>
+    <string name="d12_sync_unavailable">A sincronização entre aparelhos está indisponível nesta versão.</string>
+    <string name="d12_sync_profile_required">Entre na conta e selecione um perfil sincronizado para enviar indicações.</string>
+    <string name="d12_sync_recipient_required">Ainda há perfis selecionados que precisam sincronizar.</string>
     <string name="d12_all_profiles_filter">Todos os perfis</string>
     <string name="d12_pending_sync">Sincronização pendente</string>
     <string name="d12_received">Recebidas</string>
@@ -4546,4 +4568,59 @@
     <string name="d12_remove">Remover</string>
     <string name="d12_remove_confirm">Remover esta indicação?</string>
     <string name="d12_empty">Nenhuma indicação para este perfil.</string>
+    <string name="detail_tab_where_to_watch">Onde assistir</string>
+    <string name="detail_watch_subscription">Assinatura</string>
+    <string name="detail_watch_free">Grátis ou com anúncios</string>
+    <string name="detail_watch_rent">Aluguel</string>
+    <string name="detail_watch_buy">Compra</string>
+    <string name="detail_watch_loading">Consultando disponibilidade no Brasil…</string>
+    <string name="detail_watch_error">Não foi possível consultar a disponibilidade agora.</string>
+    <string name="detail_watch_empty">Nenhuma oferta encontrada para este título no Brasil.</string>
+    <string name="detail_watch_attribution">Disponibilidade no Brasil · Dados JustWatch via TMDB</string>
+    <string name="detail_watch_open_tmdb">Ver todas as opções no TMDB</string>
+    <string name="detail_watch_brazil">Brasil</string>
+    <string name="network_estimate_general">O que esta conexão consegue rodar?</string>
+    <string name="network_estimate_profiles">Exemplos para filmes de duas horas. O resultado varia com o servidor e os picos de bitrate.</string>
+    <string name="network_estimate_profile_row">%1$s · %2$d Mbps · %3$.1f GB</string>
+    <string name="network_estimate_720">720p comprimido</string>
+    <string name="network_estimate_1080">1080p comprimido</string>
+    <string name="network_estimate_4k">4K comprimido</string>
+    <string name="network_estimate_1080_remux">1080p REMUX</string>
+    <string name="network_estimate_4k_remux">4K REMUX</string>
+    <string name="network_estimate_heavy_remux">4K REMUX pesado</string>
+    <string name="network_estimate_favorable">Favorável</string>
+    <string name="network_estimate_marginal">No limite</string>
+    <string name="network_estimate_unfavorable">Desfavorável</string>
+    <string name="network_estimate_unknown">Indeterminado</string>
+    <string name="network_estimate_file">Arquivo no servidor medido · %1$s</string>
+    <string name="network_estimate_file_size">Tamanho do arquivo · %1$.1f GB</string>
+    <string name="network_estimate_file_missing">É preciso medir o servidor e conhecer o bitrate total do arquivo.</string>
+    <string name="collection_highlight_title">Destacar esta coleção</string>
+    <string name="collection_highlight_off">Desligado</string>
+    <string name="collection_highlight_solid">Sólido</string>
+    <string name="collection_highlight_gradient">Degradê</string>
+    <string name="detail_tmdb_comments_title">Comentário do TMDB</string>
+    <string name="detail_tmdb_comments_rating">%1$s/10</string>
+    <string name="detail_tmdb_comments_loading">Carregando mais comentários…</string>
+    <string name="assessment_summary_title">Como está a reprodução</string>
+    <string name="assessment_summary_source">Estimativa para a fonte testada (%1$.1f Mbps). A taxa varia conforme o arquivo.</string>
+    <string name="assessment_summary_measure">Reproduza um título exigente e refaça a avaliação para medir a fonte.</string>
+    <string name="assessment_summary_check_network">Para arquivos pesados, experimente cabo de rede ou melhore o sinal do Wi-Fi. Teste a mesma fonte antes de aumentar o buffer.</string>
+    <string name="assessment_summary_review">Confira abaixo os ajustes sugeridos antes de aplicá-los.</string>
+    <string name="assessment_summary_keep">Mantenha os ajustes atuais para as condições testadas.</string>
+    <string name="player_slow_source_next">A fonte demorou. Tentando outra do mesmo addon (%1$d/%2$d).</string>
+    <string name="player_slow_source_next_named">A fonte demorou. Tentando %3$s no mesmo addon (%1$d/%2$d).</string>
+    <string name="danplus_loading_preparing">Preparando a reprodução</string>
+    <string name="discover_filter_year">Ano</string>
+    <string name="discover_year_all">Todos os anos</string>
+    <string name="discover_filter_watch_status">Status de exibição</string>
+    <string name="discover_watch_all">Todos</string>
+    <string name="discover_watch_watched">Assistidos</string>
+    <string name="calendar_film_br_release">Estreia no Brasil · TMDB</string>
+    <string name="calendar_br_release_days">%1$d dias</string>
+    <string name="calendar_br_release_loading">Consultando estreias de filmes no Brasil…</string>
+    <string name="calendar_br_release_retry">Tentar buscar estreias no Brasil novamente</string>
+    <string name="danplus_qr_backup_hint">Mudou de aparelho ou está reinstalando o DAN+? Recupere seus perfis e configurações.</string>
+    <string name="network_estimate_profile_rate">%1$d Mbps</string>
+    <string name="collection_highlight_color">Escolher cor</string>
 </resources>

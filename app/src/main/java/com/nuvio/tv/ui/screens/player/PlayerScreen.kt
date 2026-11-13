@@ -283,6 +283,9 @@ fun PlayerScreen(
     val context = LocalContext.current
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val containerFocusRequester = remember { FocusRequester() }
+    val pausePeopleFocusRequester = remember { FocusRequester() }
+    var pausePeopleFocused by remember(uiState.showPauseOverlay) { mutableStateOf(false) }
+    var pausePerson by remember(uiState.showPauseOverlay, uiState.currentVideoId) { mutableStateOf<com.nuvio.tv.domain.model.MetaCastMember?>(null) }
     val playPauseFocusRequester = remember { FocusRequester() }
     val progressBarFocusRequester = remember { FocusRequester() }
     val episodesFocusRequester = remember { FocusRequester() }
@@ -450,7 +453,8 @@ fun PlayerScreen(
         } else if (uiState.showPartyPanel) {
             viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
         } else if (uiState.showPauseOverlay) {
-            viewModel.onEvent(PlayerEvent.OnCloseDetails)
+            if (pausePerson != null) pausePerson = null
+            else viewModel.onEvent(PlayerEvent.OnCloseDetails)
         } else if (uiState.showMoreDialog) {
             focusPlayAfterMoreBack = true
             viewModel.onEvent(PlayerEvent.OnDismissMoreDialog)
@@ -1449,7 +1453,15 @@ fun PlayerScreen(
                         keyEvent.nativeKeyEvent.action, keyEvent.nativeKeyEvent.repeatCount
                     )
                     if (uiState.showPauseOverlay) {
+                        if (pausePeopleFocused && keyEvent.nativeKeyEvent.keyCode in pausePeopleKeys) {
+                            return@onKeyEvent false
+                        }
                         when (keyEvent.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                if (firstPress && (uiState.castMembers.isNotEmpty() || uiState.directors.isNotEmpty() || uiState.pauseDirectorMembers.isNotEmpty())) {
+                                    runCatching { pausePeopleFocusRequester.requestFocus() }
+                                }
+                            }
                             KeyEvent.KEYCODE_DPAD_CENTER,
                             KeyEvent.KEYCODE_ENTER,
                             KeyEvent.KEYCODE_NUMPAD_ENTER,
@@ -1920,7 +1932,8 @@ fun PlayerScreen(
                 backdropUrl = uiState.backdrop,
                 logoUrl = uiState.logo,
                 title = uiState.title,
-                message = uiState.loadingMessage.takeIf { uiState.showPlayerLoadingStatus || uiState.isTorrentStream },
+                message = uiState.sourceFailoverNotice
+                    ?: uiState.loadingMessage.takeIf { uiState.showPlayerLoadingStatus || uiState.isTorrentStream },
                 sourceLine = if (!uiState.showPlayerLoadingSource) null else run {
                     val provider = resolveStreamProvider(
                         streamName = uiState.currentStreamName,
@@ -1965,13 +1978,30 @@ fun PlayerScreen(
                 onClose = { viewModel.onEvent(PlayerEvent.OnDismissPauseOverlay) },
                 title = uiState.title,
                 logo = uiState.logo,
+                poster = uiState.poster,
                 episodeTitle = uiState.currentEpisodeTitle,
                 season = uiState.currentSeason,
                 episode = uiState.currentEpisode,
                 year = uiState.releaseYear,
                 type = uiState.contentType,
+                genres = uiState.pauseGenres,
+                imdbRating = uiState.pauseImdbRating,
                 description = uiState.description,
                 cast = uiState.castMembers,
+                directors = uiState.directors,
+                directorMembers = uiState.pauseDirectorMembers,
+                peopleFocusRequester = pausePeopleFocusRequester,
+                selectedPerson = pausePerson,
+                onPersonSelected = { pausePerson = it },
+                onPeopleFocus = { pausePeopleFocused = it },
+                remainingMinutes = viewModel.playbackTimeline.value.let { timeline ->
+                    (timeline.duration - timeline.currentPosition).takeIf {
+                        !uiState.isLive && uiState.showPauseOverlay && timeline.currentPosition >= 0 && it > 0
+                    }?.let { remainingMediaMs ->
+                        val speed = uiState.playbackSpeed.takeIf { it.isFinite() && it > 0f } ?: 1f
+                        kotlin.math.ceil(remainingMediaMs / (60_000.0 * speed)).toLong()
+                    }
+                },
                 showClock = !uiState.isLive,
                 modifier = Modifier
                     .fillMaxSize()

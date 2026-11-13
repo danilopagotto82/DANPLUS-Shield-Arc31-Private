@@ -96,6 +96,7 @@ import com.nuvio.tv.ui.util.localizedGenreLabel
 @Composable
 internal fun DiscoverSection(
     uiState: SearchUiState,
+    visibleResults: List<MetaPreview>,
     posterCardStyle: PosterCardStyle,
     watchedMovieIds: Set<String> = emptySet(),
     watchedSeriesIds: Set<String> = emptySet(),
@@ -112,7 +113,8 @@ internal fun DiscoverSection(
     onSelectCatalog: (String) -> Unit,
     onSelectGenre: (String?) -> Unit,
     onSelectLetter: (String?) -> Unit = {},
-    onSetUnwatched: (Boolean) -> Unit = {},
+    onSelectYear: (Int?) -> Unit,
+    onSelectWatchFilter: (DiscoverWatchFilter) -> Unit,
     onLoadMore: () -> Unit,
     onItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
@@ -137,6 +139,19 @@ internal fun DiscoverSection(
     val selectedTypeLabel = localizedTypeLabel(uiState.selectedDiscoverType)
     val selectedCatalogLabel = selectedCatalog?.catalogName ?: stringResource(R.string.discover_select_catalog)
     val selectedGenreLabel = uiState.selectedDiscoverGenre?.let { localizedGenreLabel(it) } ?: stringResource(R.string.discover_genre_default)
+
+    val allYears = stringResource(R.string.discover_year_all)
+    val yearOptions = remember(allYears) {
+        listOf(DiscoverOption(allYears, "all")) +
+            (java.time.Year.now().value + 1 downTo 1888).map { DiscoverOption(it.toString(), it.toString()) }
+    }
+    val watchOptions = listOf(
+        DiscoverOption(stringResource(R.string.discover_watch_all), DiscoverWatchFilter.ALL.name),
+        DiscoverOption(stringResource(R.string.discover_watch_watched), DiscoverWatchFilter.WATCHED.name),
+        DiscoverOption(stringResource(R.string.discover_show_unwatched), DiscoverWatchFilter.UNWATCHED.name)
+    )
+    val selectedWatchOption = watchOptions.first { it.value == uiState.discoverWatchFilter.name }
+    val hasFilters = uiState.discoverYear != null || uiState.discoverWatchFilter != DiscoverWatchFilter.ALL
 
     Column(
         modifier = modifier
@@ -233,26 +248,34 @@ internal fun DiscoverSection(
                 )
             }
 
-            if (selectedCatalog?.offersUnwatched == true) {
-                val allTitles = stringResource(R.string.discover_show_all)
-                val unwatched = stringResource(R.string.discover_show_unwatched)
-                DiscoverDropdownPicker(
-                    modifier = Modifier.weight(1f),
-                    title = stringResource(R.string.discover_filter_show),
-                    value = if (uiState.discoverUnwatchedOnly) unwatched else allTitles,
-                    selectedValue = if (uiState.discoverUnwatchedOnly) "unwatched" else "all",
-                    expanded = expandedPicker == "show",
-                    options = listOf(DiscoverOption(allTitles, "all"), DiscoverOption(unwatched, "unwatched")),
-                    onExpandedChange = { shouldExpand ->
-                        expandedPicker = if (shouldExpand) "show" else null
-                    },
-                    onSelect = { option ->
-                        onSetUnwatched(option.value == "unwatched")
-                        expandedPicker = null
-                    },
-                    blockFocus = blockFilterFocus
-                )
-            }
+            DiscoverDropdownPicker(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.discover_filter_year),
+                value = uiState.discoverYear?.toString() ?: allYears,
+                selectedValue = uiState.discoverYear?.toString() ?: "all",
+                expanded = expandedPicker == "year",
+                options = yearOptions,
+                onExpandedChange = { expandedPicker = if (it) "year" else null },
+                onSelect = {
+                    onSelectYear(it.value.toIntOrNull())
+                    expandedPicker = null
+                },
+                blockFocus = blockFilterFocus
+            )
+            DiscoverDropdownPicker(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.discover_filter_watch_status),
+                value = selectedWatchOption.label,
+                selectedValue = selectedWatchOption.value,
+                expanded = expandedPicker == "watch_status",
+                options = watchOptions,
+                onExpandedChange = { expandedPicker = if (it) "watch_status" else null },
+                onSelect = {
+                    onSelectWatchFilter(DiscoverWatchFilter.valueOf(it.value))
+                    expandedPicker = null
+                },
+                blockFocus = blockFilterFocus
+            )
         }
 
         selectedCatalog?.let { catalog ->
@@ -267,7 +290,8 @@ internal fun DiscoverSection(
                 uiState.selectedDiscoverLetter?.takeIf { it in catalog.letters }?.let {
                     add(localContext.getString(R.string.discover_letter_selected, it))
                 }
-                if (uiState.discoverUnwatchedOnly && catalog.offersUnwatched) add(localContext.getString(R.string.discover_show_unwatched))
+                uiState.discoverYear?.let { add(it.toString()) }
+                if (uiState.discoverWatchFilter != DiscoverWatchFilter.ALL) add(selectedWatchOption.label)
             }
             Text(
                 text = metadataSegments.joinToString(" • "),
@@ -277,7 +301,7 @@ internal fun DiscoverSection(
         }
 
         when {
-            uiState.discoverLoading && uiState.discoverResults.isEmpty() -> {
+            uiState.discoverLoading && visibleResults.isEmpty() -> {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -288,10 +312,11 @@ internal fun DiscoverSection(
                 }
             }
 
-            uiState.discoverResults.isNotEmpty() -> {
+            visibleResults.isNotEmpty() || (hasFilters && selectedCatalog != null &&
+                (uiState.discoverHasMore || uiState.pendingDiscoverResults.isNotEmpty())) -> {
                 Box(modifier = Modifier.onFocusChanged { gridHasFocus = it.hasFocus }) {
                 DiscoverGrid(
-                    items = uiState.discoverResults,
+                    items = visibleResults,
                     posterCardStyle = posterCardStyle,
                     watchedMovieIds = watchedMovieIds,
                     watchedSeriesIds = watchedSeriesIds,
@@ -301,7 +326,7 @@ internal fun DiscoverSection(
                     shouldRestoreFocusedItem = shouldRestoreFocusedItem,
                     onRestoreFocusedItemHandled = onRestoreFocusedItemHandled,
                     onItemFocused = { index ->
-                        uiState.discoverResults.getOrNull(index)?.let { item ->
+                        visibleResults.getOrNull(index)?.let { item ->
                             HeroBackdropState.selectPageArtwork("${item.apiType}:${item.id}", item.backdropUrl)
                         }
                         onDiscoverItemFocused(index)
@@ -322,7 +347,7 @@ internal fun DiscoverSection(
                         onItemLongPress(item, selectedCatalog?.addonBaseUrl ?: "")
                     },
                     filterKey = "${uiState.selectedDiscoverType}|${uiState.selectedDiscoverCatalogKey}|${uiState.selectedDiscoverGenre}|" +
-                        "${uiState.selectedDiscoverLetter}|${uiState.discoverUnwatchedOnly}"
+                        "${uiState.selectedDiscoverLetter}|${uiState.discoverYear}|${uiState.discoverWatchFilter}"
                 )
                 }
             }
@@ -734,10 +759,7 @@ internal fun DiscoverGrid(
                 onClick = { onItemClick(index, item) },
                 onLongPress = { onItemLongPress(item) },
                 posterCardStyle = adaptiveStyle,
-                isWatched = run {
-                    val isSeries = item.apiType.equals("series", ignoreCase = true) || item.apiType.equals("tv", ignoreCase = true)
-                    if (isSeries) item.id in watchedSeriesIds else item.id in watchedMovieIds
-                },
+                isWatched = item.isWatchedInDiscover(watchedMovieIds, watchedSeriesIds),
                 modifier = Modifier
                     .padding(top = 3.dp)
                     .width(adaptiveStyle.width),

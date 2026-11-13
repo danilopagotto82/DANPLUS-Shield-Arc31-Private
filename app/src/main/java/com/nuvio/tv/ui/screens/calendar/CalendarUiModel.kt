@@ -25,7 +25,7 @@ enum class CalendarRowStatus { BELL_OFF, BELL_ON, WATCHED, NOT_WATCHED, NONE;
     val hasBell: Boolean get() = this == BELL_OFF || this == BELL_ON
 }
 
-enum class CalendarRowKind { EPISODE, FILM_CINEMA, FILM_DIGITAL, SHOW }
+enum class CalendarRowKind { EPISODE, FILM_CINEMA, FILM_DIGITAL, FILM_BR_RELEASE, SHOW }
 
 @Immutable
 data class CalendarRow(
@@ -49,7 +49,8 @@ data class CalendarRow(
     val backdrop: String? = null,
     val logo: String? = null,
     val rating: Double? = null,
-    val genre: String? = null
+    val genre: String? = null,
+    val personal: Boolean = false
 ) {
     val dimmed: Boolean get() = status == CalendarRowStatus.WATCHED
     val isFilm: Boolean get() = type == CalendarTitleType.MOVIE
@@ -111,12 +112,14 @@ fun calendarRowStatus(
     if (entry.isOut(now)) {
         return if (watched?.isWatched(title, entry) == true) CalendarRowStatus.WATCHED else CalendarRowStatus.NOT_WATCHED
     }
+    if (entry.kind == CalendarEntryKind.MOVIE_BR_RELEASE) return CalendarRowStatus.NONE
     if (entry.kind == CalendarEntryKind.MOVIE_THEATRICAL) return CalendarRowStatus.NONE
     return if (bell) CalendarRowStatus.BELL_ON else CalendarRowStatus.BELL_OFF
 }
 
 private fun rowKind(title: CalendarTitleRecord, entry: CalendarEntry?): CalendarRowKind = when {
     entry == null -> CalendarRowKind.SHOW
+    entry.kind == CalendarEntryKind.MOVIE_BR_RELEASE -> CalendarRowKind.FILM_BR_RELEASE
     entry.kind == CalendarEntryKind.MOVIE_THEATRICAL -> CalendarRowKind.FILM_CINEMA
     entry.kind == CalendarEntryKind.MOVIE_DIGITAL -> CalendarRowKind.FILM_DIGITAL
     title.type == CalendarTitleType.MOVIE -> CalendarRowKind.FILM_DIGITAL
@@ -156,7 +159,8 @@ fun calendarRow(
         backdrop = title.backdrop?.takeIf(String::isNotBlank),
         logo = title.logo?.takeIf(String::isNotBlank),
         rating = title.rating,
-        genre = title.genre
+        genre = title.genre,
+        personal = title.origins.any { it.started || it.savesFilms } || title.key in bells
     )
 }
 

@@ -405,6 +405,7 @@ class PlayerRuntimeController(
             releaseYear = year,
             contentType = contentType,
             backdrop = backdrop,
+            poster = poster,
             logo = logo,
             showLoadingOverlay = true,
             currentSeason = currentSeason,

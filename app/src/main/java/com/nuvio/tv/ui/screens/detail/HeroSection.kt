@@ -101,7 +101,12 @@ import com.nuvio.tv.ui.components.MDBListRatingsRow
 import com.nuvio.tv.ui.components.SynopsisDescription
 import com.nuvio.tv.ui.theme.NuvioTheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.nuvio.tv.core.danexus.ProfileRecommendationRules
+import com.nuvio.tv.ui.screens.profile.DanexusProfilesViewModel
+import com.nuvio.tv.ui.screens.profile.DanexusRecommendDialog
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Stop
@@ -268,9 +273,11 @@ fun HeroContentSection(
     heroLogoUrl: String? = null
 ) {
     val context = LocalContext.current
+    val recommendationViewModel =
+        if (ProfileRecommendationRules.isSupportedType(meta.apiType)) hiltViewModel<DanexusProfilesViewModel>() else null
     var showDanPlusIndications by remember(meta.id, meta.apiType) { mutableStateOf(false) }
-    if (showDanPlusIndications) {
-        com.nuvio.tv.ui.screens.profile.DanexusRecommendDialog(meta, onDismiss = { showDanPlusIndications = false })
+    if (showDanPlusIndications && recommendationViewModel != null) {
+        DanexusRecommendDialog(meta, onDismiss = { showDanPlusIndications = false }, viewModel = recommendationViewModel)
     }
     val v2Hero = com.nuvio.tv.ui.v2.appearance.LocalV2Appearance.current != null
     val isSeriesApi = remember(meta.apiType) {
@@ -491,8 +498,7 @@ fun HeroContentSection(
                                 enabled = !isMovieWatchedPending,
                                 selected = isMovieWatched,
                                 toggleable = true,
-                                selectedContainerColor = NuvioTheme.colors.Secondary,
-                                selectedContentColor = NuvioTheme.colors.OnSecondary,
+                                selectedContentColor = NuvioTheme.colors.Secondary,
                                 onFocused = onHeroActionFocused
                             )
                         }
@@ -506,10 +512,15 @@ fun HeroContentSection(
                             )
                         }
 
-                        if (com.nuvio.tv.core.danexus.ProfileRecommendationRules.isSupportedType(meta.apiType)) {
+                        if (recommendationViewModel != null) {
+                            val activeProfile by recommendationViewModel.profileManager.activeProfileId.collectAsStateWithLifecycle()
+                            val recommendations by recommendationViewModel.items.collectAsStateWithLifecycle()
+                            val recommended = ProfileRecommendationRules.hasOutgoing(recommendations, activeProfile, meta)
                             ActionIconButton(
-                                icon = Icons.Default.FavoriteBorder,
-                                contentDescription = stringResource(R.string.d12_recommend_action),
+                                icon = if (recommended) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = stringResource(
+                                    if (recommended) R.string.d12_recommend_action_recorded else R.string.d12_recommend_action
+                                ),
                                 onClick = { showDanPlusIndications = true },
                                 onFocused = onHeroActionFocused
                             )
@@ -754,36 +765,20 @@ private fun ScoutRateButton(
     onFocused: () -> Unit
 ) {
     val secondary = NuvioTheme.colors.Secondary
-    if (com.nuvio.tv.ui.v2.appearance.LocalV2Appearance.current != null) {
-        val shape = RoundedCornerShape(12.dp)
-        com.nuvio.tv.ui.v2.components.NuvioActionPill(
-            onClick = onClick,
-            stationary = true,
-            modifier = Modifier
-                .focusRequester(focusRequester)
-                .onFocusChanged { if (it.isFocused) onFocused() }
-                .then(if (rating != null) Modifier.background(secondary.copy(alpha = .34f), shape).border(1.dp, secondary, shape) else Modifier)
-        ) {
-            com.nuvio.tv.ui.scout.ScoutRatingIcon(rating, 17.dp)
-            Spacer(Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-        }
-        return
-    }
+
     IconButton(
         onClick = onClick,
         modifier = Modifier
             .focusRequester(focusRequester)
             .size(NuvioTheme.spacing.xxxl)
-            .nuvioControlSurface(CircleShape)
             .onFocusChanged { if (it.isFocused) onFocused() }
             .focusProperties { up = FocusRequester.Cancel }
             .semantics { contentDescription = label },
         colors = IconButtonDefaults.colors(
-            containerColor = if (rating != null) secondary else NuvioTheme.colors.BackgroundCard,
-            focusedContainerColor = secondary,
-            contentColor = if (rating != null) NuvioTheme.colors.OnSecondary else NuvioTheme.colors.TextPrimary,
-            focusedContentColor = NuvioTheme.colors.OnSecondary
+            containerColor = Color.Transparent,
+            focusedContainerColor = NuvioTheme.colors.TextPrimary.copy(alpha = .12f),
+            contentColor = if (rating != null) secondary else NuvioTheme.colors.TextPrimary,
+            focusedContentColor = NuvioTheme.colors.TextPrimary
         ),
         border = IconButtonDefaults.border(
             focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = CircleShape)
@@ -805,31 +800,23 @@ private fun ActionIconButtonPainter(
     onFocused: () -> Unit = {},
     enabled: Boolean = true
 ) {
-    val isV2 = com.nuvio.tv.ui.v2.appearance.LocalV2Appearance.current != null
-    if (isV2) {
-        V2DetailGlassAction(contentDescription, onClick, onFocused, enabled, null) {
-            Icon(painter, null, Modifier.size(17.dp))
-        }
-        return
-    }
     IconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
             .size(NuvioTheme.spacing.xxxl)
-            .nuvioControlSurface(CircleShape)
             .onFocusChanged { state ->
                 if (state.isFocused) onFocused()
             }
             .focusProperties { up = FocusRequester.Cancel },
-        scale = if (isV2) IconButtonDefaults.scale(focusedScale = 1f) else IconButtonDefaults.scale(),
+        scale = IconButtonDefaults.scale(focusedScale = 1f),
         colors = IconButtonDefaults.colors(
-            containerColor = if (isV2) Color.Transparent else NuvioTheme.colors.BackgroundCard,
-            focusedContainerColor = if (isV2) Color.Transparent else NuvioTheme.colors.Secondary,
+            containerColor = Color.Transparent,
+            focusedContainerColor = NuvioTheme.colors.TextPrimary.copy(alpha = .12f),
             contentColor = NuvioTheme.colors.TextPrimary,
-            focusedContentColor = if (isV2) NuvioTheme.colors.TextPrimary else NuvioTheme.colors.OnSecondary
+            focusedContentColor = NuvioTheme.colors.TextPrimary
         ),
-        border = if (isV2) IconButtonDefaults.border() else IconButtonDefaults.border(
+        border = IconButtonDefaults.border(
             focusedBorder = Border(
                 border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
                 shape = CircleShape
@@ -860,23 +847,11 @@ private fun ActionIconButton(
     // When true this icon button is a state toggle (watched/unwatched) and announces itself as
     // such; the library add/remove button is a plain action and leaves this off.
     toggleable: Boolean = false,
-    selectedContainerColor: Color = Color(0xFF7CFF9B),
-    selectedContentColor: Color = Color.Black,
+    selectedContentColor: Color = Color(0xFF63CFE9),
     busy: Boolean = false,
     onFocused: () -> Unit = {},
     focusRequester: FocusRequester? = null
 ) {
-    val isV2 = com.nuvio.tv.ui.v2.appearance.LocalV2Appearance.current != null
-    if (isV2) {
-        V2DetailGlassAction(contentDescription, onClick, onFocused, enabled, onLongPress) {
-            when {
-                busy -> LoadingIndicator(Modifier.size(17.dp), color = androidx.tv.material3.LocalContentColor.current)
-                icon != null -> Icon(icon, null, Modifier.size(17.dp))
-                painter != null -> Icon(painter, null, Modifier.size(17.dp))
-            }
-        }
-        return
-    }
     var longPressTriggered by remember { mutableStateOf(false) }
     val longPressKeyTracker = rememberLongPressKeyTracker()
 
@@ -892,7 +867,6 @@ private fun ActionIconButton(
         modifier = Modifier
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .size(NuvioTheme.spacing.xxxl)
-            .nuvioControlSurface(CircleShape)
             .onFocusChanged { state ->
                 if (state.isFocused) onFocused()
             }
@@ -930,19 +904,20 @@ private fun ActionIconButton(
             }
             .focusProperties { up = FocusRequester.Cancel }
             .semantics {
+                this.contentDescription = contentDescription
                 if (toggleable) {
                     role = Role.Checkbox
                     toggleableState = if (selected) ToggleableState.On else ToggleableState.Off
                 }
             },
-        scale = if (isV2) IconButtonDefaults.scale(focusedScale = 1f) else IconButtonDefaults.scale(),
+        scale = IconButtonDefaults.scale(focusedScale = 1f),
         colors = IconButtonDefaults.colors(
-            containerColor = if (selected) selectedContainerColor else if (isV2) Color.Transparent else NuvioTheme.colors.BackgroundCard,
-            focusedContainerColor = if (isV2) Color.Transparent else NuvioTheme.colors.Secondary,
+            containerColor = Color.Transparent,
+            focusedContainerColor = NuvioTheme.colors.TextPrimary.copy(alpha = .12f),
             contentColor = if (selected) selectedContentColor else NuvioTheme.colors.TextPrimary,
-            focusedContentColor = if (isV2) NuvioTheme.colors.TextPrimary else NuvioTheme.colors.OnSecondary
+            focusedContentColor = NuvioTheme.colors.TextPrimary
         ),
-        border = if (isV2) IconButtonDefaults.border() else IconButtonDefaults.border(
+        border = IconButtonDefaults.border(
             focusedBorder = Border(
                 border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
                 shape = CircleShape
@@ -959,12 +934,12 @@ private fun ActionIconButton(
             )
             painter != null -> Icon(
                 painter = painter,
-                contentDescription = contentDescription,
+                contentDescription = null,
                 modifier = Modifier.size(22.dp)
             )
             icon != null -> Icon(
                 imageVector = icon,
-                contentDescription = contentDescription,
+                contentDescription = null,
                 modifier = Modifier.size(NuvioTheme.spacing.xl)
             )
         }
@@ -1297,29 +1272,4 @@ private fun MetaInfoDivider() {
         style = MaterialTheme.typography.labelLarge,
         color = NuvioTheme.extendedColors.textTertiary
     )
-}
-
-
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-private fun V2DetailGlassAction(label: String, onClick: () -> Unit, onFocused: () -> Unit,
-    enabled: Boolean, onLongPress: (() -> Unit)?, icon: @Composable () -> Unit) {
-    val tracker = rememberLongPressKeyTracker()
-    var consumed by remember { mutableStateOf(false) }
-    com.nuvio.tv.ui.v2.components.NuvioActionPill(onClick = {
-        if (consumed) consumed = false else onClick()
-    }, modifier = Modifier.onFocusChanged { if (it.isFocused) onFocused() }
-        .onPreviewKeyEvent { event ->
-            val native = event.nativeKeyEvent
-            if (onLongPress != null && native.keyCode == AndroidKeyEvent.KEYCODE_MENU) {
-                if (native.action == AndroidKeyEvent.ACTION_DOWN && native.repeatCount == 0) onLongPress()
-                true
-            } else if (onLongPress != null && tracker.handle(native, ::isSelectKey) { consumed = true; onLongPress() }) {
-                if (native.action == AndroidKeyEvent.ACTION_UP) consumed = false
-                true
-            } else false
-        }, enabled = enabled, stationary = true) {
-        icon(); Spacer(Modifier.width(8.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
-    }
 }

@@ -192,4 +192,7 @@
     <string name="scout_award_bafta">BAFTA</string>
     <string name="scout_award_emmy">Emmys</string>
     <string name="scout_award_actor">Actor Awards</string>
+    <string name="scout_show_watched_on">Show watched · On</string>
+    <string name="scout_show_watched_off">Show watched · Off</string>
+    <string name="scout_watched_hidden_empty">Watched titles are hidden.</string>
 </resources>

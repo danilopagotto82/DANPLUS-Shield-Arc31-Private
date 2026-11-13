@@ -384,6 +384,31 @@ internal fun LazyListScope.deviceAssessmentItems(
         return
     }
 
+    item(key = "assessment_summary") {
+        SettingsGroupCard(
+            modifier = Modifier.fillMaxWidth(),
+            title = stringResource(R.string.assessment_summary_title)
+        ) {
+            Column(
+                modifier = Modifier.padding(NuvioTheme.spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+            ) {
+                AssessmentPlaybackNetworkSummary(res.measuredBaselineMbps)
+                val action = when {
+                    res.measuredBaselineMbps == null -> R.string.assessment_summary_measure
+                    res.measuredBaselineMbps < 120.0 -> R.string.assessment_summary_check_network
+                    res.applyPlan.touchedCount > 0 -> R.string.assessment_summary_review
+                    else -> R.string.assessment_summary_keep
+                }
+                Text(
+                    text = stringResource(action),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NuvioTheme.colors.TextPrimary
+                )
+            }
+        }
+    }
+
     res.errorText?.let { err ->
         item(key = "assessment_error") {
             SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {

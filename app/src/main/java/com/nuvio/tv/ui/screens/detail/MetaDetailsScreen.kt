@@ -23,6 +23,8 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.BringIntoViewSpec
@@ -142,7 +144,7 @@ import com.nuvio.tv.domain.model.MetaTrailer
 import com.nuvio.tv.domain.model.resolveContentLanguage
 import com.nuvio.tv.domain.model.MDBListRatings
 import com.nuvio.tv.domain.model.NextToWatch
-import com.nuvio.tv.domain.model.TraktCommentReview
+import com.nuvio.tv.domain.model.TmdbReview
 import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.ui.components.ErrorState
@@ -185,6 +187,7 @@ private enum class PeopleSectionTab {
     CAST,
     RATINGS,
     MORE_LIKE_THIS,
+    WHERE_TO_WATCH,
     TRAILER,
     COLLECTION
 }
@@ -909,6 +912,7 @@ fun MetaDetailsScreen(
                     onHeroDrawn = { drawnHeroToken = uiState.heroPresentationToken },
                     secondaryContentReady = secondaryReady,
                     onSecondaryContentRequested = viewModel::onSecondaryContentRequested,
+                    loadWatchProviders = { viewModel.loadWatchProviders(meta) },
                     commentState = commentState,
                     ratingState = ratingState,
                     peopleState = peopleState,
@@ -959,8 +963,6 @@ fun MetaDetailsScreen(
                     heroSourceLineEnabled = heroSourceLineEnabled,
                     mdbListRatingOrder = uiState.mdbListRatingOrder,
                     shouldShowCommentsSection = uiState.shouldShowCommentsSection,
-                    commentsMode = uiState.commentsMode,
-                    commentsEpisodeTarget = uiState.commentsEpisodeTarget,
                     selectedComment = uiState.selectedComment,
                     onSeasonSelected = { viewModel.onEvent(MetaDetailsEvent.OnSeasonSelected(it)) },
                     onEpisodeClick = playEpisode,
@@ -1119,10 +1121,7 @@ fun MetaDetailsScreen(
                     onSharedTrailerSelected = { viewModel.onEvent(MetaDetailsEvent.OnSharedTrailerSelected(it)) },
                     onDismissSharedTrailer = { viewModel.onEvent(MetaDetailsEvent.OnDismissSharedTrailer) },
                     onRetrySharedTrailer = { viewModel.onEvent(MetaDetailsEvent.OnRetrySharedTrailer) },
-                    onRetryComments = { viewModel.onEvent(MetaDetailsEvent.OnRetryComments) },
                     onLoadMoreComments = { viewModel.onEvent(MetaDetailsEvent.OnLoadMoreComments) },
-                    onCommentsModeSelected = { viewModel.onEvent(MetaDetailsEvent.OnCommentsModeSelected(it)) },
-                    onCommentsEpisodeSelected = { viewModel.onEvent(MetaDetailsEvent.OnCommentsEpisodeSelected(it)) },
                     onCommentClick = {
                         commentOverlayDirection = 0
                         viewModel.onEvent(MetaDetailsEvent.OnCommentSelected(it))
@@ -1262,6 +1261,7 @@ private fun MetaDetailsContent(
     onHeroDrawn: () -> Unit,
     secondaryContentReady: Boolean,
     onSecondaryContentRequested: () -> Unit,
+    loadWatchProviders: suspend () -> com.nuvio.tv.data.remote.api.TmdbWatchRegion?,
     commentState: State<DetailCommentState>,
     ratingState: State<DetailRatingState>,
     peopleState: State<DetailPeopleState>,
@@ -1309,9 +1309,7 @@ private fun MetaDetailsContent(
     heroSourceLineEnabled: Boolean = false,
     mdbListRatingOrder: List<String> = com.nuvio.tv.domain.model.MDBListSettings.DEFAULT_RATING_ORDER,
     shouldShowCommentsSection: Boolean,
-    commentsMode: CommentsMode,
-    commentsEpisodeTarget: Video?,
-    selectedComment: TraktCommentReview?,
+    selectedComment: TmdbReview?,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeClick: (Video) -> Unit,
     onEpisodeManualPlayClick: (Video) -> Unit,
@@ -1356,11 +1354,8 @@ private fun MetaDetailsContent(
     onSharedTrailerSelected: (MetaTrailer) -> Unit,
     onDismissSharedTrailer: () -> Unit,
     onRetrySharedTrailer: () -> Unit,
-    onRetryComments: () -> Unit,
     onLoadMoreComments: () -> Unit,
-    onCommentsModeSelected: (CommentsMode) -> Unit,
-    onCommentsEpisodeSelected: (Video) -> Unit,
-    onCommentClick: (TraktCommentReview) -> Unit,
+    onCommentClick: (TmdbReview) -> Unit,
     onShowPreviousComment: () -> Unit,
     onShowNextComment: () -> Unit,
     onDismissCommentOverlay: () -> Unit,
@@ -1435,6 +1430,8 @@ private fun MetaDetailsContent(
     val castTabFocusRequester = remember { FocusRequester() }
     val moreLikeTabFocusRequester = remember { FocusRequester() }
     val trailerTabFocusRequester = remember { FocusRequester() }
+    val watchTabFocusRequester = remember { FocusRequester() }
+    val watchSectionFocusRequester = remember { FocusRequester() }
     val collectionTabFocusRequester = remember { FocusRequester() }
     val ratingsTabFocusRequester = remember { FocusRequester() }
     val ratingsContentFocusRequester = remember { FocusRequester() }
@@ -1443,8 +1440,6 @@ private fun MetaDetailsContent(
     val moreLikeSectionFocusRequester = remember { FocusRequester() }
     val trailerSectionFocusRequester = remember { FocusRequester() }
     val collectionSectionFocusRequester = remember { FocusRequester() }
-    val commentsTitleModeFocusRequester = remember { FocusRequester() }
-    val commentsEpisodeModeFocusRequester = remember { FocusRequester() }
     val commentsRowEntryFocusRequester = remember { FocusRequester() }
     val networkSectionFocusRequester = remember { FocusRequester() }
     val productionSectionFocusRequester = remember { FocusRequester() }
@@ -1455,7 +1450,6 @@ private fun MetaDetailsContent(
     var pendingRestoreCollectionItemId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingRestoreCompanyId by rememberSaveable { mutableStateOf<Int?>(null) }
     var restoreFocusToken by rememberSaveable { mutableIntStateOf(0) }
-    var commentsEntryFocusToken by rememberSaveable { mutableIntStateOf(0) }
     var companyRestoreToken by rememberSaveable { mutableIntStateOf(0) }
     var restoreOnNextResume by rememberSaveable { mutableStateOf(false) }
     var consumeReturnEpisodeFocusOnClear by rememberSaveable(meta.id) { mutableStateOf(false) }
@@ -1836,8 +1830,8 @@ private fun MetaDetailsContent(
                             playedSeason = targetEpisode.season,
                             playedEpisode = targetEpisode.episode,
                             selectedSeason = selectedSeason,
-                            nextSeason = nextToWatch?.nextSeason,
                             availableSeasons = seasons,
+                            nextSeason = nextToWatch?.nextSeason,
                             allVideos = meta.videos,
                             requestedEpisodeId = targetEpisode.id,
                             episodesForSeason = episodesForSeason,
@@ -1957,7 +1951,10 @@ private fun MetaDetailsContent(
     }
     val hasCastSection = directorWriterMembers.isNotEmpty() || normalCastMembers.isNotEmpty()
     val hasMoreLikeThisSection = moreLikeThis.isNotEmpty()
-    val hasTrailerSection = remember(meta.trailers) { meta.trailers.any { !it.ytId.isNullOrBlank() } }
+    val brazilianTrailers = remember(meta.trailers) {
+        meta.trailers.filter { !it.ytId.isNullOrBlank() && it.lang.equals("pt-BR", true) }
+    }
+    val hasTrailerSection = brazilianTrailers.isNotEmpty()
     val showEpisodeImdbRatings = detailImdbRatingsVisibility.showEpisodeRatings
     val visibleEpisodeImdbRatings = remember(
         secondaryReady,
@@ -1976,6 +1973,9 @@ private fun MetaDetailsContent(
     val strTabCast = stringResource(R.string.detail_tab_cast)
     val strTabRatings = stringResource(R.string.detail_tab_ratings)
     val strTabMoreLikeThis = stringResource(R.string.detail_tab_more_like_this)
+    val strTabWatch = stringResource(R.string.detail_tab_where_to_watch)
+    val hasWatchSection = com.nuvio.tv.core.tmdb.TmdbApiKey.value.isNotBlank() &&
+        (meta.apiType.equals("movie", ignoreCase = true) || isTvShow)
     val strTabTrailer = stringResource(R.string.detail_tab_trailer)
     val strTabCollection = stringResource(R.string.tmdb_collections_title)
     val moreLikeThisSourceLabel = when (moreLikeThisSource) {
@@ -1990,6 +1990,9 @@ private fun MetaDetailsContent(
         hasMoreLikeThisSection,
         hasTrailerSection,
         hasRatingsSection,
+        hasWatchSection,
+        strTabWatch,
+        watchTabFocusRequester,
         collection,
         castTabFocusRequester,
         ratingsTabFocusRequester,
@@ -2026,6 +2029,9 @@ private fun MetaDetailsContent(
                     )
                 )
             }
+            if (hasWatchSection) {
+                add(PeopleTabItem(PeopleSectionTab.WHERE_TO_WATCH, strTabWatch, watchTabFocusRequester))
+            }
             if (hasTrailerSection) {
                 add(
                     PeopleTabItem(
@@ -2052,24 +2058,6 @@ private fun MetaDetailsContent(
     val hasVisiblePeopleSection = visiblePeopleTabItems.isNotEmpty()
     val hasVisiblePeopleTabs = visiblePeopleTabItems.size > 1
     val showParentalGuide = parentalGuide.isNotEmpty() || parentalGuidePending
-    val commentsItemIndex = remember(
-        isSeries,
-        seasons,
-        hasVisiblePeopleSection,
-        hasVisiblePeopleTabs,
-        showParentalGuide
-    ) {
-        var index = 1
-        if (isSeries && seasons.isNotEmpty()) {
-            index += 2
-        }
-        if (showParentalGuide) index += 1
-        if (hasVisiblePeopleSection) {
-            if (hasVisiblePeopleTabs) index += 1
-            index += 1
-        }
-        index
-    }
     val detailV2 = com.nuvio.tv.ui.v2.appearance.LocalV2Appearance.current != null
     val initialPeopleTab = when {
         availablePeopleTabs.contains(PeopleSectionTab.CAST) -> PeopleSectionTab.CAST
@@ -2126,6 +2114,7 @@ private fun MetaDetailsContent(
         hasVisiblePeopleSection -> when (activePeopleTab) {
             PeopleSectionTab.CAST -> castSectionFocusRequester
             PeopleSectionTab.MORE_LIKE_THIS -> moreLikeSectionFocusRequester
+            PeopleSectionTab.WHERE_TO_WATCH -> watchSectionFocusRequester
             PeopleSectionTab.TRAILER -> trailerSectionFocusRequester
             PeopleSectionTab.COLLECTION -> collectionSectionFocusRequester
             PeopleSectionTab.RATINGS -> ratingsGridFocusRequester
@@ -2133,10 +2122,6 @@ private fun MetaDetailsContent(
         isSeries -> seasonDownFocusRequester ?: heroPlayFocusRequester
         else -> heroPlayFocusRequester
     }
-    val canToggleEpisodeComments = isSeries && episodesForSeason.isNotEmpty()
-    val commentsSelectedModeFocusRequester =
-        if (commentsMode == CommentsMode.EPISODE) commentsEpisodeModeFocusRequester else commentsTitleModeFocusRequester
-
     val visiblePeopleTabsList = visiblePeopleTabItems.map { it.tab }
     LaunchedEffect(visiblePeopleTabsList, pendingRestoreType, shouldSplitCollection) {
         if (!peopleTabInteracted && pendingRestoreType == null &&
@@ -2215,24 +2200,6 @@ private fun MetaDetailsContent(
             onEpisodeManualPlayClick(video)
         }
     }
-    val episodeCommentsClick = remember(
-        onCommentsEpisodeSelected,
-        shouldShowCommentsSection
-    ) {
-        { video: Video ->
-            if (shouldShowCommentsSection) {
-                onCommentsEpisodeSelected(video)
-                commentsEntryFocusToken += 1
-            }
-            Unit
-        }
-    }
-
-    LaunchedEffect(commentsEntryFocusToken, shouldShowCommentsSection, commentsItemIndex) {
-        if (commentsEntryFocusToken <= 0 || !shouldShowCommentsSection) return@LaunchedEffect
-        listState.animateScrollToItem(commentsItemIndex)
-    }
-
     LaunchedEffect(
         pendingRestoreType,
         pendingRestoreEpisodeId,
@@ -2264,11 +2231,12 @@ private fun MetaDetailsContent(
         hasVisiblePeopleSection -> when (activePeopleTab) {
             PeopleSectionTab.CAST -> castSectionFocusRequester
             PeopleSectionTab.MORE_LIKE_THIS -> moreLikeSectionFocusRequester
+            PeopleSectionTab.WHERE_TO_WATCH -> watchSectionFocusRequester
             PeopleSectionTab.TRAILER -> trailerSectionFocusRequester
             PeopleSectionTab.COLLECTION -> collectionSectionFocusRequester
             PeopleSectionTab.RATINGS -> ratingsContentFocusRequester
         }
-        shouldShowCommentsSection && canToggleEpisodeComments -> commentsSelectedModeFocusRequester
+        shouldShowCommentsSection -> commentsRowEntryFocusRequester
         else -> null
     }
     val heroDownHasMoreBelow = shouldShowCommentsSection || people.companies.isNotEmpty() || people.networks.isNotEmpty()
@@ -2571,16 +2539,13 @@ private fun MetaDetailsContent(
                                 name == "cast_or_more_like" -> when (activePeopleTab) {
                                     PeopleSectionTab.CAST -> castSectionFocusRequester
                                     PeopleSectionTab.MORE_LIKE_THIS -> moreLikeSectionFocusRequester
+                                    PeopleSectionTab.WHERE_TO_WATCH -> watchSectionFocusRequester
                                     PeopleSectionTab.TRAILER -> trailerSectionFocusRequester
                                     PeopleSectionTab.COLLECTION -> collectionSectionFocusRequester
                                     PeopleSectionTab.RATINGS -> ratingsContentFocusRequester
                                 }
                                 name == "collection_section" -> collectionSectionFocusRequester
-                                name == "trakt_comments" -> when {
-                                    commentState.value.comments.isNotEmpty() -> commentsRowEntryFocusRequester
-                                    canToggleEpisodeComments -> commentsSelectedModeFocusRequester
-                                    else -> commentsRowEntryFocusRequester
-                                }
+                                name == "tmdb_comments" -> commentsRowEntryFocusRequester
                                 name == "networks" -> networkSectionFocusRequester
                                 name == "production" -> productionSectionFocusRequester
                                 else -> null
@@ -2773,8 +2738,6 @@ private fun MetaDetailsContent(
                                 onMarkSeasonUnwatched = onMarkSeasonUnwatched,
                                 isSeasonFullyWatched = isSeasonFullyWatched(selectedSeason),
                                 selectedSeason = selectedSeason,
-                                onOpenEpisodeComments = episodeCommentsClick,
-                                showOpenEpisodeComments = shouldShowCommentsSection,
                                 onMarkPreviousEpisodesWatched = onMarkPreviousEpisodesWatched,
                                 upFocusRequester = if (showSeasonTabs) selectedSeasonFocusRequester else (heroPlayFocusRequester ?: heroPlayButtonFocusRequester),
                                 downFocusRequester = episodesDownFocusRequester,
@@ -2852,6 +2815,7 @@ private fun MetaDetailsContent(
                                 contentFocusRequester = when (activePeopleTab) {
                                     PeopleSectionTab.CAST -> castSectionFocusRequester
                                     PeopleSectionTab.MORE_LIKE_THIS -> moreLikeSectionFocusRequester
+                                    PeopleSectionTab.WHERE_TO_WATCH -> watchSectionFocusRequester
                                     PeopleSectionTab.TRAILER -> trailerSectionFocusRequester
                                     PeopleSectionTab.COLLECTION -> collectionSectionFocusRequester
                                     PeopleSectionTab.RATINGS -> ratingsContentFocusRequester
@@ -2895,7 +2859,7 @@ private fun MetaDetailsContent(
                                         title = if (hasVisiblePeopleTabs) "" else strTabCast,
                                         leadingCast = directorWriterMembers,
                                         upFocusRequester = if (hasVisiblePeopleTabs) castTabFocusRequester else seasonDownFocusRequester ?: heroPlayFocusRequester,
-                                        downFocusRequester = if (shouldShowCommentsSection && canToggleEpisodeComments) commentsSelectedModeFocusRequester else null,
+                                        downFocusRequester = if (shouldShowCommentsSection) commentsRowEntryFocusRequester else null,
                                         sectionFocusRequester = castSectionFocusRequester,
                                         restorePersonId = if (!childOverlayVisible && pendingRestoreType == RestoreTarget.CAST_MEMBER) pendingRestoreCastPersonId else null,
                                         restoreFocusToken = if (pendingRestoreType == RestoreTarget.CAST_MEMBER) restoreFocusToken else 0,
@@ -2929,7 +2893,7 @@ private fun MetaDetailsContent(
                                         sourceLabel = moreLikeThisSourceLabel,
                                         posterCardCornerRadius = posterCardCornerRadiusDp.dp,
                                         upFocusRequester = if (hasVisiblePeopleTabs) moreLikeTabFocusRequester else seasonDownFocusRequester ?: heroPlayFocusRequester,
-                                        downFocusRequester = if (shouldShowCommentsSection && canToggleEpisodeComments) commentsSelectedModeFocusRequester else null,
+                                        downFocusRequester = if (shouldShowCommentsSection) commentsRowEntryFocusRequester else null,
                                         sectionFocusRequester = moreLikeSectionFocusRequester,
                                         restoreItemId = if (!childOverlayVisible && pendingRestoreType == RestoreTarget.MORE_LIKE_THIS) pendingRestoreMoreLikeItemId else null,
                                         restoreFocusToken = if (pendingRestoreType == RestoreTarget.MORE_LIKE_THIS) restoreFocusToken else 0,
@@ -2956,13 +2920,13 @@ private fun MetaDetailsContent(
 
                                 PeopleSectionTab.TRAILER -> {
                                     TrailerSection(
-                                        trailers = meta.trailers,
+                                        trailers = brazilianTrailers,
                                         listState = trailerListState,
                                         posterCardCornerRadius = posterCardCornerRadiusDp.dp,
                                         upFocusRequester = if (hasVisiblePeopleTabs) trailerTabFocusRequester else seasonDownFocusRequester ?: heroPlayFocusRequester,
                                         downFocusRequester = when {
                                             shouldSplitCollection && collection.isNotEmpty() -> collectionSectionFocusRequester
-                                            shouldShowCommentsSection && canToggleEpisodeComments -> commentsSelectedModeFocusRequester
+                                            shouldShowCommentsSection -> commentsRowEntryFocusRequester
                                             else -> null
                                         },
                                         sectionFocusRequester = trailerSectionFocusRequester,
@@ -2984,7 +2948,7 @@ private fun MetaDetailsContent(
                                         listState = collectionListState,
                                         posterCardCornerRadius = posterCardCornerRadiusDp.dp,
                                         upFocusRequester = if (hasVisiblePeopleTabs) collectionTabFocusRequester else seasonDownFocusRequester ?: heroPlayFocusRequester,
-                                        downFocusRequester = if (shouldShowCommentsSection && canToggleEpisodeComments) commentsSelectedModeFocusRequester else null,
+                                        downFocusRequester = if (shouldShowCommentsSection) commentsRowEntryFocusRequester else null,
                                         sectionFocusRequester = collectionSectionFocusRequester,
                                         restoreItemId = if (!childOverlayVisible && pendingRestoreType == RestoreTarget.COLLECTION) pendingRestoreCollectionItemId else null,
                                         restoreFocusToken = if (pendingRestoreType == RestoreTarget.COLLECTION) restoreFocusToken else 0,
@@ -3009,6 +2973,26 @@ private fun MetaDetailsContent(
                                     )
                                 }
 
+                                PeopleSectionTab.WHERE_TO_WATCH -> {
+                                    WhereToWatchSection(
+                                        load = loadWatchProviders,
+                                        titleId = meta.id,
+                                        showTitle = !hasVisiblePeopleTabs,
+                                        focusRequester = watchSectionFocusRequester,
+                                        upFocusRequester = if (hasVisiblePeopleTabs) {
+                                            watchTabFocusRequester
+                                        } else {
+                                            seasonDownFocusRequester ?: heroPlayFocusRequester
+                                        },
+                                        downFocusRequester = when {
+                                            shouldSplitCollection -> collectionSectionFocusRequester
+                                            shouldShowCommentsSection -> commentsRowEntryFocusRequester
+                                            else -> null
+                                        },
+                                        modifier = Modifier.padding(start = detailStartInset, end = NuvioTheme.spacing.xxxl)
+                                    )
+                                }
+
                                 PeopleSectionTab.RATINGS -> {
                                     EpisodeRatingsSection(
                                         episodes = meta.videos,
@@ -3021,7 +3005,7 @@ private fun MetaDetailsContent(
                                         } else {
                                             seasonDownFocusRequester ?: heroPlayFocusRequester
                                         },
-                                        downFocusRequester = if (shouldShowCommentsSection && canToggleEpisodeComments) commentsSelectedModeFocusRequester else null,
+                                        downFocusRequester = if (shouldShowCommentsSection) commentsRowEntryFocusRequester else null,
                                         firstItemFocusRequester = ratingsContentFocusRequester,
                                         ratingsGridFocusRequester = ratingsGridFocusRequester,
                                         modifier = Modifier.heightIn(min = if (!hasItemsBelow) castSectionHeight else NuvioTheme.spacing.none)
@@ -3044,9 +3028,10 @@ private fun MetaDetailsContent(
                                 when (activePeopleTab) {
                                     PeopleSectionTab.CAST -> castSectionFocusRequester
                                     PeopleSectionTab.MORE_LIKE_THIS -> moreLikeSectionFocusRequester
+                                    PeopleSectionTab.WHERE_TO_WATCH -> watchSectionFocusRequester
                                     PeopleSectionTab.TRAILER -> trailerSectionFocusRequester
                                     PeopleSectionTab.RATINGS -> ratingsContentFocusRequester
-                                    else -> seasonDownFocusRequester ?: heroPlayFocusRequester
+                                    PeopleSectionTab.COLLECTION -> seasonDownFocusRequester ?: heroPlayFocusRequester
                                 }
                             } else {
                                 seasonDownFocusRequester ?: heroPlayFocusRequester
@@ -3077,31 +3062,14 @@ private fun MetaDetailsContent(
                 }
 
                 if (shouldShowCommentsSection) {
-                    detailSection(key = "trakt_comments", contentType = "horizontal_row", immediate = revealSecondaryImmediately) {
+                    detailSection(key = "tmdb_comments", contentType = "horizontal_row", immediate = revealSecondaryImmediately) {
                         val comments = commentState.value
                         CommentsSection(
                             comments = comments.comments,
-                            commentsMode = commentsMode,
-                            canToggleEpisodeComments = canToggleEpisodeComments,
-                            titleModeFocusRequester = commentsTitleModeFocusRequester,
-                            episodeModeFocusRequester = commentsEpisodeModeFocusRequester,
-                            selectedEpisode = commentsEpisodeTarget,
-                            allEpisodes = meta.videos.filter { it.season != null && it.episode != null },
-                            selectedSeason = selectedSeason,
-                            availableSeasons = seasons,
-                            isLoading = comments.loading,
                             isLoadingMore = comments.loadingMore,
                             canLoadMore = comments.canLoadMore,
-                            error = comments.error,
                             upFocusRequester = commentsUpFocusRequester,
-                            entryFocusToken = commentsEntryFocusToken,
-                            onEntryFocusHandled = {
-                                commentsEntryFocusToken = 0
-                            },
-                            onRetry = onRetryComments,
                             onLoadMore = onLoadMoreComments,
-                            onCommentsModeSelected = onCommentsModeSelected,
-                            onEpisodeSelected = onCommentsEpisodeSelected,
                             onCommentClick = onCommentClick,
                             listState = commentsListState,
                             windowResetKey = meta.id,
@@ -3324,7 +3292,6 @@ private fun MetaDetailsContent(
             val selectedCommentIndex = comments.comments.indexOfFirst { it.id == review.id }
             CommentOverlay(
                 review = review,
-                episode = if (commentsMode == CommentsMode.EPISODE) commentsEpisodeTarget else null,
                 canNavigatePrevious = selectedCommentIndex > 0,
                 canNavigateNext = selectedCommentIndex >= 0 && (
                     selectedCommentIndex < comments.comments.lastIndex || comments.canLoadMore || comments.loadingMore
@@ -3681,6 +3648,7 @@ private fun PeopleSectionTabs(
         }
 
         Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             renderTabs(tabs)

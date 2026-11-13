@@ -147,6 +147,8 @@ import com.nuvio.tv.domain.model.ContinueWatchingCardStyle
 import com.nuvio.tv.domain.model.PLACEHOLDER_IMAGE_URL
 import com.nuvio.tv.domain.model.isPlaceholder
 import com.nuvio.tv.ui.components.ContinueWatchingCard
+import com.nuvio.tv.ui.components.CollectionHighlightVerticalPadding
+import com.nuvio.tv.ui.components.collectionHighlight
 import com.nuvio.tv.ui.components.continueWatchingArtworkWidth
 import com.nuvio.tv.ui.components.continueWatchingImageCacheKey
 import com.nuvio.tv.ui.components.continueWatchingImageModel
@@ -1257,7 +1259,8 @@ internal fun ModernRowSection(
                 null
             }
 
-            Box {
+            val highlightPadding = if (row.collectionHighlight == null) 0.dp else CollectionHighlightVerticalPadding
+            Box(Modifier.collectionHighlight(row.collectionHighlight, row.collectionHighlightRgb, rowStartPadding + firstCardWidth)) {
             LazyRow(
                 state = rowListState,
                 modifier = Modifier
@@ -1294,7 +1297,10 @@ internal fun ModernRowSection(
                         if (!it.hasFocus) focusGlide.clear()
                     }
                     .focusGroup(),
-                contentPadding = PaddingValues(start = rowStartPadding, end = ROW_END_PADDING),
+                contentPadding = PaddingValues(
+                    start = rowStartPadding, end = ROW_END_PADDING,
+                    top = highlightPadding, bottom = highlightPadding
+                ),
                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
             ) {
                 itemsIndexed(

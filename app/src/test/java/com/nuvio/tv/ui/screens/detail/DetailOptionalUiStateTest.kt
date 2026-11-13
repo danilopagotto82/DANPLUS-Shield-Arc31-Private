@@ -6,7 +6,7 @@ import org.junit.Test
 class DetailOptionalUiStateTest {
     @Test fun `comment completion does not invalidate entry or rating state`() {
         val initial = MetaDetailsUiState()
-        val loading = initial.copy(isCommentsLoading = true, commentsCurrentPage = 1, commentsPageCount = 4)
+        val loading = initial.copy(isCommentsLoadingMore = true, commentsCurrentPage = 1, commentsPageCount = 4)
         assertEquals(initial.entryState(), loading.entryState())
         assertEquals(initial.ratingState(), loading.ratingState())
         assertNotEquals(initial.commentState(), loading.commentState())

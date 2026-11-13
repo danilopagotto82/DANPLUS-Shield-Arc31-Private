@@ -289,6 +289,8 @@ internal fun buildModernHomePresentation(
                             key = rowKey,
                             title = collection.title,
                             globalRowIndex = index,
+                            collectionHighlight = collection.highlight,
+                            collectionHighlightRgb = collection.highlight?.let(collection.highlightColors::forStyle),
                             items = collection.folders.map { folder ->
                                 val occurrence = occurrenceCounts.getOrDefault(folder.id, 0)
                                 occurrenceCounts[folder.id] = occurrence + 1

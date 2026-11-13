@@ -122,7 +122,7 @@ import com.nuvio.tv.data.remote.supabase.ProfileBackgroundCatalogItem
 import com.nuvio.tv.domain.model.UserProfile
 import com.nuvio.tv.ui.components.AvatarPickerGrid
 import com.nuvio.tv.ui.components.CustomProfileBackgroundImage
-import com.nuvio.tv.ui.components.MemberBrandWordmark
+import com.nuvio.tv.ui.components.DanPlusWordmark
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.components.PanelActionRow
 import com.nuvio.tv.ui.components.ProfileBackgroundImage
@@ -998,10 +998,7 @@ private fun ProfileSelectionMainContent(
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        MemberBrandWordmark(
-            height = ProfileSelectionSpacing.LogoHeight,
-            contentDescription = stringResource(R.string.cd_nuvio_logo)
-        )
+        DanPlusWordmark(height = ProfileSelectionSpacing.LogoHeight)
 
         Spacer(modifier = Modifier.height(ProfileSelectionSpacing.LogoToHeading))
 

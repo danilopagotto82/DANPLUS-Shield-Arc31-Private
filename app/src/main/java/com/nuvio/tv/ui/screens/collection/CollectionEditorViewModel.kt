@@ -15,12 +15,15 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.nuvio.tv.data.remote.api.TmdbCollectionSearchResult
 import com.nuvio.tv.data.remote.api.TmdbCompanySearchResult
 import com.nuvio.tv.data.local.CollectionsDataStore
+import com.nuvio.tv.data.local.ThemeDataStore
 import com.nuvio.tv.domain.model.AddonCatalogCollectionSource
 import com.nuvio.tv.domain.model.catalogTypesMatch
 import com.nuvio.tv.domain.model.collectionCatalogKey
 import com.nuvio.tv.domain.model.withResolvedCatalogTypes
 import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.CollectionFolder
+import com.nuvio.tv.domain.model.CollectionHighlight
+import com.nuvio.tv.domain.model.CollectionHighlightColors
 import com.nuvio.tv.domain.model.CollectionSource
 import com.nuvio.tv.domain.model.FolderViewMode
 import com.nuvio.tv.domain.model.PosterShape
@@ -53,6 +56,8 @@ data class CollectionEditorUiState(
     val viewMode: FolderViewMode = FolderViewMode.TABBED_GRID,
     val showAllTab: Boolean = true,
     val folders: List<CollectionFolder> = emptyList(),
+    val highlight: CollectionHighlight? = null,
+    val highlightColors: CollectionHighlightColors = CollectionHighlightColors(),
     val isLoading: Boolean = true,
     val availableCatalogs: List<AvailableCatalog> = emptyList(),
     val installedAddonIds: Set<String> = emptySet(),
@@ -132,13 +137,15 @@ class CollectionEditorViewModel @Inject constructor(
     private val tmdbCollectionSourceResolver: TmdbCollectionSourceResolver,
     private val traktPublicListSourceResolver: TraktPublicListSourceResolver,
     private val collectionSyncService: CollectionSyncService,
-    private val serverCatalog: ServerCatalog
+    private val serverCatalog: ServerCatalog,
+    themeDataStore: ThemeDataStore
 ) : ViewModel() {
 
     private val collectionIdArg: String = savedStateHandle["collectionId"] ?: ""
 
     private val _uiState = MutableStateFlow(CollectionEditorUiState())
     val uiState: StateFlow<CollectionEditorUiState> = _uiState.asStateFlow()
+    val themeSelection = themeDataStore.themeSelection
 
     init {
         loadData()
@@ -189,6 +196,8 @@ class CollectionEditorViewModel @Inject constructor(
                             viewMode = existing.viewMode,
                             showAllTab = existing.showAllTab,
                             folders = existing.folders,
+                            highlight = existing.highlight,
+                            highlightColors = existing.highlightColors,
                             availableCatalogs = availableCatalogs,
                             installedAddonIds = addons.map { addon -> addon.id }.toSet(),
                             addonCatalogInfoByKey = addonCatalogInfoByKey,
@@ -1220,6 +1229,14 @@ class CollectionEditorViewModel @Inject constructor(
         }
     }
 
+    fun setHighlight(highlight: CollectionHighlight?) {
+        _uiState.update { it.copy(highlight = highlight) }
+    }
+
+    fun setHighlightColor(style: CollectionHighlight, rgb: Int) {
+        _uiState.update { it.copy(highlightColors = it.highlightColors.withColor(style, rgb)) }
+    }
+
     fun save(onComplete: () -> Unit) {
         val state = _uiState.value
         if (state.folders.isEmpty()) return
@@ -1232,13 +1249,15 @@ class CollectionEditorViewModel @Inject constructor(
                 focusGlowEnabled = state.focusGlowEnabled,
                 viewMode = state.viewMode,
                 showAllTab = state.showAllTab,
-                folders = state.folders
+                folders = state.folders,
+                highlight = state.highlight,
+                highlightColors = state.highlightColors
             ).withResolvedCatalogTypes(addonRepository.getInstalledAddons().first())
 
             if (state.isNew) {
-                collectionsDataStore.addCollection(collection)
+                collectionsDataStore.addCollection(collection, saveHighlight = true)
             } else {
-                collectionsDataStore.updateCollection(collection)
+                collectionsDataStore.updateCollection(collection, saveHighlight = true)
             }
             collectionSyncService.triggerPush()
             onComplete()

@@ -2,9 +2,16 @@ package com.nuvio.tv.core.calendar
 
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.data.remote.api.TmdbApi
+import com.nuvio.tv.data.remote.api.TmdbDiscoverResult
 import com.nuvio.tv.data.remote.api.TmdbEpisodeToAir
 import com.nuvio.tv.data.remote.api.TmdbMovieReleaseDateCountry
 import java.time.LocalDate
+import android.os.SystemClock
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 import retrofit2.Response
@@ -15,6 +22,51 @@ class TmdbCalendarClient @Inject constructor(
     private val tmdbService: TmdbService
 ) {
     private val apiKey: String get() = tmdbService.apiKey()
+
+    private data class MovieReleaseCache(
+        val start: LocalDate,
+        val expiresAt: Long,
+        val titles: List<CalendarTitleRecord>
+    )
+
+    private val movieReleaseLock = Mutex()
+    private var movieReleaseCache: MovieReleaseCache? = null
+
+    suspend fun brazilianMovieReleases(today: LocalDate): List<CalendarTitleRecord> = movieReleaseLock.withLock {
+        val now = SystemClock.elapsedRealtime()
+        movieReleaseCache?.takeIf { it.start == today && it.expiresAt > now }?.let { return@withLock it.titles }
+        if (apiKey.isBlank()) return@withLock emptyList()
+
+        val lastDay = today.plusDays(89)
+        val movies = mutableListOf<TmdbDiscoverResult>()
+        var page = 1
+        do {
+            val response = tmdbApi.discoverBrazilianMovieReleases(apiKey, today.toString(), lastDay.toString(), page)
+                .foundOrNull() ?: break
+            movies += response.results.orEmpty()
+            val totalPages = response.totalPages ?: 1
+            page++
+        } while (page <= totalPages && page <= MAX_RELEASE_PAGES)
+
+        val candidates = movies.asSequence()
+            .filter { it.id > 0 && ((it.popularity ?: 0.0) >= 1.0 ||
+                (it.voteCount ?: 0) >= 100 && (it.voteAverage ?: 0.0) >= 7.0) }
+            .distinctBy { it.id }
+            .take(MAX_RELEASE_TITLES)
+            .toList()
+        val titles = candidates.chunked(4).flatMap { batch ->
+            coroutineScope {
+                batch.map { movie ->
+                    async {
+                        val dates = tmdbApi.getMovieReleaseDates(movie.id, apiKey).foundOrNull()?.results.orEmpty()
+                        brazilianMovieRelease(movie, dates, today, lastDay)
+                    }
+                }.awaitAll().filterNotNull()
+            }
+        }
+        movieReleaseCache = MovieReleaseCache(today, now + RELEASE_CACHE_MS, titles)
+        titles
+    }
 
     suspend fun findTmdbId(imdb: String, type: CalendarTitleType): Long? {
         val body = tmdbApi.findByExternalId(imdb, apiKey).foundOrNull() ?: return null
@@ -58,6 +110,35 @@ class TmdbCalendarClient @Inject constructor(
         code() == 404 -> null
         else -> throw CalendarFetchException("TMDB ${code()}")
     }
+}
+
+internal fun brazilianMovieRelease(
+    movie: TmdbDiscoverResult,
+    releases: List<TmdbMovieReleaseDateCountry>,
+    from: LocalDate,
+    through: LocalDate
+): CalendarTitleRecord? {
+    val name = movie.title?.takeIf(String::isNotBlank) ?: movie.originalTitle?.takeIf(String::isNotBlank)
+        ?: return null
+    val dates = releases.filter { it.iso31661.equals("BR", ignoreCase = true) }
+        .flatMap { it.releaseDates.orEmpty() }
+        .filter { it.type == TYPE_THEATRICAL || it.type == TYPE_DIGITAL }
+        .mapNotNull { item ->
+            item.releaseDate?.take(10)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        }
+    // A prior Brazilian theatrical/digital release means this is not an upcoming premiere.
+    val date = dates.minOrNull()?.takeIf { it in from..through } ?: return null
+    val ids = CalendarIds(tmdb = movie.id.toLong())
+    val key = calendarTitleKey(CalendarTitleType.MOVIE, ids) ?: return null
+    return CalendarTitleRecord(
+        key = key, type = CalendarTitleType.MOVIE, ids = ids,
+        name = name, contentId = "tmdb:${movie.id}", poster = tmdbPosterUrl(movie.posterPath),
+        backdrop = movie.backdropPath?.takeIf { it.startsWith("/") }?.let { "https://image.tmdb.org/t/p/w780$it" },
+        rating = movie.voteAverage?.takeIf { it > 0 },
+        sources = mapOf(CalendarSource.TMDB to listOf(
+            CalendarEntry(kind = CalendarEntryKind.MOVIE_BR_RELEASE, airDate = date.toString(), source = CalendarSource.TMDB)
+        ))
+    )
 }
 
 fun tmdbEpisodeEntry(episode: TmdbEpisodeToAir): CalendarEntry? {
@@ -128,3 +209,6 @@ private const val FALLBACK_REGION = "US"
 private const val TYPE_THEATRICAL_LIMITED = 2
 private const val TYPE_THEATRICAL = 3
 private const val TYPE_DIGITAL = 4
+private const val MAX_RELEASE_PAGES = 4
+private const val MAX_RELEASE_TITLES = 80
+private const val RELEASE_CACHE_MS = 6 * 60 * 60 * 1000L

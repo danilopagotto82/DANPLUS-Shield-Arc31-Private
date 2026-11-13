@@ -1,27 +1,27 @@
 package com.nuvio.tv.ui.v2.profile
 
 import android.graphics.drawable.Drawable
+import android.media.AudioAttributes
+import android.media.SoundPool
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import android.os.SystemClock
+import androidx.compose.foundation.layout.fillMaxWidth
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameMillis
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
@@ -31,24 +31,20 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.nuvio.tv.R
 import com.nuvio.tv.core.util.StartupLatencyTrace
-import com.nuvio.tv.ui.brand.ArcIgnitionView
-import com.nuvio.tv.ui.brand.ArcIntroSound
 import com.nuvio.tv.ui.brand.ArcIntroStage
-import com.nuvio.tv.ui.brand.ArcPalette
 import com.nuvio.tv.ui.brand.ArcStartHandoff
-import com.nuvio.tv.ui.components.BrandWordmark
-import com.nuvio.tv.ui.theme.NuvioTheme
-import kotlinx.coroutines.awaitCancellation
+import com.nuvio.tv.ui.brand.DanPlusIntroTimeline
+import com.nuvio.tv.ui.brand.DanPlusIntroView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.resume
 import kotlin.math.max
@@ -174,7 +170,7 @@ class ProfileEntryState {
 
 val LocalProfileEntryState = staticCompositionLocalOf<ProfileEntryState?> { null }
 
-/** The Arc entrance plays on its own surface and thread; Compose only owns timing, Back and the exit. */
+/** Reuses the profile/Home handoff with the DAN+ surface and original stereo cue. */
 @Composable
 fun ProfileEntryIdent(
     state: ProfileEntryState,
@@ -183,144 +179,122 @@ fun ProfileEntryIdent(
     onReturnToProfiles: () -> Unit
 ) {
     val context = LocalContext.current
-    val handoff = remember { startPicture?.showing == true }
-    var opacity by remember { mutableFloatStateOf(1f) }
-    var sound by remember { mutableStateOf<ArcIntroSound?>(null) }
-    // Read by the intro thread, which starts the sound with the first frame it draws.
-    val soundForFrame = remember { AtomicReference<ArcIntroSound?>(null) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(Unit) {
-        val stillIntro = runCatching {
+    val reducedMotion = remember(context) {
+        runCatching {
             Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
         }.getOrDefault(false)
-        if (!soundEnabled || stillIntro) return@LaunchedEffect
-        // Owned by this coroutine, so leaving at any moment, even the frame it is made in, always lets it go.
-        val created = ArcIntroSound(context, lifecycle)
-        sound = created
-        soundForFrame.set(created)
-        try {
-            awaitCancellation()
-        } finally {
-            soundForFrame.set(null)
-            created.fadeOutAndRelease(ArcIntroSound.FadeMs)
+    }
+    var surface by remember { mutableStateOf<DanPlusIntroView?>(null) }
+    var started by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    var minimumComplete by remember { mutableStateOf(false) }
+    var leaving by remember { mutableStateOf(false) }
+    var opacity by remember { mutableFloatStateOf(1f) }
+    var sound by remember { mutableStateOf<SoundPool?>(null) }
+    var readySoundId by remember { mutableStateOf(0) }
+    var soundCued by remember { mutableStateOf(false) }
+
+    DisposableEffect(startPicture) { onDispose { startPicture?.end() } }
+    DisposableEffect(lifecycle, soundEnabled, reducedMotion) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) state.finish()
+        }
+        lifecycle.addObserver(observer)
+        val pool = if (soundEnabled && !reducedMotion) runCatching {
+            SoundPool.Builder().setMaxStreams(1).setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                    .build()
+            ).build()
+        }.getOrNull() else null
+        sound = pool
+        pool?.setOnLoadCompleteListener { callbackPool, id, status ->
+            if (callbackPool === sound && status == 0) readySoundId = id
+        }
+        if (pool != null) runCatching { pool.load(context, R.raw.danplus_intro_sound, 1) }
+        onDispose {
+            lifecycle.removeObserver(observer)
+            sound = null
+            readySoundId = 0
+            pool?.setOnLoadCompleteListener(null)
+            pool?.release()
         }
     }
-    val shownAt = remember { SystemClock.uptimeMillis().also { StartupLatencyTrace.cold("intro_ident") } }
-    fun sinceShown() = SystemClock.uptimeMillis() - shownAt
-    var leaving by remember { mutableStateOf(false) }
-    var minimumComplete by remember { mutableStateOf(false) }
-    var started by remember { mutableStateOf(false) }
-    var startedAt by remember { mutableStateOf(0L) }
-    var failed by remember { mutableStateOf(false) }
-    var backdrop by remember { mutableStateOf(true) }
-    var surface by remember { mutableStateOf<ArcIgnitionView?>(null) }
-    // The theme can still settle (for example membership themes) before the first frame; never after, also while the
-    // first frame's message is still on its way to the main thread.
-    var startedPalette by remember { mutableStateOf<ArcPalette?>(null) }
-    val palette = startedPalette ?: surface?.takeIf { it.stage == ArcIntroStage.Drawn }?.palette ?: NuvioTheme.arcPalette
-    val begun = started || failed
-    val pictureBackdrop = remember(startPicture) { startPicture?.let { with(it) { Modifier.drawPicture() } } ?: Modifier }
-    fun startFrom(view: ArcIgnitionView) {
-        if (surface !== view || started || failed) return
-        if (!leaving) sound?.play()
-        startedPalette = view.palette
-        started = true
-        startedAt = SystemClock.uptimeMillis()
-        StartupLatencyTrace.cold("intro_started", "ident=+${sinceShown()} ms")
+
+    LaunchedEffect(Unit) {
+        StartupLatencyTrace.cold("intro_ident", "danplus")
+        delay(1_600)
+        if (!started && !leaving) failed = true
+        delay(EntryIdentPolicy.RecoveryTimeoutMs - 1_600)
+        leaving = true
     }
-    fun fallBack(reason: String) {
-        if (failed) return
-        failed = true
-        StartupLatencyTrace.cold("intro_fallback", "$reason${if (started) " after start" else ""} ident=+${sinceShown()} ms")
-    }
-    DisposableEffect(startPicture) { onDispose { startPicture?.end() } }
-    LaunchedEffect(begun) {
-        if (!begun) return@LaunchedEffect
+    LaunchedEffect(started, failed) {
+        if (!started && !failed) return@LaunchedEffect
         startPicture?.end()
         state.markShown()
-        delay(EntryIdentPolicy.holdMs(sinceShown(), fallback = failed))
+        delay(if (reducedMotion) 0L else if (failed) 350L else DanPlusIntroTimeline.HoldMs)
         minimumComplete = true
     }
     LaunchedEffect(minimumComplete, state.homeReady, state.revealRequested) {
-        if (state.revealRequested || EntryIdentPolicy.shouldFinish(if (minimumComplete) EntryIdentPolicy.MinimumCycleMs else 0L, state.homeReady)) {
-            leaving = true
-        }
-    }
-    LaunchedEffect(Unit) {
-        delay(EntryIdentPolicy.FirstFrameLimitMs)
-        while (!started && !failed && !leaving) {
-            val view = surface
-            when (EntryIdentPolicy.firstFrame(sinceShown(), view?.stage)) {
-                EntryIdentPolicy.FirstFrame.Started -> { view?.let(::startFrom); break }
-                EntryIdentPolicy.FirstFrame.Fallback -> { fallBack("limit stage=${view?.stage?.name ?: "no surface"}"); break }
-                EntryIdentPolicy.FirstFrame.Wait -> delay(EntryIdentPolicy.FirstFrameRecheckMs)
-            }
-        }
-    }
-    LaunchedEffect(Unit) {
-        delay(EntryIdentPolicy.RecoveryTimeoutMs)
-        leaving = true // Expose Home's existing loading/error/retry and navigation surfaces.
+        if (state.homeReady && (minimumComplete || state.revealRequested)) leaving = true
     }
     LaunchedEffect(leaving) {
         if (!leaving) return@LaunchedEffect
         startPicture?.end()
         state.beginReveal()
+        val duration = if (reducedMotion) 0L else DanPlusIntroTimeline.ExitMs
         val view = surface
-        sound?.fadeOutAndRelease(EntryIdentPolicy.ExitMs)
-        if (view != null && !failed && started) {
-            // Once its fade-in is over the surface is opaque until it fades out, so Home can sit behind it from here on.
-            delay(EntryIdentPolicy.fadeInLeftMs(SystemClock.uptimeMillis() - startedAt))
-            backdrop = false
-            repeat(2) { withFrameNanos { } }
-            withTimeoutOrNull(EntryIdentPolicy.ExitMs + 1_500L) {
-                suspendCancellableCoroutine<Unit> { cont -> view.exit(EntryIdentPolicy.ExitMs) { if (cont.isActive) cont.resume(Unit) } }
+        if (view != null && started && !failed) {
+            withTimeoutOrNull(duration + 700L) {
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    view.exit(duration) { if (continuation.isActive) continuation.resume(Unit) }
+                }
             }
-        } else {
-            view?.exit(0L) {}
-            withFrameNanos { }
-            fadeOutOnFrameClock { opacity = it }
+        } else if (duration > 0 && failed) {
+            val start = withFrameMillis { it }
+            do {
+                val elapsed = withFrameMillis { it } - start
+                opacity = 1f - DanPlusIntroTimeline.ease(elapsed.toFloat() / duration)
+            } while (opacity > 0f)
         }
-        StartupLatencyTrace.cold("intro_finished", "${if (started && !failed) "animated" else "still"} ident=+${sinceShown()} ms")
+        StartupLatencyTrace.cold("intro_finished", "danplus")
         state.finish()
     }
     BackHandler { state.finish(); onReturnToProfiles() }
-    val description = stringResource(R.string.cd_nuvio_logo)
-    Box(
-        Modifier.fillMaxSize()
-            .graphicsLayer { alpha = opacity }
-            .then(
-                when {
-                    !backdrop -> Modifier
-                    startPicture != null && EntryIdentPolicy.showsStartPicture(handoff, failed) -> pictureBackdrop
-                    else -> Modifier.background(IdentBackdrop)
-                }
-            ),
-        contentAlignment = Alignment.Center
-    ) {
+
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (failed) {
-            BrandWordmark(Modifier.height(72.dp), contentDescription = description)
-        } else {
-            key(palette) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { context ->
-                        surface?.let { StartupLatencyTrace.cold("intro_restart", "${it.palette.key}>${palette.key} ident=+${sinceShown()} ms") }
-                        lateinit var view: ArcIgnitionView
-                        view = ArcIgnitionView(
-                            context = context,
-                            palette = palette,
-                            onStarted = { startFrom(view) },
-                            onFailed = { reason -> if (surface === view) fallBack(reason) },
-                            onFirstFrame = { if (surface === view) soundForFrame.get()?.play() },
-                            handoff = handoff
-                        )
-                        view.also { it.contentDescription = description; surface = it }
-                    },
-                    onRelease = { if (surface === it) surface = null }
-                )
+            Box(
+                Modifier.fillMaxSize().graphicsLayer { alpha = opacity }.background(IdentBackdrop),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(painterResource(R.drawable.danplus_intro_logo), "DAN PLUS", Modifier.fillMaxWidth(.65f))
             }
+        } else {
+            if (!started) Box(Modifier.fillMaxSize().startPictureOr(startPicture, IdentBackdrop))
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { viewContext ->
+                    DanPlusIntroView(
+                        context = viewContext,
+                        reducedMotion = reducedMotion,
+                        onStarted = { if (!leaving && !failed) started = true },
+                        onAudioCue = {
+                            if (!soundCued && !leaving && !failed && readySoundId != 0 &&
+                                lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                soundCued = true
+                                sound?.play(readySoundId, 1f, 1f, 1, 0, 1f)
+                            }
+                        },
+                        onFailed = { failed = true }
+                    ).also { it.contentDescription = "DAN PLUS"; surface = it }
+                },
+                onRelease = { if (surface === it) surface = null }
+            )
         }
     }
 }
 
-private val IdentBackdrop = Color(0xFF03050A)
+private val IdentBackdrop = Color(0xFF03070D)

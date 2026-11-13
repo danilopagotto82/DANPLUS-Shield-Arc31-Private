@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="tv_channel_continue_watching">Nastavi gledati</string>
     <string name="type_movie">Film</string>
     <string name="type_movies">Filmovi</string>
@@ -2471,7 +2471,7 @@
     <string name="cd_preview">Pretpregled</string>
     <string name="cd_test">Testiraj</string>
     <string name="cd_unlink">Odspoji</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">Trakt logo</string>
     <string name="cd_trakt_qr">QR za aktivaciju Trakta</string>
     <string name="cd_imdb">IMDb</string>

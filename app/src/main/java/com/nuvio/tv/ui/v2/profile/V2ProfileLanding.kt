@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.UserProfile
-import com.nuvio.tv.ui.components.MemberBrandWordmark
+import com.nuvio.tv.ui.components.DanPlusWordmark
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.rememberLongPressKeyTracker
 import com.nuvio.tv.ui.v2.components.AvatarModel
@@ -103,7 +103,7 @@ fun V2ProfileLanding(
     val groupTop = minOf(maxHeight * .26f, maxHeight * .52f - 160.dp).coerceAtLeast(80.dp)
     val portraitSize = minOf(144.dp, maxHeight * .205f, available / count - 22.dp).coerceAtLeast(56.dp)
     androidx.compose.foundation.layout.Box(Modifier.align(Alignment.TopCenter).padding(top = 24.dp)) {
-        MemberBrandWordmark(height = 40.dp, contentDescription = stringResource(R.string.cd_nuvio_logo))
+        DanPlusWordmark(height = 40.dp)
     }
     Column(Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(horizontal = 48.dp).padding(top = groupTop),
         horizontalAlignment = Alignment.CenterHorizontally) {

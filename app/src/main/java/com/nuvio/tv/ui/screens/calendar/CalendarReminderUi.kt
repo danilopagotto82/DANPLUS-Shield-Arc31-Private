@@ -427,6 +427,7 @@ internal fun calendarReminderTitleRes(items: List<CalendarReminder>): Int = when
 private fun calendarReminderLine(reminder: CalendarReminder): String {
     val entry = reminder.entry
     return when (entry.kind) {
+        CalendarEntryKind.MOVIE_BR_RELEASE -> stringResource(R.string.calendar_film_br_release)
         CalendarEntryKind.MOVIE_THEATRICAL -> stringResource(R.string.calendar_film_cinema)
         CalendarEntryKind.MOVIE_DIGITAL -> stringResource(R.string.calendar_film_digital)
         CalendarEntryKind.EPISODE -> {

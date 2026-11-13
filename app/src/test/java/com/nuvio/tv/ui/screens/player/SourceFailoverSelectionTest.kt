@@ -61,6 +61,21 @@ class SourceFailoverSelectionTest {
     private fun playable(stream: Stream) = SourceFailoverSelection.isAutoFailoverPlayable(stream, 1, 2)
 
     @Test
+    fun slowSourceSwitchStaysInsideTheCurrentAddon() {
+        val original = stream(url = "https://first.example/video")
+        val otherAddon = stream(url = "https://other.example/video").copy(addonName = "Other")
+        val alternative = stream(url = "https://second.example/video")
+        val candidates = listOf(original, otherAddon, alternative)
+
+        assertSame(alternative, SourceFailoverSelection.selectNext(
+            candidates, 0, key, key, emptySet(), 1, 2, addonName = original.addonName
+        ))
+        assertNull(SourceFailoverSelection.selectNext(
+            candidates, 0, key, key, setOf(alternative.url!!), 1, 2, addonName = original.addonName
+        ))
+    }
+
+    @Test
     fun `a direct http link is playable`() {
         assertTrue(playable(stream(url = "https://cdn.example/show.s01e02.mkv")))
         assertTrue(playable(stream(url = "http://cdn.example/show.s01e02.mkv")))

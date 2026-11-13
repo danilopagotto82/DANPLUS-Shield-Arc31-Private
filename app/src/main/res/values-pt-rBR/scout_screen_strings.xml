@@ -192,4 +192,8 @@
     <string name="scout_award_bafta">BAFTA</string>
     <string name="scout_award_emmy">Emmys</string>
     <string name="scout_award_actor">Actor Awards</string>
+    <string name="scout_title">Para Você</string>
+    <string name="scout_show_watched_on">Mostrar assistidos · Sim</string>
+    <string name="scout_show_watched_off">Mostrar assistidos · Não</string>
+    <string name="scout_watched_hidden_empty">Os títulos assistidos foram ocultados.</string>
 </resources>

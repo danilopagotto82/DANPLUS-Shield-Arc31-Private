@@ -266,7 +266,6 @@ internal fun TrackingSettingsContent(
             restoreFocusTarget = TrackingFocusTarget.CONTINUE_WATCHING
             showDaysCapDialog = true
         },
-        onCommentsChanged = traktViewModel::onShowMetaCommentsChanged,
         onMoreLikeThisClick = {
             restoreFocusTarget = TrackingFocusTarget.MORE_LIKE_THIS
             showMoreLikeThisSourceDialog = true
@@ -631,7 +630,6 @@ internal fun TrackingSettingsOverview(
     onTransferClick: () -> Unit = {},
     onWatchProgressClick: () -> Unit,
     onContinueWatchingWindowClick: () -> Unit,
-    onCommentsChanged: (Boolean) -> Unit,
     onMoreLikeThisClick: () -> Unit,
     onAnimeIdClick: () -> Unit,
     mdbListLibraryLists: MdbListLibraryListsUiState = MdbListLibraryListsUiState(),
@@ -796,16 +794,6 @@ internal fun TrackingSettingsOverview(
                                     modifier = Modifier
                                         .focusRequester(continueWatchingFocusRequester)
                                         .testTag(TrackingSettingsTestTags.CONTINUE_WATCHING)
-                                )
-                                SettingsToggleRow(
-                                    title = stringResource(R.string.trakt_comments_title),
-                                    subtitle = stringResource(R.string.trakt_comments_subtitle),
-                                    checked = traktState.showMetaComments,
-                                    enabled = true,
-                                    onToggle = {
-                                        onCommentsChanged(!traktState.showMetaComments)
-                                    },
-                                    modifier = Modifier.testTag(TrackingSettingsTestTags.COMMENTS)
                                 )
                             }
                         }
@@ -1081,6 +1069,5 @@ internal object TrackingSettingsTestTags {
     const val LIBRARY_SOURCE = "tracking_source_library"
     const val WATCH_PROGRESS_SOURCE = "tracking_source_watch_progress"
     const val CONTINUE_WATCHING = "tracking_trakt_continue_watching"
-    const val COMMENTS = "tracking_trakt_comments"
     const val MORE_LIKE_THIS = "tracking_trakt_more_like_this"
 }

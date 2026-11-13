@@ -39,7 +39,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.R
 import com.nuvio.tv.core.scout.ScoutAiState
 import com.nuvio.tv.core.scout.ScoutAiStore
@@ -104,7 +103,7 @@ class ScoutQuickStartViewModel @Inject constructor(
     fun load() {
         aiStore.update { it.copy(quickStartOffered = true) }
         viewModelScope.launch {
-            val key = BuildConfig.TMDB_API_KEY
+            val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
             val films = runCatching { tmdbApi.discoverMovies(apiKey = key, sortBy = "popularity.desc", voteCountGte = QUICK_MIN_VOTES) }
                 .getOrNull()?.body()?.results.orEmpty().mapNotNull { it.toPick(false) }
             val series = runCatching { tmdbApi.discoverTv(apiKey = key, sortBy = "popularity.desc", voteCountGte = QUICK_MIN_VOTES, withoutGenres = "10763,10764,10766,10767") }

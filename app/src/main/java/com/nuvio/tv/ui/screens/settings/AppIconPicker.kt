@@ -352,7 +352,7 @@ private const val AdaptiveIconVisibleScale = 108f / 72f
 
 internal val AppIconOption.iconResource: Int
     get() = when (this) {
-        AppIconOption.ORIGINAL -> R.drawable.arc_launcher_foreground
+        AppIconOption.ORIGINAL -> R.drawable.danplus_launcher_foreground
         AppIconOption.ARCTIC_BLUE -> R.drawable.arc_launcher_foreground_arctic_blue
         AppIconOption.EMERALD -> R.drawable.arc_launcher_foreground_emerald
         AppIconOption.ROSE_GOLD -> R.drawable.arc_launcher_foreground_rose_gold

@@ -23,7 +23,7 @@ data class CalendarSection(
 )
 
 const val CALENDAR_DEFAULT_WINDOW_DAYS = 30
-val CALENDAR_WINDOW_OPTIONS = listOf(14, 30, 60)
+val CALENDAR_WINDOW_OPTIONS = listOf(14, 30, 60, 90)
 private const val JUST_AIRED_DAYS = 7L
 private const val LATER_MONTHS = 12L
 

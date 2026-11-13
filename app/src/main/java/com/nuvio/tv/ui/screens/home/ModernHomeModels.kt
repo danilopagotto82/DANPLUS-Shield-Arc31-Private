@@ -93,7 +93,8 @@ data class HeroPreview(
     /** Same idea for the logo URL. */
     val frozenLogoUrl: String? = null,
     /** Several shows' logos in a row, for a hero that stands for more than one title. */
-    val logos: StableList<String> = emptyList<String>().asStable()
+    val logos: StableList<String> = emptyList<String>().asStable(),
+    val isCollectionFolder: Boolean = false
 )
 
 @Immutable
@@ -155,7 +156,9 @@ data class HeroCarouselRow(
     val apiType: String? = null,
     val supportsSkip: Boolean = false,
     val hasMore: Boolean = false,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val collectionHighlight: com.nuvio.tv.domain.model.CollectionHighlight? = null,
+    val collectionHighlightRgb: Int? = null
 )
 
 @Immutable
@@ -620,7 +623,8 @@ internal fun buildCollectionFolderItem(
             poster = imageUrl,
             backdrop = heroBackdrop,
             imageUrl = imageUrl,
-            logos = mix?.logos.orEmpty().asStable()
+            logos = mix?.logos.orEmpty().asStable(),
+            isCollectionFolder = true
         ),
         payload = ModernPayload.CollectionFolder(
             focusKey = "collection_${collection.id}::${folder.id}",

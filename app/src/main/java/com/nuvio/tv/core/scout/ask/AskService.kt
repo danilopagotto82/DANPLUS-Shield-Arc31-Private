@@ -1,7 +1,6 @@
 package com.nuvio.tv.core.scout.ask
 
 import android.content.Context
-import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.poster.CustomPosterScreen
 import com.nuvio.tv.core.scout.ScoutArtwork
 import com.nuvio.tv.core.tmdb.TmdbImageSizes
@@ -102,8 +101,8 @@ class TmdbAskTitleLookup @Inject constructor(
         val order = if (pick.isSeries == true) listOf(true, false) else listOf(false, true)
         for (series in order) {
             val results = try {
-                val response = if (series) tmdbApi.searchTv(BuildConfig.TMDB_API_KEY, pick.title, language)
-                else tmdbApi.searchMovies(BuildConfig.TMDB_API_KEY, pick.title, language)
+                val response = if (series) tmdbApi.searchTv(com.nuvio.tv.core.tmdb.TmdbApiKey.value, pick.title, language)
+                else tmdbApi.searchMovies(com.nuvio.tv.core.tmdb.TmdbApiKey.value, pick.title, language)
                 response.body()?.results.orEmpty()
             } catch (e: CancellationException) {
                 throw e

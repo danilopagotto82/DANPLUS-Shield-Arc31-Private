@@ -18,6 +18,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import com.nuvio.tv.R
 import com.nuvio.tv.data.local.DeviceUiPreferenceStore
 import com.nuvio.tv.data.local.V2AppearancePreferenceStore
@@ -55,6 +61,12 @@ internal fun V2PreferenceControls(initialFocusRequester: FocusRequester? = null)
                 InterfaceExperience.NUVIO_V2 to stringResource(R.string.v2_experience_v2),
                 InterfaceExperience.ORIGINAL_NUVIO to stringResource(R.string.v2_experience_original)
             ),
+            styledLabel = { experience ->
+                if (experience == InterfaceExperience.NUVIO_V2) buildAnnotatedString {
+                    withStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.ExtraBold)) { append("DAN") }
+                    withStyle(SpanStyle(color = Color(0xFF69B9FF), fontWeight = FontWeight.Normal)) { append("PLUS") }
+                } else null
+            },
             onSelect = { value ->
                 DeviceUiPreferenceStore.update(context) { it.copy(interfaceExperience = value) }
             }
@@ -71,7 +83,7 @@ internal fun V2PreferenceControls(initialFocusRequester: FocusRequester? = null)
             if (appearance.introAnimationEnabled) {
                 SettingsToggleRow(
                     title = stringResource(R.string.v2_intro_sound_title),
-                    subtitle = stringResource(R.string.v2_intro_sound_subtitle),
+                    subtitle = stringResource(R.string.danplus_intro_sound_subtitle),
                     checked = appearance.introSoundEnabled,
                     onToggle = { scope.launch {
                         V2AppearancePreferenceStore.update(context) { it.copy(introSoundEnabled = !it.introSoundEnabled) }
@@ -276,7 +288,8 @@ private fun <T> V2ChoiceRow(
     options: List<Pair<T, String>>,
     onSelect: suspend (T) -> Unit,
     subtitle: String? = null,
-    initialFocusRequester: FocusRequester? = null
+    initialFocusRequester: FocusRequester? = null,
+    styledLabel: ((T) -> AnnotatedString?)? = null
 ) {
     val scope = rememberCoroutineScope()
     if (selected is VisualStyle || selected is NavigationStyle || selected is FocusStyle ||
@@ -304,12 +317,15 @@ private fun <T> V2ChoiceRow(
         subtitle = subtitle,
         modifier = Modifier.bringIntoViewRequester(rowVisibility).focusRequester(rowFocus),
         value = options.firstOrNull { it.first == selected }?.second,
+        annotatedValue = styledLabel?.invoke(selected),
         onClick = { open = true }
     )
     if (open) {
         SettingsSingleChoiceDialog(
             title = title,
-            options = options.map { SettingsPickerOption(it.first, it.second) },
+            options = options.map { (value, label) ->
+                SettingsPickerOption(value, label, annotatedTitle = styledLabel?.invoke(value))
+            },
             selectedValue = selected,
             onOptionSelected = { value -> scope.launch { onSelect(value); dismiss() } },
             onDismiss = dismiss

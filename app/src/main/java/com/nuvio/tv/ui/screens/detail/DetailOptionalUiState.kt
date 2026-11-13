@@ -3,11 +3,11 @@ package com.nuvio.tv.ui.screens.detail
 import com.nuvio.tv.domain.model.*
 
 internal data class DetailCommentState(
-    val comments: List<TraktCommentReview>, val currentPage: Int, val pageCount: Int,
-    val loading: Boolean, val loadingMore: Boolean, val error: String?
+    val comments: List<TmdbReview>, val currentPage: Int, val pageCount: Int,
+    val loadingMore: Boolean
 ) { val canLoadMore: Boolean get() = currentPage in 1 until pageCount }
 internal fun MetaDetailsUiState.commentState() = DetailCommentState(
-    comments, commentsCurrentPage, commentsPageCount, isCommentsLoading, isCommentsLoadingMore, commentsError)
+    comments, commentsCurrentPage, commentsPageCount, isCommentsLoadingMore)
 
 internal data class DetailRatingState(val ratings: MDBListRatings?, val active: Boolean, val tmdb: Float?)
 internal fun MetaDetailsUiState.ratingState() = DetailRatingState(mdbListRatings, isMdbListRatingsActive, tmdbRating)
@@ -21,5 +21,5 @@ internal fun MetaDetailsUiState.peopleState() = DetailPeopleState(
 internal fun MetaDetailsUiState.entryState() = copy(
     meta = meta?.copy(cast = emptyList(), castMembers = emptyList(), productionCompanies = emptyList(), networks = emptyList()),
     comments = emptyList(), commentsCurrentPage = 0, commentsPageCount = 0,
-    isCommentsLoading = false, isCommentsLoadingMore = false, commentsError = null,
+    isCommentsLoadingMore = false,
     mdbListRatings = null, isMdbListRatingsActive = false, tmdbRating = null)

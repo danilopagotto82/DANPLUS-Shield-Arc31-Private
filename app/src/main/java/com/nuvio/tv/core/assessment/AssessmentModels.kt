@@ -84,7 +84,8 @@ data class AssessmentResult(
     /** Machine-actionable side of the items: null field = never touched. */
     val applyPlan: AssessmentApplyPlan,
     val errorText: String?,
-    val deviceFacts: AssessmentDeviceFacts? = null
+    val deviceFacts: AssessmentDeviceFacts? = null,
+    val measuredBaselineMbps: Double? = null
 )
 
 /**

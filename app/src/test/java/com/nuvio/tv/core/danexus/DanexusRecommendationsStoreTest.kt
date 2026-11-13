@@ -65,6 +65,45 @@ class DanexusRecommendationsStoreTest {
         assertTrue(f.store.read().any { it.from == 4 && it.contentId == "other" })
     }
 
+    @Test fun retryingTheSameTitleKeepsTheServerCopyUntilTheNextSync() {
+        val f = Fixture()
+        val profileIds = mapOf(1 to "sender", 2 to "recipient")
+        f.store.send(1, listOf(2), f.meta(), serverIds = profileIds, syncEnabled = true)
+        val first = f.store.read().single()
+        val remote = first.copy(key = "server-row", remote = true, uploadPending = false, remoteViewerId = "sender")
+        f.store.cacheRemote(DanexusRecommendations.GUEST, "sender", listOf(remote), setOf(first.key))
+
+        f.store.send(1, listOf(2), f.meta(), serverIds = profileIds, syncEnabled = true)
+
+        val rows = f.store.read()
+        val pending = rows.single { it.uploadPending }
+        assertEquals("server-row", rows.single { it.remote }.key)
+        assertNotEquals(first.key, pending.key)
+        f.store.cacheRemote(DanexusRecommendations.GUEST, "sender", listOf(remote), setOf(pending.key))
+        assertEquals(listOf(remote), f.store.read())
+    }
+
+    @Test fun aFullRemoteCacheDoesNotDiscardAnOlderOfflineSend() {
+        val f = Fixture()
+        val profileIds = mapOf(1 to "sender", 2 to "recipient")
+        f.store.send(1, listOf(2), f.meta(), serverIds = profileIds, syncEnabled = true)
+        val pending = f.store.read().single()
+        val remoteRows = (1..601).map { index ->
+            pending.copy(
+                key = "remote-$index",
+                createdAt = pending.createdAt + index,
+                remote = true,
+                remoteViewerId = "sender",
+                uploadPending = false
+            )
+        }
+
+        f.store.cacheRemote(DanexusRecommendations.GUEST, "sender", remoteRows, emptySet())
+
+        assertEquals(pending, f.store.read().single { it.uploadPending })
+        assertEquals(600, f.store.read().count { it.remote })
+    }
+
     @Test fun recipientRemovalPersistsAndDoesNotRemoveOtherRecipients() {
         val f = Fixture()
         f.store.send(1, listOf(2, 3), f.meta())

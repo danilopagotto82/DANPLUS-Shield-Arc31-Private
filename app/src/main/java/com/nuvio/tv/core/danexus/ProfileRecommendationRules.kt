@@ -11,6 +11,13 @@ internal object ProfileRecommendationRules {
 
     fun isSupportedType(type: String): Boolean = type.equals("movie", ignoreCase = true) || isSeries(type)
 
+    fun hasOutgoing(rows: List<ProfileRecommendation>, active: Int, meta: Meta): Boolean =
+        rows.any { row ->
+            row.from == active && isSupportedType(row.type) && isSupportedType(meta.apiType) &&
+                isSeries(row.type) == isSeries(meta.apiType) &&
+                (row.contentId == meta.id || row.contentId == meta.imdbId)
+        }
+
     fun recipients(active: Int, requested: Collection<Int>, available: Set<Int>): Set<Int> =
         requested.filterTo(linkedSetOf()) { it != active && it in available }
 
@@ -23,7 +30,8 @@ internal object ProfileRecommendationRules {
     fun deliver(rows: List<ProfileRecommendation>, item: ProfileRecommendation): List<ProfileRecommendation> {
         if (item.from == item.to) return rows
         return listOf(item) + rows.filterNot {
-            it.from == item.from && it.to == item.to && it.contentId == item.contentId && it.type == item.type
+            !it.remote && it.from == item.from && it.to == item.to &&
+                it.contentId == item.contentId && isSeries(it.type) == isSeries(item.type)
         }
     }
 

@@ -1,6 +1,5 @@
 package com.nuvio.tv.core.scout
 
-import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.poster.CustomPosterScreen
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
@@ -43,7 +42,7 @@ class ScoutMixSuggestions @Inject constructor(
         val lists = coroutineScope {
             seeds.map { id ->
                 async {
-                    runCatching { tmdbApi.getTvRecommendations(id, BuildConfig.TMDB_API_KEY, language) }.getOrNull()
+                    runCatching { tmdbApi.getTvRecommendations(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language) }.getOrNull()
                         ?.body()?.results.orEmpty().mapNotNull { it.toPick(seedTv = true) }
                 }
             }.awaitAll()

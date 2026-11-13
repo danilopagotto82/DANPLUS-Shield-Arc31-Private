@@ -14,15 +14,11 @@ import com.nuvio.tv.ui.util.keepLtr
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,7 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -402,8 +397,8 @@ fun AdvancedSettingsContent(
                     }
                 )
                 SettingsToggleRow(
-                    title = "Add-on health indicators",
-                    subtitle = "Show OK/Slow/Down status on add-ons and resolvers. Passive - no background scanning.",
+                    title = stringResource(R.string.addon_health_setting),
+                    subtitle = stringResource(R.string.addon_health_setting_description),
                     checked = uiState.addonHealthEnabled,
                     onToggle = {
                         viewModel.onEvent(
@@ -588,6 +583,7 @@ fun AdvancedSettingsContent(
                                 icon = Icons.Default.Timer,
                                 label = stringResource(R.string.network_http_response_label),
                                 value = generalDiagnostic.latencyMs?.let { "$it ms" },
+                                accent = Color(0xFFC2ACF5),
                                 loading = generalDiagnostic.status == NetworkTestState.TestingLatency
                             )
                             NetworkMetricCard(
@@ -595,6 +591,7 @@ fun AdvancedSettingsContent(
                                 icon = Icons.Default.Speed,
                                 label = stringResource(R.string.network_download_label),
                                 value = generalDiagnostic.downloadMbps?.let { "%.1f Mbps".format(it) },
+                                accent = Color(0xFFE6BC68),
                                 loading = generalDiagnostic.status == NetworkTestState.TestingDownload
                             )
                         }
@@ -612,6 +609,9 @@ fun AdvancedSettingsContent(
                             style = MaterialTheme.typography.labelSmall,
                             color = NuvioTheme.colors.TextSecondary.copy(alpha = 0.45f)
                         )
+                        if (generalDiagnostic.status == NetworkTestState.Done) {
+                            GeneralPlaybackNetworkEstimate(generalDiagnostic.downloadMbps)
+                        }
                     }
                 }
             }
@@ -680,6 +680,11 @@ fun AdvancedSettingsContent(
                             }
 
                             if (streamDiagnostic.status == "Done") {
+                                StreamPlaybackNetworkEstimate(
+                                    serverMbps = streamDiagnostic.baselineMbps,
+                                    totalBitrate = streamDiagnostic.bitrate.takeIf { streamDiagnostic.bitrateIsMux },
+                                    sizeBytes = streamDiagnostic.fileSizeBytes
+                                )
                                 Text(
                                     text = stringResource(R.string.stream_test_caveat),
                                     style = MaterialTheme.typography.labelSmall,
@@ -875,45 +880,33 @@ private fun NetworkMetricCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String?,
+    accent: Color,
     loading: Boolean
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "spin")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
+    val shape = RoundedCornerShape(14.dp)
     Column(
-        modifier = modifier.padding(NuvioTheme.spacing.sm),
+        modifier = modifier
+            .background(accent.copy(alpha = 0.08f), shape)
+            .border(1.dp, accent.copy(alpha = 0.42f), shape)
+            .padding(NuvioTheme.spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
     ) {
         Icon(
             imageVector = if (loading) Icons.Default.Refresh else icon,
             contentDescription = null,
-            modifier = Modifier
-                .size(28.dp)
-                .then(if (loading) Modifier.rotate(rotation) else Modifier),
-            tint = if (loading) Color.White else Color.White
+            modifier = Modifier.size(23.dp),
+            tint = accent
         )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = NuvioTheme.colors.TextSecondary
-        )
+        Text(text = label, style = MaterialTheme.typography.bodySmall, color = NuvioTheme.colors.TextSecondary)
         Text(
             text = when {
-                loading -> "..."
+                loading -> "…"
                 value != null -> value.keepLtr()
                 else -> "–"
             },
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-            color = if (value != null && !loading) NuvioTheme.colors.TextPrimary else NuvioTheme.colors.TextTertiary
+            color = if (value != null && !loading) accent else NuvioTheme.colors.TextTertiary
         )
     }
 }

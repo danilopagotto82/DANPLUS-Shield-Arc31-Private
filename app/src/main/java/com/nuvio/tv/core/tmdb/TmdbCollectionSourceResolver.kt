@@ -1,7 +1,6 @@
 package com.nuvio.tv.core.tmdb
 
 import android.content.Context
-import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.R
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
@@ -82,18 +81,18 @@ class TmdbCollectionSourceResolver @Inject constructor(
 
     suspend fun searchCompanies(query: String): List<TmdbCompanySearchResult> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
-        tmdbApi.searchCompanies(BuildConfig.TMDB_API_KEY, query.trim()).body()?.results.orEmpty()
+        tmdbApi.searchCompanies(com.nuvio.tv.core.tmdb.TmdbApiKey.value, query.trim()).body()?.results.orEmpty()
     }
 
     suspend fun searchCollections(query: String): List<TmdbCollectionSearchResult> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
         val language = tmdbSettingsDataStore.settings.first().language
-        tmdbApi.searchCollections(BuildConfig.TMDB_API_KEY, query.trim(), language).body()?.results.orEmpty()
+        tmdbApi.searchCollections(com.nuvio.tv.core.tmdb.TmdbApiKey.value, query.trim(), language).body()?.results.orEmpty()
     }
 
     suspend fun listImportMetadata(id: Int): TmdbSourceImportMetadata = withContext(Dispatchers.IO) {
         val language = tmdbSettingsDataStore.settings.first().language
-        val body = tmdbApi.getListDetails(id, BuildConfig.TMDB_API_KEY, language, 1).body()
+        val body = tmdbApi.getListDetails(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language, 1).body()
             ?: error(string(R.string.tmdb_error_list_not_found))
         TmdbSourceImportMetadata(
             title = body.name?.takeIf { it.isNotBlank() }
@@ -102,7 +101,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
 
     suspend fun collectionImportMetadata(id: Int): TmdbSourceImportMetadata = withContext(Dispatchers.IO) {
         val language = tmdbSettingsDataStore.settings.first().language
-        val body = tmdbApi.getCollectionDetails(id, BuildConfig.TMDB_API_KEY, language).body()
+        val body = tmdbApi.getCollectionDetails(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language).body()
             ?: error(string(R.string.tmdb_error_collection_not_found))
         TmdbSourceImportMetadata(
             title = body.name?.takeIf { it.isNotBlank() },
@@ -112,7 +111,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
     }
 
     suspend fun companyImportMetadata(id: Int): TmdbSourceImportMetadata = withContext(Dispatchers.IO) {
-        val body = tmdbApi.getCompanyDetails(id, BuildConfig.TMDB_API_KEY).body()
+        val body = tmdbApi.getCompanyDetails(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value).body()
             ?: error(string(R.string.tmdb_error_company_not_found))
         TmdbSourceImportMetadata(
             title = body.name?.takeIf { it.isNotBlank() },
@@ -121,7 +120,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
     }
 
     suspend fun networkImportMetadata(id: Int): TmdbSourceImportMetadata = withContext(Dispatchers.IO) {
-        val body = tmdbApi.getNetworkDetails(id, BuildConfig.TMDB_API_KEY).body()
+        val body = tmdbApi.getNetworkDetails(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value).body()
             ?: error(string(R.string.tmdb_error_network_not_found))
         TmdbSourceImportMetadata(
             title = body.name?.takeIf { it.isNotBlank() },
@@ -131,7 +130,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
 
     suspend fun personImportMetadata(id: Int): TmdbSourceImportMetadata = withContext(Dispatchers.IO) {
         val language = tmdbSettingsDataStore.settings.first().language
-        val body = tmdbApi.getPersonDetails(id, BuildConfig.TMDB_API_KEY, language).body()
+        val body = tmdbApi.getPersonDetails(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language).body()
             ?: error(string(R.string.tmdb_error_person_not_found))
         TmdbSourceImportMetadata(
             title = body.name?.takeIf { it.isNotBlank() },
@@ -141,7 +140,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
 
     suspend fun searchKeywords(query: String): Map<Int, String> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyMap()
-        tmdbApi.searchKeywords(BuildConfig.TMDB_API_KEY, query.trim()).body()?.results.orEmpty()
+        tmdbApi.searchKeywords(com.nuvio.tv.core.tmdb.TmdbApiKey.value, query.trim()).body()?.results.orEmpty()
             .mapNotNull { result ->
                 val name = result.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 result.id to name
@@ -152,8 +151,8 @@ class TmdbCollectionSourceResolver @Inject constructor(
     suspend fun genres(mediaType: TmdbCollectionMediaType): Map<Int, String> = withContext(Dispatchers.IO) {
         val language = tmdbSettingsDataStore.settings.first().language
         val response = when (mediaType) {
-            TmdbCollectionMediaType.MOVIE -> tmdbApi.getMovieGenres(BuildConfig.TMDB_API_KEY, language)
-            TmdbCollectionMediaType.TV -> tmdbApi.getTvGenres(BuildConfig.TMDB_API_KEY, language)
+            TmdbCollectionMediaType.MOVIE -> tmdbApi.getMovieGenres(com.nuvio.tv.core.tmdb.TmdbApiKey.value, language)
+            TmdbCollectionMediaType.TV -> tmdbApi.getTvGenres(com.nuvio.tv.core.tmdb.TmdbApiKey.value, language)
         }
         response.body()?.genres.orEmpty().associate { it.id to it.name }
     }
@@ -175,7 +174,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
 
     private suspend fun resolveList(source: TmdbCollectionSource, language: String, page: Int): CatalogRow {
         val id = source.tmdbId ?: error(string(R.string.tmdb_error_missing_list_id))
-        val body = tmdbApi.getListDetails(id, BuildConfig.TMDB_API_KEY, language, page).body()
+        val body = tmdbApi.getListDetails(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language, page).body()
             ?: error(string(R.string.tmdb_error_list_not_found))
         val items = body.items.orEmpty()
             .mapNotNull { it.toPreview() }
@@ -191,7 +190,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
 
     private suspend fun resolveCollection(source: TmdbCollectionSource, language: String): CatalogRow {
         val id = source.tmdbId ?: error(string(R.string.tmdb_error_missing_collection_id))
-        val body = tmdbApi.getCollectionDetails(id, BuildConfig.TMDB_API_KEY, language).body()
+        val body = tmdbApi.getCollectionDetails(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language).body()
             ?: error(string(R.string.tmdb_error_collection_not_found))
         val items = body.parts.orEmpty()
             .mapNotNull {
@@ -224,7 +223,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
 
     private suspend fun resolvePersonCredits(source: TmdbCollectionSource, language: String): CatalogRow {
         val id = source.tmdbId ?: error(string(R.string.tmdb_error_missing_person_id))
-        val body = tmdbApi.getPersonCombinedCredits(id, BuildConfig.TMDB_API_KEY, language).body()
+        val body = tmdbApi.getPersonCombinedCredits(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language).body()
             ?: error(string(R.string.tmdb_error_person_credits_not_found))
         val items = when (source.sourceType) {
             TmdbCollectionSourceType.DIRECTOR -> body.crew.orEmpty()
@@ -252,7 +251,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
         val today = LocalDate.now().toString()
         val response = when (mediaType) {
             TmdbCollectionMediaType.MOVIE -> tmdbApi.discoverMovies(
-                apiKey = BuildConfig.TMDB_API_KEY,
+                apiKey = com.nuvio.tv.core.tmdb.TmdbApiKey.value,
                 language = language,
                 page = page,
                 sortBy = movieSort(source.sortBy),
@@ -286,7 +285,7 @@ class TmdbCollectionSourceResolver @Inject constructor(
                 certificationLte = filters.certificationLte
             ).body()
             TmdbCollectionMediaType.TV -> tmdbApi.discoverTv(
-                apiKey = BuildConfig.TMDB_API_KEY,
+                apiKey = com.nuvio.tv.core.tmdb.TmdbApiKey.value,
                 language = language,
                 page = page,
                 sortBy = tvSort(source.sortBy),
@@ -345,8 +344,8 @@ class TmdbCollectionSourceResolver @Inject constructor(
                 async {
                     gate.withPermit {
                         val body = runCatching {
-                            if (tv) tmdbApi.getTvDetails(id, BuildConfig.TMDB_API_KEY, language)
-                            else tmdbApi.getMovieDetails(id, BuildConfig.TMDB_API_KEY, language)
+                            if (tv) tmdbApi.getTvDetails(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language)
+                            else tmdbApi.getMovieDetails(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language)
                         }.getOrNull()?.body()
                         body?.toPreview(source.mediaType)
                     }

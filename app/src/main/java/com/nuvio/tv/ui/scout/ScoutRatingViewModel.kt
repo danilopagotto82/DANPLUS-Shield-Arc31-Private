@@ -46,6 +46,12 @@ class ScoutRatingViewModel @Inject constructor(
         viewModelScope.launch { store.update(transform) }
     }
 
+    fun observeShowWatched(profileId: Int) = store.observeShowWatched(profileId)
+
+    fun setShowWatched(profileId: Int, enabled: Boolean) {
+        viewModelScope.launch { store.setShowWatched(profileId, enabled) }
+    }
+
     fun offerAsk(target: ScoutAskTarget?) {
         if (target != null && !mixSession.active) store.offerAsk(target)
     }

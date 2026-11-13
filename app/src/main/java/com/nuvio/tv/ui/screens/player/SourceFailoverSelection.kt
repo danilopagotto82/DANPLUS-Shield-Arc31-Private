@@ -66,12 +66,14 @@ internal object SourceFailoverSelection {
         currentRequestKey: String?,
         deadUrls: Set<String>,
         season: Int?,
-        episode: Int?
+        episode: Int?,
+        addonName: String? = null
     ): Stream? {
         if (currentRequestKey == null || listRequestKey != currentRequestKey) return null
         val startIndex = if (currentIndex >= 0) currentIndex + 1 else 0
         for (index in startIndex until streams.size) {
             val candidate = streams[index]
+            if (addonName != null && candidate.addonName != addonName) continue
             if (!isAutoFailoverPlayable(candidate, season, episode)) continue
             val key = failoverKey(candidate) ?: continue
             if (key in deadUrls) continue

@@ -890,15 +890,6 @@ open class MainActivity : ComponentActivity() {
                         return@Surface
                     }
 
-                    // Past sign-in and the profile page, the intro is what comes next: get its art ready while Home loads.
-                    val introPalette = NuvioTheme.arcPalette
-                    val rootView = LocalView.current
-                    LaunchedEffect(introPalette, mainUiPrefs.experienceModeLoaded, device.interfaceExperience, appearance.introAnimationEnabled) {
-                        if (mainUiPrefs.experienceModeLoaded && appearance.introAnimationEnabled && !profileEntry.hasRunThisSession &&
-                            device.interfaceExperience == com.nuvio.tv.domain.model.InterfaceExperience.NUVIO_V2) {
-                            com.nuvio.tv.ui.brand.ArcIntroPrep.warm(context, introPalette, rootView.width, rootView.height)
-                        }
-                    }
                     val layoutChosen = mainUiPrefs.hasChosenLayout
                     if (layoutChosen == null || !mainUiPrefs.experienceModeLoaded || installedAddons == null) {
                         Box(
@@ -1246,6 +1237,7 @@ open class MainActivity : ComponentActivity() {
                         strNavHome,
                         strNavDiscover,
                         strNavSearch,
+                        strNavScout,
                         strNavLibrary,
                         strNavIndications,
                         strNavSettings,

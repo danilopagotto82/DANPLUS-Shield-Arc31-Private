@@ -117,7 +117,7 @@ class TrackingSettingsOverviewTest {
         setOverview()
 
         composeRule.onNodeWithTag(TrackingSettingsTestTags.CONTINUE_WATCHING).assertDoesNotExist()
-        composeRule.onNodeWithTag(TrackingSettingsTestTags.COMMENTS).assertDoesNotExist()
+        composeRule.onNodeWithTag("tracking_trakt_comments").assertDoesNotExist()
         composeRule.onNodeWithTag(TrackingSettingsTestTags.MORE_LIKE_THIS).assertDoesNotExist()
     }
 
@@ -135,8 +135,8 @@ class TrackingSettingsOverviewTest {
 
         composeRule.onNodeWithTag(TrackingSettingsTestTags.CONTINUE_WATCHING)
             .assertIsNotEnabled()
-        composeRule.onNodeWithTag(TrackingSettingsTestTags.COMMENTS)
-            .assertIsEnabled()
+        composeRule.onNodeWithTag("tracking_trakt_comments")
+            .assertDoesNotExist()
         composeRule.onNodeWithTag(TrackingSettingsTestTags.MORE_LIKE_THIS)
             .assertIsEnabled()
     }
@@ -156,8 +156,8 @@ class TrackingSettingsOverviewTest {
 
         composeRule.onNodeWithTag(TrackingSettingsTestTags.CONTINUE_WATCHING)
             .assertIsEnabled()
-        composeRule.onNodeWithTag(TrackingSettingsTestTags.COMMENTS)
-            .assertIsEnabled()
+        composeRule.onNodeWithTag("tracking_trakt_comments")
+            .assertDoesNotExist()
         composeRule.onNodeWithTag(TrackingSettingsTestTags.MORE_LIKE_THIS)
             .assertIsEnabled()
     }
@@ -186,7 +186,6 @@ class TrackingSettingsOverviewTest {
                     onLibrarySourceClick = {},
                     onWatchProgressClick = {},
                     onContinueWatchingWindowClick = {},
-                    onCommentsChanged = {},
                     onMoreLikeThisClick = {},
                     onAnimeIdClick = {}
                 )
@@ -269,7 +268,6 @@ class TrackingSettingsOverviewTest {
                     onLibrarySourceClick = {},
                     onWatchProgressClick = {},
                     onContinueWatchingWindowClick = {},
-                    onCommentsChanged = {},
                     onMoreLikeThisClick = {},
                     onAnimeIdClick = {}
                 )

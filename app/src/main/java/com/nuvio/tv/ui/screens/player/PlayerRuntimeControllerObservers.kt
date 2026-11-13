@@ -984,10 +984,8 @@ internal fun PlayerRuntimeController.cancelStartupWatchdog() {
  * frame (real onRenderedFirstFrame or the tunneled synthetic first frame at READY)
  * and on stream reset/reinit. Fires once if no frame has rendered inside
  * [PlayerRuntimeController.STARTUP_WATCHDOG_TIMEOUT_MS] and surfaces an actionable
- * error instead of an infinite spinner. Deliberately does NOT auto-retry: the known
- * trigger is the vendor Codec2 service wedging during decoder allocation, where a
- * reinit just hangs again; the honest remedy is telling the user (a device restart
- * clears the wedge). Exo engine path only, matching the arm site.
+ * error or advances to another source when HTTP startup delivered no data. Decoder
+ * failures keep their own recovery path. Exo engine path only.
  */
 internal fun PlayerRuntimeController.scheduleStartupWatchdog() {
     cancelStartupWatchdog()
@@ -1113,6 +1111,28 @@ internal fun PlayerRuntimeController.scheduleStartupWatchdog() {
                         "${elapsedMs}ms after starting_stream; trying MPV"
                 )
                 if (switchToMpvForUnsupportedFormat("startup-no-picture")) return@launch
+            }
+            val url = currentStreamUrl
+            val addon = _uiState.value.currentStreamAddonName?.takeIf { it.isNotBlank() }
+            if (addon != null && !isInBackground && _uiState.value.error == null &&
+                StartupWatchdogDecision.canSkipSlowHttpSource(
+                    reason = fireReason,
+                    slowStart = slowStart,
+                    bufferedAheadMs = bufferedAheadMs,
+                    playbackThreadAnswers = playbackThreadAnswers,
+                    url = url
+                ) && advanceToNextLiveSource(
+                    detailedError = context.getString(com.nuvio.tv.R.string.player_error_startup_no_stream_data),
+                    slowSourceAddon = addon,
+                    stillWaitingForData = {
+                        _exoPlayer === livePlayer && currentStreamUrl == url && !hasRenderedFirstFrame &&
+                            !isInBackground && livePlayer.totalBufferedDuration <= 0L &&
+                            livePlayer.playbackState != Player.STATE_READY
+                    }
+                )
+            ) {
+                com.nuvio.tv.core.util.TtffTrace.mark("startup_watchdog_next_source")
+                return@launch
             }
             val fireCard = withSendRule(watchdogErrorCard(fireReason, elapsedMs, livePlayer))
             val fireMessage = fireCard?.message ?: when (fireReason) {

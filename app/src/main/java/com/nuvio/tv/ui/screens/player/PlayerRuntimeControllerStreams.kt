@@ -1021,6 +1021,7 @@ internal fun PlayerRuntimeController.switchToSourceStream(
     automatic: Boolean = false
 ) {
     if (!automatic) {
+        _uiState.update { it.copy(sourceFailoverNotice = null) }
         deadSourceFailoverCount = 0
         serverDeadAnswerRetried.clear()
     }

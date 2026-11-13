@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="tv_channel_continue_watching">İzlemeye Devam Et</string>
     <string name="type_movie">Film</string>
     <string name="type_movies">Filmler</string>
@@ -2788,7 +2788,7 @@
     <string name="cd_trailer_controls">Fragman kontrolleri</string>
     <string name="cd_seek_bar">İlerleme çubuğu</string>
     <string name="cd_unlink">Bağlantıyı kes</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">Trakt logosu</string>
     <string name="cd_trakt_qr">Trakt etkinleştirme QR kodu</string>
     <string name="cd_simkl_qr">Simkl etkinleştirme QR kodu</string>

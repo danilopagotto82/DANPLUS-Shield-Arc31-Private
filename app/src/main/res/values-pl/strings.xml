@@ -1413,7 +1413,7 @@
     <string name="genre_war_politics">Wojna i polityka</string>
     <string name="genre_western">Western</string>
 
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="type_unknown">Nieznany</string>
 
     <string name="cd_play">Odtwórz</string>
@@ -1446,7 +1446,7 @@
     <string name="cd_preview">Podgląd</string>
     <string name="cd_test">Test</string>
     <string name="cd_unlink">Odłącz</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">Logo Trakt</string>
     <string name="cd_trakt_qr">Kod QR aktywacji Trakt</string>
     <string name="cd_imdb">IMDb</string>

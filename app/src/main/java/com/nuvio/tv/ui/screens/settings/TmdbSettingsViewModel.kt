@@ -62,6 +62,7 @@ class TmdbSettingsViewModel @Inject constructor(
             is TmdbSettingsEvent.ToggleTrailers -> update { dataStore.setUseTrailers(event.enabled) }
             is TmdbSettingsEvent.ToggleMoreLikeThis -> update { dataStore.setUseMoreLikeThis(event.enabled) }
             is TmdbSettingsEvent.ToggleCollections -> update { dataStore.setUseCollections(event.enabled) }
+            is TmdbSettingsEvent.ToggleComments -> update { dataStore.setShowComments(event.enabled) }
         }
     }
 
@@ -84,7 +85,8 @@ data class TmdbSettingsUiState(
     val useEpisodes: Boolean = true,
     val useTrailers: Boolean = true,
     val useMoreLikeThis: Boolean = true,
-    val useCollections: Boolean = true
+    val useCollections: Boolean = true,
+    val showComments: Boolean = true
 ) {
     fun fromSettings(settings: TmdbSettings): TmdbSettingsUiState = copy(
         enabled = settings.enabled,
@@ -100,7 +102,8 @@ data class TmdbSettingsUiState(
         useEpisodes = settings.useEpisodes,
         useTrailers = settings.useTrailers,
         useMoreLikeThis = settings.useMoreLikeThis,
-        useCollections = settings.useCollections
+        useCollections = settings.useCollections,
+        showComments = settings.showComments
     )
 }
 
@@ -119,4 +122,5 @@ sealed class TmdbSettingsEvent {
     data class ToggleTrailers(val enabled: Boolean) : TmdbSettingsEvent()
     data class ToggleMoreLikeThis(val enabled: Boolean) : TmdbSettingsEvent()
     data class ToggleCollections(val enabled: Boolean) : TmdbSettingsEvent()
+    data class ToggleComments(val enabled: Boolean) : TmdbSettingsEvent()
 }

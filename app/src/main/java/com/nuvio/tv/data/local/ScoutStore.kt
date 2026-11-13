@@ -49,6 +49,7 @@ class ScoutStore @Inject constructor(
     private val becauseRow = booleanPreferencesKey("because_row")
     private val gemsRow = booleanPreferencesKey("gems_row")
     private val tilesRow = booleanPreferencesKey("tiles_row_chosen")
+    private val showWatched = booleanPreferencesKey("show_watched")
     private val leaveOutGenres = stringSetPreferencesKey("leave_out_genres")
     private val leaveOutLanguages = stringSetPreferencesKey("leave_out_languages")
     private val asked = stringSetPreferencesKey("asked")
@@ -65,6 +66,13 @@ class ScoutStore @Inject constructor(
     val profile: Flow<ScoutProfile> = profileManager.activeProfileId.flatMapLatest { id ->
         factory.get(id, FEATURE).data.map { readProfile(id, it) }
     }.distinctUntilChanged().flowOn(Dispatchers.Default)
+
+    fun observeShowWatched(profileId: Int): Flow<Boolean> =
+        factory.get(profileId, FEATURE).data.map { it[showWatched] ?: true }.distinctUntilChanged()
+
+    suspend fun setShowWatched(profileId: Int, enabled: Boolean) {
+        factory.get(profileId, FEATURE).edit { it[showWatched] = enabled }
+    }
 
     fun offerAsk(target: ScoutAskTarget) {
         _pendingAsk.value = target

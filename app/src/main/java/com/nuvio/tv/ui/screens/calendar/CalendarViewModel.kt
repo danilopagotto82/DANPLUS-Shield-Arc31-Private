@@ -8,6 +8,9 @@ import com.nuvio.tv.core.calendar.CalendarRefreshReason
 import com.nuvio.tv.core.calendar.CalendarSectionKind
 import com.nuvio.tv.core.calendar.CalendarSettings
 import com.nuvio.tv.core.calendar.CalendarState
+import com.nuvio.tv.core.calendar.CalendarTitleRecord
+import com.nuvio.tv.core.calendar.CalendarTitleType
+import kotlinx.coroutines.CancellationException
 import com.nuvio.tv.core.calendar.buildCalendarSections
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Instant
@@ -46,8 +49,11 @@ data class CalendarUiState(
     val today: LocalDate? = null,
     val windowDays: Int = CALENDAR_DEFAULT_WINDOW_DAYS,
     val list: CalendarListModel = CalendarListModel(),
+    val movieReleasesLoading: Boolean = false,
+    val movieReleasesUnavailable: Boolean = false,
     val days: Map<LocalDate, List<CalendarRow>> = emptyMap(),
-    val byTitle: Map<String, List<CalendarRow>> = emptyMap()
+    val byTitle: Map<String, List<CalendarRow>> = emptyMap(),
+    val brazilMovieReleases: Boolean = true
 )
 
 @Immutable
@@ -64,7 +70,14 @@ private data class CalendarInputs(
     val state: CalendarState,
     val settings: CalendarSettings?,
     val zone: ZoneId,
-    val now: Instant
+    val now: Instant,
+    val movieReleases: MovieReleasesState
+)
+
+private data class MovieReleasesState(
+    val titles: List<CalendarTitleRecord> = emptyList(),
+    val loading: Boolean = false,
+    val unavailable: Boolean = false
 )
 
 internal fun calendarPhase(state: CalendarState, settingsLoaded: Boolean, list: CalendarListModel): CalendarPhase = when {
@@ -93,9 +106,12 @@ class CalendarViewModel internal constructor(
         }
     }
 
+    private val movieReleases = MutableStateFlow(MovieReleasesState())
+    private var movieReleasesJob: Job? = null
+
     val uiState: StateFlow<CalendarUiState> =
-        combine(data.state, data.settings, data.zones, ticks) { state, settings, zone, now ->
-            CalendarInputs(state, settings, zone, now)
+        combine(data.state, data.settings, data.zones, ticks, movieReleases) { state, settings, zone, now, releases ->
+            CalendarInputs(state, settings, zone, now, releases)
         }
             .mapLatest(::build)
             .distinctUntilChanged()
@@ -146,6 +162,34 @@ class CalendarViewModel internal constructor(
         if (!titleOpened) showToday()
         titleOpened = false
         data.requestRefresh(CalendarRefreshReason.CALENDAR_OPENED)
+        loadMovieReleases()
+    }
+
+    fun loadMovieReleases() {
+        if (movieReleasesJob?.isActive == true) return
+        movieReleasesJob = viewModelScope.launch {
+            if (data.settings.first { it != null }?.brazilMovieReleases != true) {
+                movieReleases.value = MovieReleasesState()
+                return@launch
+            }
+            val today = data.now().atZone(ZoneId.of("America/Sao_Paulo")).toLocalDate()
+            movieReleases.value = movieReleases.value.copy(loading = true, unavailable = false)
+            try {
+                movieReleases.value = MovieReleasesState(titles = data.upcomingBrazilianMovies(today))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                movieReleases.value = movieReleases.value.copy(loading = false, unavailable = true)
+            }
+        }
+    }
+
+    fun cancelMovieReleases() {
+        movieReleasesJob?.cancel()
+    }
+
+    fun setWindowDays(days: Int) {
+        viewModelScope.launch { data.setWindowDays(days) }
     }
 
     /** Back from a title page keeps the month where it was; any other way in starts on today. */
@@ -170,19 +214,44 @@ class CalendarViewModel internal constructor(
     suspend fun watchTarget(row: CalendarRow) = runCatching { data.watchTarget(row) }.getOrNull()
 
     private fun build(inputs: CalendarInputs): CalendarUiState {
-        val (state, settings, zone, now) = inputs
+        val (state, settings, zone, now, releases) = inputs
         val bells = settings?.bellOn.orEmpty()
         val windowDays = settings?.windowDays ?: CALENDAR_DEFAULT_WINDOW_DAYS
+        val today = now.atZone(zone).toLocalDate()
+        val personalMovies = state.titles.asSequence().filter { it.type == CalendarTitleType.MOVIE }
+            .mapNotNull { title -> title.ids.tmdb?.let { it to title } }.toMap()
+        val endDate = today.plusDays(windowDays.toLong() - 1)
+        val hidden = settings?.hiddenTitleKeys.orEmpty()
+        val movieReleasesEnabled = settings?.brazilMovieReleases == true
+        val upcoming = releases.titles.takeIf { movieReleasesEnabled }.orEmpty().filter { release ->
+            hidden.none(release::matchesKey) &&
+                release.entries.any { it.localDate(zone)?.let { date -> date in today..endDate } == true }
+        }
+        val upcomingById = upcoming.associateBy { it.ids.tmdb }
+        val personalWithDates = state.titles.map { title ->
+            val release = upcomingById[title.ids.tmdb]
+            if (title.type != CalendarTitleType.MOVIE || release == null || title.entries.any { entry ->
+                    entry.localDate(zone)?.let { it in today..endDate } == true
+                }) title
+            else title.copy(sources = title.sources + (
+                com.nuvio.tv.core.calendar.CalendarSource.TMDB to
+                    (title.sources[com.nuvio.tv.core.calendar.CalendarSource.TMDB].orEmpty() + release.entries)
+            ))
+        }
+        val titles = personalWithDates + upcoming.filter { it.ids.tmdb !in personalMovies }
         val list = if (state.loaded && settings != null) {
-            buildCalendarList(buildCalendarSections(state.titles, now, zone, windowDays), now, zone, bells, state.watched)
+            buildCalendarList(buildCalendarSections(titles, now, zone, windowDays), now, zone, bells, state.watched)
         } else CalendarListModel()
-        val days = if (state.loaded && settings != null) buildCalendarDays(state.titles, now, zone, bells, state.watched) else emptyMap()
+        val days = if (state.loaded && settings != null) buildCalendarDays(titles, now, zone, bells, state.watched) else emptyMap()
         return CalendarUiState(
             phase = calendarPhase(state, settings != null, list),
             remaining = state.remaining,
             zone = zone,
             now = now.truncatedTo(java.time.temporal.ChronoUnit.MINUTES),
-            today = now.atZone(zone).toLocalDate(),
+            today = today,
+            movieReleasesLoading = movieReleasesEnabled && releases.loading,
+            movieReleasesUnavailable = movieReleasesEnabled && releases.unavailable,
+            brazilMovieReleases = movieReleasesEnabled,
             windowDays = windowDays,
             list = list,
             days = days,

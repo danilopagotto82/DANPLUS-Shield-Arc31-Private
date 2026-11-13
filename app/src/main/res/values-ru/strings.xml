@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="type_movie">Фильм</string>
     <string name="type_series">Сериал</string>
     <string name="type_unknown">Неизвестно</string>
@@ -1659,7 +1659,7 @@
     <string name="cd_preview">Предпросмотр</string>
     <string name="cd_test">Тест</string>
     <string name="cd_unlink">Отвязать</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">Логотип Trakt</string>
     <string name="cd_trakt_qr">QR-код активации Trakt</string>
     <string name="cd_imdb">IMDb</string>

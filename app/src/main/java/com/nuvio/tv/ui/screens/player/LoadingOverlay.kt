@@ -1,13 +1,7 @@
 package com.nuvio.tv.ui.screens.player
 
-import com.nuvio.tv.ui.theme.NuvioMotion
-
-import com.nuvio.tv.ui.theme.NuvioTheme
-
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -15,18 +9,20 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,29 +30,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.crossfade
-import androidx.compose.ui.platform.LocalContext
-import com.nuvio.tv.ui.components.LoadingIndicator
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 
-/**
- * Height of the artwork box rendered above the loading text. The box is centred,
- * so on the 540dp Android TV canvas it occupies 180..360dp.
- */
-private val LOADING_ARTWORK_BOX_HEIGHT = 180.dp
+private val LoadingGold = Color(0xFFE6BC68)
+private val LoadingBackground = Color(0xFF090A0F)
+private val LoadingText = Color(0xFFF7F2E9)
 
 @Composable
 fun LoadingOverlay(
@@ -70,265 +65,146 @@ fun LoadingOverlay(
     progress: Float? = null,
     modifier: Modifier = Modifier
 ) {
-    var logoLoadFailed by remember(logoUrl) { mutableStateOf(false) }
-    val showLogo = !logoUrl.isNullOrBlank() && !logoLoadFailed
-
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(animationSpec = tween(250)),
-        exit = fadeOut(animationSpec = tween(200)),
+        enter = fadeIn(tween(180)),
+        exit = fadeOut(tween(140)),
         modifier = modifier
     ) {
-        val context = LocalContext.current
-        val logoAlpha by animateFloatAsState(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis = 700, delayMillis = 400, easing = LinearEasing),
-            label = "loadingLogoAlpha"
-        )
-        val infiniteTransition = rememberInfiniteTransition(label = "loadingLogoPulse")
-        val logoScale by infiniteTransition.animateFloat(
-            initialValue = 1f,
-            targetValue = 1.04f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2000, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "loadingLogoScale"
-        )
-        val backdropRequest = remember(context, backdropUrl) {
-            backdropUrl?.takeIf { it.isNotBlank() }?.let { url ->
-                ImageRequest.Builder(context)
-                    .data(url)
-                    .crossfade(true)
-                    .build()
-            }
+        val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+        val backdropShade = remember(rtl) {
+            val edge = Color(0xF5090A0F)
+            val middle = Color(0xC4090A0F)
+            val clear = Color(0x22090A0F)
+            Brush.horizontalGradient(if (rtl) listOf(clear, middle, edge) else listOf(edge, middle, clear))
         }
-        val logoRequest = remember(context, logoUrl) {
-            logoUrl?.takeIf { it.isNotBlank() }?.let { url ->
-                ImageRequest.Builder(context)
-                    .data(url)
-                    .crossfade(true)
-                    .build()
-            }
+        val bottomShade = remember {
+            Brush.verticalGradient(0.32f to Color.Transparent, 1f to LoadingBackground)
         }
-        val overlayBrush = remember {
-            Brush.verticalGradient(
-                colorStops = arrayOf(
-                    0f to Color(0x4D000000),
-                    0.35f to Color(0x99000000),
-                    0.7f to Color(0xCC000000),
-                    1f to Color(0xE6000000)
-                )
-            )
-        }
+        var titleLogoReady by remember(logoUrl) { mutableStateOf(false) }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-        ) {
-            if (backdropRequest != null) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(LoadingBackground)) {
+            backdropUrl?.takeIf { it.isNotBlank() }?.let { artwork ->
                 AsyncImage(
-                    model = backdropRequest,
-                    contentDescription = stringResource(R.string.cd_loading_backdrop),
+                    model = artwork,
+                    contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    alignment = Alignment.TopEnd
+                    alignment = Alignment.CenterEnd
                 )
+                Box(Modifier.fillMaxSize().background(backdropShade))
+                Box(Modifier.fillMaxSize().background(bottomShade))
             }
-
-            Box(
+            val wide = maxWidth >= 600.dp
+            val sideInset = if (wide) 58.dp else 24.dp
+            val bottomInset = if (maxHeight >= 380.dp) 48.dp else 22.dp
+            Image(
+                painter = painterResource(R.drawable.danplus_startup_logo),
+                contentDescription = "DAN+",
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(overlayBrush)
+                    .align(Alignment.TopEnd)
+                    .padding(end = sideInset, top = if (wide) 32.dp else 18.dp)
+                    .width(104.dp)
+                    .height(36.dp)
             )
-
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = sideInset, end = sideInset, bottom = bottomInset)
+                    .widthIn(max = 384.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (showLogo) {
-                        val isLogoFillActive = progress != null
-                        val targetFill = (progress ?: 0f).coerceIn(0f, 1f)
-                        val animatedFill by animateFloatAsState(
-                            targetValue = targetFill,
-                            // When completing (target ≈ 1.0), animate faster so the
-                            // fill finishes before the overlay's 200ms fade-out;
-                            // otherwise use the smoother 400ms tween for buffering.
-                            animationSpec = tween(
-                                durationMillis = if (targetFill >= 0.999f) 160 else 400,
-                                easing = LinearEasing
-                            ),
-                            label = "loadingLogoFill"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .width(320.dp)
-                                .height(LOADING_ARTWORK_BOX_HEIGHT)
-                        ) {
-                            // Base layer: semi-transparent logo (always visible).
-                            // When the fill effect is active we hold a steady low
-                            // alpha; otherwise fall back to the original fade+pulse.
-                            AsyncImage(
-                                model = logoRequest,
-                                contentDescription = stringResource(R.string.cd_loading_logo),
-                                onError = { logoLoadFailed = true },
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer {
-                                        alpha = if (isLogoFillActive) 0.25f else logoAlpha
-                                        if (!isLogoFillActive) {
-                                            scaleX = logoScale
-                                            scaleY = logoScale
-                                        }
-                                    },
-                                contentScale = ContentScale.Fit
-                            )
-                            // Foreground layer: full-alpha logo clipped from left
-                            // to right by progress, giving the illusion that the
-                            // base logo is filling up as buffering proceeds.
-                            if (isLogoFillActive) {
-                                AsyncImage(
-                                    model = logoRequest,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .drawWithContent {
-                                            val clipWidth = size.width * animatedFill
-                                            if (clipWidth > 0f) {
-                                                clipRect(right = clipWidth) {
-                                                    this@drawWithContent.drawContent()
-                                                }
-                                            }
-                                        },
-                                    contentScale = ContentScale.Fit
-                                )
-                            }
-                        }
-                    } else if (!title.isNullOrBlank()) {
+                Box {
+                    if (!title.isNullOrBlank() && !titleLogoReady) {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = Color.White,
-                            textAlign = TextAlign.Center,
+                            style = if (wide) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.headlineSmall,
+                            color = LoadingText,
                             maxLines = 2,
-                            modifier = Modifier
-                                .padding(horizontal = NuvioTheme.spacing.xl)
-                                .graphicsLayer {
-                                    alpha = logoAlpha
-                                    scaleX = logoScale
-                                    scaleY = logoScale
-                                }
+                            overflow = TextOverflow.Ellipsis
                         )
-                    } else {
-                        Box(
-                            modifier = Modifier.size(180.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LoadingIndicator()
-                        }
+                    }
+                    if (!logoUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = logoUrl,
+                            contentDescription = title.takeIf { titleLogoReady },
+                            onSuccess = { titleLogoReady = true },
+                            onError = { titleLogoReady = false },
+                            modifier = Modifier.width(if (wide) 276.dp else 214.dp)
+                                .height(66.dp).alpha(if (titleLogoReady) 1f else 0f),
+                            alignment = Alignment.CenterStart,
+                            contentScale = ContentScale.Fit
+                        )
                     }
                 }
+                PlaybackLoadingBar(progress)
+                Text(
+                    text = message?.takeIf { it.isNotBlank() } ?: stringResource(R.string.danplus_loading_preparing),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = LoadingText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val source = sourceLine?.takeIf { it.isNotBlank() }
+                    ?: filename?.takeIf { it.isNotBlank() }
+                if (source != null) {
+                    Text(
+                        text = source,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LoadingText.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
 
-                // Option A: the source/filename/message lane is pinned to the
-                // bottom of the screen as a sibling of the centred artwork, so the
-                // artwork stays at true centre and never shifts when the lane
-                // appears or grows.
-                val showHorizontalBar = progress != null && !showLogo
-                if (!sourceLine.isNullOrBlank() || !filename.isNullOrBlank() || !message.isNullOrBlank() || showHorizontalBar) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = NuvioTheme.spacing.lg, vertical = NuvioTheme.spacing.xxl)
-                    ) {
-                        val sourceShadow = androidx.compose.ui.graphics.Shadow(
-                            color = Color.Black.copy(alpha = 0.85f),
-                            offset = androidx.compose.ui.geometry.Offset(0f, 2f),
-                            blurRadius = 6f
-                        )
-                        if (!sourceLine.isNullOrBlank()) {
-                            Text(
-                                text = sourceLine,
-                                style = MaterialTheme.typography.labelMedium.copy(shadow = sourceShadow),
-                                color = Color.White.copy(alpha = 0.72f),
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        if (!filename.isNullOrBlank()) {
-                            Text(
-                                text = filename,
-                                style = MaterialTheme.typography.labelMedium.copy(shadow = sourceShadow),
-                                color = Color.White.copy(alpha = 0.62f),
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 2.dp)
-                            )
-                        }
-                        if (!sourceLine.isNullOrBlank() || !filename.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                        }
-                        Crossfade(
-                            targetState = message?.takeIf { it.isNotBlank() },
-                            animationSpec = tween(durationMillis = 260),
-                            label = "loadingMessageCrossfade",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(40.dp)
-                        ) { loadingMessage ->
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (loadingMessage != null) {
-                                    Text(
-                                        text = loadingMessage,
-                                        style = MaterialTheme.typography.labelMedium.copy(shadow = sourceShadow),
-                                        color = Color.White.copy(alpha = 0.72f),
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            }
-                        }
-                        if (showHorizontalBar) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            val animatedProgress by animateFloatAsState(
-                                targetValue = progress.coerceIn(0f, 1f),
-                                animationSpec = tween(durationMillis = NuvioMotion.tokens.durations.overlay),
-                                label = "loadingProgress"
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .width(240.dp)
-                                    .height(NuvioTheme.spacing.xs)
-                                    .background(
-                                        color = Color.White.copy(alpha = 0.2f),
-                                        shape = RoundedCornerShape(NuvioTheme.radii.xxs)
-                                    )
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(animatedProgress)
-                                        .height(NuvioTheme.spacing.xs)
-                                        .background(
-                                            color = Color.White.copy(alpha = 0.85f),
-                                            shape = RoundedCornerShape(NuvioTheme.radii.xxs)
-                                        )
-                                )
-                            }
-                        }
-                    }
-                }
+@Composable
+private fun PlaybackLoadingBar(progress: Float?) {
+    val measured = progress?.takeIf { it.isFinite() }?.coerceIn(0f, 1f)
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val shimmer = remember {
+        listOf(LoadingGold.copy(alpha = 0.06f), LoadingGold, Color(0xFFFFE6A8), LoadingGold.copy(alpha = 0.06f))
+    }
+    val modifier = Modifier.fillMaxWidth().height(3.dp)
+    if (measured != null) {
+        val fraction by animateFloatAsState(measured, tween(210), label = "danPlusLoadingProgress")
+        Canvas(modifier.progressSemantics(measured)) {
+            val radius = CornerRadius(size.height / 2)
+            drawRoundRect(color = LoadingGold.copy(alpha = 0.25f), cornerRadius = radius)
+            val fill = fraction * size.width
+            if (fill > 0) {
+                drawRoundRect(
+                    color = LoadingGold,
+                    topLeft = Offset(if (rtl) size.width - fill else 0f, 0f),
+                    size = Size(fill, size.height),
+                    cornerRadius = radius
+                )
+            }
+        }
+    } else {
+        val transition = rememberInfiniteTransition(label = "danPlusLoading")
+        val position by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing)),
+            label = "danPlusLoadingSweep"
+        )
+        Canvas(modifier.progressSemantics()) {
+            drawRoundRect(color = LoadingGold.copy(alpha = 0.25f), cornerRadius = CornerRadius(size.height / 2))
+            val length = size.width * 0.32f
+            val travel = position * (size.width + length)
+            val start = if (rtl) size.width - travel else travel - length
+            clipRect {
+                drawRect(
+                    brush = Brush.horizontalGradient(shimmer, startX = start, endX = start + length),
+                    topLeft = Offset(start, 0f),
+                    size = Size(length, size.height)
+                )
             }
         }
     }

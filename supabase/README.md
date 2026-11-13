@@ -17,7 +17,7 @@ Os campos pendentes já existem em `local.example.properties`:
 | `PREMIUMIZE_CLIENT_ID` | Registro OAuth para login por código. A API também aceita a chave pessoal pelo app. [API Premiumize](https://www.premiumize.me/api) |
 | `TVDB_API_KEY` | Chave v4 do projeto no painel TheTVDB. [TheTVDB](https://support.thetvdb.com/kb/faq.php?id=81) |
 
-A staging DAN+ contém o backend D12 e foi validada separadamente com o backend Nuvio self-host. Para login oficial, mantenha `DANPLUS_D12_SYNC_ENABLED=false` até existir um contrato do Nuvio para confirmar sessão ativa, owner, perfil UUID, PIN e revogação entre os serviços. As Indicações deste aparelho funcionam pelo armazenamento local do app.
+A staging DAN+ contém o backend D12 e foi validada separadamente com o backend Nuvio self-host. O aceite é entregar Indicações pelo Supabase entre aparelhos de casas diferentes da mesma conta. Para login oficial, mantenha `DANPLUS_D12_SYNC_ENABLED=false` até existir um contrato do Nuvio para confirmar sessão ativa, owner, perfil UUID, PIN e revogação entre os serviços.
 
 ## Configuração do Android
 
@@ -28,8 +28,8 @@ Use `local.example.properties` como modelo e preencha `local.properties` na raiz
 | Conta e QR | `NUVIO_SUPABASE_URL` HTTPS e `NUVIO_SUPABASE_ANON_KEY` com chave pública. `DEVICE_LOGIN_WEB_BASE_URL` e `TV_LOGIN_WEB_BASE_URL` precisam abrir páginas de aprovação conectadas ao mesmo projeto. Ajuste `AVATAR_PUBLIC_BASE_URL` se usar o bucket de avatares. Use fallback apenas para outra origem comprovada do mesmo ambiente. |
 | Rotas do QR | `start_device_login_session` ou fallback `start_tv_login_session`, `poll_tv_login_session`, `tv-logins-exchange` e portal capaz de aprovar o código. Valide de TV e celular e confirme que o QR é de uso único. |
 | Conta e perfis | `/auth/v1`, RPCs nativas de owner, registro de dispositivo, perfis, PIN, biblioteca e histórico conforme o pacote Nuvio. Valide se as sessões de aparelhos vinculados resolvem o owner esperado no servidor. |
-| D12 local | Disponível no app. A abertura e edição usam o perfil ativo e o armazenamento do aparelho. |
-| D12 entre aparelhos | `DANPLUS_D12_SYNC_ENABLED=true` somente para build de ambiente com o RPC `recommendations_v1` validado. Sem UUID do perfil retornado por `sync_pull_profiles`, a indicação fica local. |
+| Fila e cache D12 | A fila e o cache usam o armazenamento do aparelho. A fila é visível ao remetente e é reconciliada com o servidor depois do envio. |
+| D12 entre aparelhos | `DANPLUS_D12_SYNC_ENABLED=true` em `local.properties` somente para build de ambiente com o RPC `recommendations_v1` validado. O perfil ativo e cada destinatário precisam do UUID retornado por `sync_pull_profiles`. |
 | Trakt | `TRAKT_CLIENT_ID` do registro autorizado, com `TRAKT_API_URL` e `TRAKT_REDIRECT_URI` conforme o ambiente. O fluxo de código da TV usa o Client ID público. |
 | Simkl, MDBList e WeTrakr | `SIMKL_CLIENT_ID`, `MDBLIST_CLIENT_ID` e `WETRAKR_CLIENT_ID`. Floppy usa servidor/token configurados no app. |
 | Metadados | `TMDB_API_KEY`, `TVDB_API_KEY` conforme os recursos habilitados. URLs opcionais de trailers, guias parentais, IntroDB e fontes IMDb estão no exemplo. |

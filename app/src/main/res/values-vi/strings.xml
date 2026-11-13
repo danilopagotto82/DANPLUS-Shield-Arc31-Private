@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="tv_channel_continue_watching">Tiếp tục xem</string>
     <string name="type_movie">Phim</string>
     <string name="type_movies">Phim</string>
@@ -2556,7 +2556,7 @@
     <string name="cd_trailer_controls">Nút điều khiển trailer</string>
     <string name="cd_seek_bar">Thanh tua</string>
     <string name="cd_unlink">Hủy liên kết</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">Logo Trakt</string>
     <string name="cd_trakt_qr">Mã QR kích hoạt Trakt</string>
     <string name="cd_imdb">IMDb</string>

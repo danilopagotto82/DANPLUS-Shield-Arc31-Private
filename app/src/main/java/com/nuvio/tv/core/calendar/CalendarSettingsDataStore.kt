@@ -40,7 +40,8 @@ data class CalendarSettings(
     val comingUpHiddenKeys: Set<String> = emptySet(),
     val comingUpHiddenNames: Map<String, String> = emptyMap(),
     /** The view last picked in the Calendar header (Week, List or Month), by name; null until one was picked. */
-    val viewMode: String? = null
+    val viewMode: String? = null,
+    val brazilMovieReleases: Boolean = true
 )
 
 internal object CalendarSettingsKeys {
@@ -57,10 +58,11 @@ internal object CalendarSettingsKeys {
     val comingUpHiddenKeys = stringSetPreferencesKey("calendar_coming_up_hidden")
     val comingUpHiddenNames = stringSetPreferencesKey("calendar_coming_up_hidden_names")
     val viewMode = stringPreferencesKey("calendar_view_mode")
+    val brazilMovieReleases = booleanPreferencesKey("calendar_brazil_movie_releases")
 
     val names: Set<String> = setOf(
         menuVisible, includePersonalLists, followOtherServices, windowDays, zoneOverride, cornerMessage, comingUpRow,
-        hiddenTitleKeys, bellOn, hiddenTitleNames, comingUpHiddenKeys, comingUpHiddenNames, viewMode
+        hiddenTitleKeys, bellOn, hiddenTitleNames, comingUpHiddenKeys, comingUpHiddenNames, viewMode, brazilMovieReleases
     ).mapTo(linkedSetOf()) { it.name }
 }
 
@@ -97,7 +99,8 @@ internal fun Preferences.toCalendarSettings() = CalendarSettings(
     comingUpHiddenKeys = this[CalendarSettingsKeys.comingUpHiddenKeys].orEmpty(),
     comingUpHiddenNames = decodeCalendarHiddenNames(this[CalendarSettingsKeys.comingUpHiddenNames])
         .filterKeys { it in this[CalendarSettingsKeys.comingUpHiddenKeys].orEmpty() },
-    viewMode = this[CalendarSettingsKeys.viewMode]
+    viewMode = this[CalendarSettingsKeys.viewMode],
+    brazilMovieReleases = this[CalendarSettingsKeys.brazilMovieReleases] ?: true
 )
 
 /** Turning a title off also removes keys that name the same title by another of its ids. */
@@ -164,6 +167,9 @@ class CalendarSettingsDataStore @Inject constructor(
     suspend fun setComingUpRow(enabled: Boolean) = store().edit { it[CalendarSettingsKeys.comingUpRow] = enabled }
 
     suspend fun setViewMode(mode: String) = store().edit { it[CalendarSettingsKeys.viewMode] = mode }
+
+    suspend fun setBrazilMovieReleases(enabled: Boolean) =
+        store().edit { it[CalendarSettingsKeys.brazilMovieReleases] = enabled }
 
     suspend fun setTitleHidden(titleKey: String, hidden: Boolean, name: String? = null) = store().edit {
         it.toggleNamed(CalendarSettingsKeys.hiddenTitleKeys, CalendarSettingsKeys.hiddenTitleNames, titleKey, hidden, name)

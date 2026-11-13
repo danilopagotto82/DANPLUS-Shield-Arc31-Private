@@ -206,6 +206,17 @@ fun ScoutScreen(
     val saved by viewModel.savedRows.collectAsStateWithLifecycle()
     val profiles by viewModel.profiles.collectAsStateWithLifecycle()
     val activeId by viewModel.activeProfileId.collectAsStateWithLifecycle()
+    val storedWatchDisplay by viewModel.watchedDisplay.collectAsStateWithLifecycle()
+    val watchDisplay = storedWatchDisplay.takeIf { it.profileId == activeId } ?: ScoutWatchDisplay(activeId)
+    val appliesWatchFilter = !state.asking && !state.surprise && state.moreLike == null && state.tab != ScoutTab.Taste
+    val hideWatched = appliesWatchFilter && !watchDisplay.showWatched
+    val shownRow = remember(state.row, hideWatched, watchDisplay) {
+        if (hideWatched) state.row.filterNot(watchDisplay::isWatched) else state.row
+    }
+    val hiddenHero = hideWatched && state.hero?.pick?.let(watchDisplay::isWatched) == true
+    LaunchedEffect(hiddenHero, shownRow, state.rowLoading) {
+        if (hiddenHero && !state.rowLoading) shownRow.firstOrNull()?.let(viewModel::focusPick)
+    }
     val pictures by viewModel.profilePictures.collectAsStateWithLifecycle()
     val scoutProfile by ratings.profile.collectAsStateWithLifecycle()
     val requesters = remember { HashMap<String, FocusRequester>() }
@@ -276,7 +287,7 @@ fun ScoutScreen(
         val compact = maxHeight < COMPACT_PAGE
         val tallest = maxHeight * .31f
         ScoutBackdrop(
-            picture = if (onTaste) taste?.summary?.backdrops?.firstOrNull() else state.hero?.pick?.backdrop,
+            picture = if (onTaste) taste?.summary?.backdrops?.firstOrNull() else state.hero?.pick?.backdrop.takeUnless { hiddenHero },
             wide = onTaste
         )
         if (mixesOpen) Box(Modifier.matchParentSize().background(NuvioTheme.colors.Background)) {
@@ -354,11 +365,17 @@ fun ScoutScreen(
                         Text(stringResource(R.string.scout_nothing_fits), style = MaterialTheme.typography.titleLarge, color = NuvioTheme.colors.TextPrimary)
                         Text(stringResource(R.string.scout_nothing_fits_sub), style = MaterialTheme.typography.bodyMedium, color = NuvioTheme.colors.TextSecondary)
                     }
-                    else -> state.hero?.let { hero ->
+                    hiddenHero && shownRow.isEmpty() -> Text(
+                        stringResource(R.string.scout_watched_hidden_empty),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = NuvioTheme.colors.TextPrimary
+                    )
+                    else -> state.hero?.takeUnless { hiddenHero }?.let { hero ->
                         ScoutHeroBlock(
                             shown = hero,
                             logo = state.heroLogo,
                             compact = compact,
+                            watched = appliesWatchFilter && watchDisplay.isWatched(hero.pick),
                             ratingsOn = scoutProfile.settings.ratingsEnabled,
                             rating = scoutProfile.rating("tmdb:${hero.pick.tmdbId}"),
                             focus = ::focus,
@@ -382,6 +399,15 @@ fun ScoutScreen(
                 ScoutMoodLine(state, onTaste, onAsk?.let { { viewModel.openAsk() } }, ::focus)
             }
             val tabs = scoutTabItems(state)
+            if (!onTaste && appliesWatchFilter) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = FOCUS_ROOM), contentAlignment = Alignment.CenterEnd) {
+                    ScoutChip(
+                        stringResource(if (watchDisplay.showWatched) R.string.scout_show_watched_on else R.string.scout_show_watched_off),
+                        onClick = { viewModel.toggleShowWatched(watchDisplay) },
+                        modifier = focus("show_watched")
+                    )
+                }
+            }
             if (!onTaste) key(state.surprise, state.asking) {
                 ScoutTabs(
                     items = tabs,
@@ -420,7 +446,7 @@ fun ScoutScreen(
                     )
                 }
             } else {
-                ScoutPickRow(state, saved, tileHeight, ::focus, viewModel, onOpenTitle) { pick ->
+                ScoutPickRow(state, shownRow, watchDisplay.takeIf { appliesWatchFilter }, saved, tileHeight, ::focus, viewModel, onOpenTitle) { pick ->
                     posterOptions.controller.show(pick.toPreview(), null)
                 }
             }
@@ -639,6 +665,7 @@ private fun ScoutHeroBlock(
     shown: ScoutShownPick,
     logo: String?,
     compact: Boolean,
+    watched: Boolean,
     ratingsOn: Boolean,
     rating: ScoutRating?,
     focus: (String) -> Modifier,
@@ -653,7 +680,10 @@ private fun ScoutHeroBlock(
     var inLibrary by remember(pick.key) { mutableStateOf(false) }
     LaunchedEffect(pick.key) { inLibrary = controller.isInLibrary(pick.toPreview()) }
     Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
-        ScoutHeroLogo(logo, pick.name, if (compact) LOGO_SMALL else LOGO_TALL)
+        Box {
+            ScoutHeroLogo(logo, pick.name, if (compact) LOGO_SMALL else LOGO_TALL)
+            if (watched) ScoutWatchedMark(Modifier.align(Alignment.TopEnd))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm), modifier = Modifier.focusGroup()) {
             ScoutChip(stringResource(R.string.hero_play), primary = !v2, onClick = onPlay, modifier = focus("hero_play"), icon = {
                 Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp))
@@ -740,6 +770,8 @@ private fun ScoutMoodLine(state: ScoutScreenState, onTaste: Boolean, onAsk: (() 
 @Composable
 private fun ScoutPickRow(
     state: ScoutScreenState,
+    shownRow: List<ScoutPick>,
+    watchDisplay: ScoutWatchDisplay?,
     saved: Set<String>,
     height: Dp,
     focus: (String) -> Modifier,
@@ -755,7 +787,7 @@ private fun ScoutPickRow(
             contentPadding = PaddingValues(horizontal = FOCUS_ROOM, vertical = NuvioTheme.spacing.xs),
             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl)
         ) {
-            items(state.row, key = { it.key }) { pick ->
+            items(shownRow, key = { it.key }) { pick ->
                 ScoutWideTile(
                     picture = pick.backdrop ?: pick.poster,
                     title = pick.name,
@@ -764,10 +796,13 @@ private fun ScoutPickRow(
                     onClick = { onOpenTitle("tmdb:${pick.tmdbId}", if (pick.tv) "series" else "movie") },
                     onLongClick = { onLongPress(pick) },
                     onFocused = { viewModel.focusPick(pick) },
-                    modifier = Modifier.focusProperties { canFocus = !state.rowLoading }.then(focus("pick_${pick.key}"))
+                    modifier = Modifier.focusProperties { canFocus = !state.rowLoading }.then(focus("pick_${pick.key}")),
+                    corner = if (watchDisplay?.isWatched(pick) == true) {
+                        { ScoutWatchedMark(Modifier.align(Alignment.TopEnd)) }
+                    } else null
                 )
             }
-            if (state.canSave && state.row.isNotEmpty()) {
+            if (state.canSave && shownRow.isNotEmpty()) {
                 item(key = "save") {
                     val isSaved = state.answers.encode() in saved
                     ScoutWideTile(
@@ -782,6 +817,16 @@ private fun ScoutPickRow(
             }
         }
     }
+}
+
+@Composable
+private fun ScoutWatchedMark(modifier: Modifier = Modifier) {
+    Icon(
+        Icons.Default.Check,
+        contentDescription = stringResource(R.string.d12_watched),
+        tint = Color(0xFF63CFE9),
+        modifier = modifier.padding(8.dp).size(20.dp)
+    )
 }
 
 private fun ScoutPick.toPreview() = MetaPreview(

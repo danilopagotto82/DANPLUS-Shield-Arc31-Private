@@ -1079,7 +1079,11 @@ internal fun PlayerRuntimeController.attemptDeadSourceFailover(
  * and the switch happens once it is there, or the error screen shows if nothing
  * usable turned up.
  */
-internal fun PlayerRuntimeController.advanceToNextLiveSource(detailedError: String): Boolean {
+internal fun PlayerRuntimeController.advanceToNextLiveSource(
+    detailedError: String,
+    slowSourceAddon: String? = null,
+    stillWaitingForData: () -> Boolean = { true }
+): Boolean {
     deadSourceStreamUrls.add(currentStreamUrl)
     serverPlayback.session(currentStreamUrl)?.target?.let { deadSourceStreamUrls.add(it.key()) }
     _uiState.update { it.copy(deadSourceStreamUrls = deadSourceStreamUrls.toSet()) }
@@ -1095,10 +1099,13 @@ internal fun PlayerRuntimeController.advanceToNextLiveSource(detailedError: Stri
     val savedPosition = currentPlaybackPositionMs()?.takeIf { it > 0L } ?: 0L
 
     if (sourceStreamsCacheRequestKey == requestKey) {
-        val next = nextFailoverSource()
+        val next = nextFailoverSource(slowSourceAddon)
         if (next != null) {
             errorRetryJob?.cancel()
-            scope.launch { failOverToSource(next, detailedError, savedPosition) }
+            errorRetryJob = scope.launch {
+                if (!stillWaitingForData()) return@launch
+                failOverToSource(next, detailedError, savedPosition, slowSourceAddon != null)
+            }
             return true
         }
         if (sourceStreamsFetchCompleted) {
@@ -1112,13 +1119,17 @@ internal fun PlayerRuntimeController.advanceToNextLiveSource(detailedError: Stri
     loadSourceStreams(forceRefresh = false)
     errorRetryJob?.cancel()
     errorRetryJob = scope.launch {
-        showSourceFailoverOverlay(attemptNo, savedPosition)
+        showSourceFailoverOverlay(attemptNo, savedPosition, slowSource = slowSourceAddon != null)
         val deadline = SystemClock.elapsedRealtime() + FAILOVER_SOURCE_LIST_WAIT_MS
         var next: Stream? = null
         while (true) {
             if (currentSourceRequestKey() != requestKey) return@launch
+            if (!stillWaitingForData()) {
+                _uiState.update { it.copy(sourceFailoverNotice = null) }
+                return@launch
+            }
             if (sourceStreamsCacheRequestKey == requestKey) {
-                next = nextFailoverSource()
+                next = nextFailoverSource(slowSourceAddon)
                 if (next != null || sourceStreamsFetchCompleted) break
             }
             if (SystemClock.elapsedRealtime() >= deadline) break
@@ -1126,7 +1137,7 @@ internal fun PlayerRuntimeController.advanceToNextLiveSource(detailedError: Stri
         }
         errorRetryJob = null
         if (next != null) {
-            failOverToSource(next, detailedError, savedPosition)
+            failOverToSource(next, detailedError, savedPosition, slowSourceAddon != null)
         } else {
             Log.w(PlayerRuntimeController.TAG, "Dead source and no live sources in the loaded list; surfacing error")
             surfaceSourceFailoverError(detailedError)
@@ -1136,7 +1147,7 @@ internal fun PlayerRuntimeController.advanceToNextLiveSource(detailedError: Stri
 }
 
 /** Marks the list entry that is playing as dead and returns the next playable one after it. */
-private fun PlayerRuntimeController.nextFailoverSource(): Stream? {
+private fun PlayerRuntimeController.nextFailoverSource(addonName: String?): Stream? {
     val state = _uiState.value
     val streams = state.sourceAllStreams
     if (streams.isEmpty()) return null
@@ -1166,27 +1177,42 @@ private fun PlayerRuntimeController.nextFailoverSource(): Stream? {
         currentRequestKey = currentSourceRequestKey(),
         deadUrls = deadSourceStreamUrls,
         season = request?.season,
-        episode = request?.episode
+        episode = request?.episode,
+        addonName = addonName
     )
 }
 
-private fun PlayerRuntimeController.showSourceFailoverOverlay(attemptNo: Int, savedPosition: Long, sourceName: String? = null) {
+private fun PlayerRuntimeController.showSourceFailoverOverlay(
+    attemptNo: Int,
+    savedPosition: Long,
+    sourceName: String? = null,
+    slowSource: Boolean = false
+) {
+    val notice = when {
+        slowSource && sourceName != null ->
+            context.getString(com.nuvio.tv.R.string.player_slow_source_next_named, attemptNo, MAX_DEAD_SOURCE_FAILOVERS, sourceName)
+        slowSource ->
+            context.getString(com.nuvio.tv.R.string.player_slow_source_next, attemptNo, MAX_DEAD_SOURCE_FAILOVERS)
+        sourceName != null ->
+            context.getString(com.nuvio.tv.R.string.player_dead_source_failover_named, attemptNo, MAX_DEAD_SOURCE_FAILOVERS, sourceName)
+        else ->
+            context.getString(com.nuvio.tv.R.string.player_dead_source_failover, attemptNo, MAX_DEAD_SOURCE_FAILOVERS)
+    }
     _uiState.update {
         it.copy(
             error = null,
             showPauseOverlay = false,
             showLoadingOverlay = it.loadingOverlayEnabled,
-            loadingMessage = if (sourceName != null) {
-                context.getString(com.nuvio.tv.R.string.player_dead_source_failover_named, attemptNo, MAX_DEAD_SOURCE_FAILOVERS, sourceName)
-            } else {
-                context.getString(com.nuvio.tv.R.string.player_dead_source_failover, attemptNo, MAX_DEAD_SOURCE_FAILOVERS)
-            },
+            loadingMessage = notice,
+            sourceFailoverNotice = notice,
             pendingSeekPosition = if (savedPosition > 0L) savedPosition else it.pendingSeekPosition
         )
     }
 }
 
-private fun PlayerRuntimeController.failOverToSource(next: Stream, detailedError: String, savedPosition: Long) {
+private fun PlayerRuntimeController.failOverToSource(
+    next: Stream, detailedError: String, savedPosition: Long, slowSource: Boolean
+) {
     deadSourceFailoverCount++
     if (serverPlayback.session(currentStreamUrl) != null) stopServerPlayback()
     val attemptNo = deadSourceFailoverCount
@@ -1196,7 +1222,7 @@ private fun PlayerRuntimeController.failOverToSource(next: Stream, detailedError
                 "host=${next.getStreamUrl()?.safeHost()}"
     )
     val sourceName = next.name?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim() ?: next.addonName
-    showSourceFailoverOverlay(attemptNo, savedPosition, sourceName.takeIf { it.isNotBlank() })
+    showSourceFailoverOverlay(attemptNo, savedPosition, sourceName.takeIf { it.isNotBlank() }, slowSource)
     switchToSourceStream(next, automatic = true)
 }
 
@@ -1205,6 +1231,7 @@ internal fun PlayerRuntimeController.surfaceSourceFailoverError(detailedError: S
     _uiState.update {
         it.copy(
             error = detailedError,
+            sourceFailoverNotice = null,
             isBuffering = false,
             showLoadingOverlay = false,
             showPauseOverlay = false

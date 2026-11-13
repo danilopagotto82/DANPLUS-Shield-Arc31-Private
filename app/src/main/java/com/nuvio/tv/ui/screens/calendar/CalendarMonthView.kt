@@ -73,11 +73,13 @@ internal fun CalendarMonthView(
     formats: CalendarFormats,
     performance: Boolean,
     onOpen: (CalendarRow) -> Unit,
+    onWatch: (CalendarRow) -> Unit,
     onOptions: (CalendarRow) -> Unit,
     tabsRequester: FocusRequester
 ) {
     val today = uiState.today ?: return
     val monthState by viewModel.month.collectAsState()
+    val rowFocus by viewModel.focus.collectAsState()
     val month = monthState.month(today)
     val focusedDay = monthState.focusedDay(today)
     val gridRequester = remember { FocusRequester() }
@@ -194,6 +196,7 @@ internal fun CalendarMonthView(
                                 focused = gridFocused && date == focusedDay,
                                 selected = date == focusedDay,
                                 mosaic = calendarMosaic(uiState.days[date]),
+                                hasPersonalTitle = uiState.days[date].orEmpty().any { it.personal },
                                 performance = performance,
                                 modifier = Modifier.weight(1f).fillMaxHeight()
                             )
@@ -207,6 +210,9 @@ internal fun CalendarMonthView(
             date = focusedDay,
             today = today,
             rows = dayRows,
+            rowFocus = rowFocus,
+            onBell = viewModel::toggleBell,
+            onWatch = onWatch,
             formats = formats,
             performance = performance,
             firstRequester = dayListRequester,
@@ -226,6 +232,7 @@ private fun CalendarMonthCell(
     focused: Boolean,
     selected: Boolean,
     mosaic: CalendarMosaic,
+    hasPersonalTitle: Boolean,
     performance: Boolean,
     modifier: Modifier
 ) {
@@ -254,6 +261,15 @@ private fun CalendarMonthCell(
         ) {
             if (inMonth || mosaic.layout != CalendarMosaicLayout.NONE) {
                 CalendarMosaicArt(mosaic, performance, Modifier.fillMaxSize().alpha(if (inMonth) 1f else 0.45f))
+            }
+            if (inMonth && hasPersonalTitle) {
+                Box(
+                    Modifier.align(Alignment.TopEnd)
+                        .padding(NuvioTheme.spacing.xs)
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(NuvioTheme.colors.Secondary)
+                )
             }
             val number = date.dayOfMonth.toString()
             Box(
@@ -365,6 +381,9 @@ private fun CalendarDayPanel(
     date: LocalDate,
     today: LocalDate,
     rows: List<CalendarRow>,
+    rowFocus: CalendarFocus?,
+    onBell: (CalendarRow) -> Unit,
+    onWatch: (CalendarRow) -> Unit,
     formats: CalendarFormats,
     performance: Boolean,
     firstRequester: FocusRequester,
@@ -373,156 +392,64 @@ private fun CalendarDayPanel(
     onOpen: (CalendarRow) -> Unit,
     onOptions: (CalendarRow) -> Unit
 ) {
-    val v2 = LocalV2Appearance.current != null
-    val shape = RoundedCornerShape(if (v2) NuvioTheme.radii.xxl else NuvioTheme.radii.md)
-    val content: @Composable () -> Unit = {
-        Column(Modifier.fillMaxSize().padding(NuvioTheme.spacing.md)) {
-            val day = formats.longDate(date)
-            Text(
-                text = if (date == today) stringResource(R.string.calendar_line_join, stringResource(R.string.calendar_section_today), day) else day,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = if (date == today) NuvioTheme.colors.Secondary else NuvioTheme.colors.TextPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = NuvioTheme.spacing.xs)
-            )
+    val first = rows.firstOrNull()
+    val day = formats.longDate(date)
+    if (first == null) {
+        Column(modifier.padding(NuvioTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
+            Text(day, style = MaterialTheme.typography.titleMedium, color = NuvioTheme.colors.TextPrimary)
+            Text(stringResource(R.string.calendar_month_day_empty), style = MaterialTheme.typography.bodySmall,
+                color = NuvioTheme.colors.TextSecondary)
+        }
+        return
+    }
+    val focus = rowFocus?.takeIf { focused -> rows.any { it.key == focused.row.key } } ?: CalendarFocus(first)
+    CalendarSidePanel(
+        focus = focus,
+        formats = formats,
+        today = today,
+        next = emptyList(),
+        performance = performance,
+        onWatch = onWatch,
+        onOpen = onOpen,
+        onBell = onBell,
+        modifier = modifier,
+        footer = {
             val summary = calendarDaySummary(rows)
             val counts = listOfNotNull(
                 summary.episodes.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.calendar_month_episodes, it, it) },
                 summary.films.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.calendar_month_films, it, it) }
             )
             Text(
-                text = calendarJoinedNames(counts).ifEmpty { stringResource(R.string.calendar_month_day_empty) },
-                style = MaterialTheme.typography.bodySmall,
-                color = NuvioTheme.colors.TextSecondary,
-                modifier = Modifier.padding(start = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.sm)
-            )
-            LazyColumn(
-                contentPadding = PaddingValues(NuvioTheme.spacing.xs),
-                verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
-            ) {
-                itemsIndexed(rows, key = { _, row -> row.key }) { index, row ->
-                    CalendarDayPanelItem(
-                        row = row,
-                        big = index == 0,
-                        formats = formats,
-                        performance = performance,
-                        focusRequester = if (index == 0) firstRequester else null,
-                        onFocused = onFocused,
-                        onOpen = onOpen,
-                        onOptions = onOptions
-                    )
-                }
-            }
-        }
-    }
-    if (v2) NuvioGlassSurface(GlassRole.PANEL, modifier, shape = shape) { content() }
-    else Box(modifier.clip(shape).background(NuvioTheme.colors.BackgroundCard)) { content() }
-}
-
-/** The day's first title as a large picture, the rest as a small picture with name, episode, time and network. */
-@Composable
-private fun CalendarDayPanelItem(
-    row: CalendarRow,
-    big: Boolean,
-    formats: CalendarFormats,
-    performance: Boolean,
-    focusRequester: FocusRequester?,
-    onFocused: (CalendarRow) -> Unit,
-    onOpen: (CalendarRow) -> Unit,
-    onOptions: (CalendarRow) -> Unit
-) {
-    val v2 = LocalV2Appearance.current != null
-    val shape = RoundedCornerShape(if (v2) NuvioTheme.radii.lg else NuvioTheme.radii.md)
-    val press = remember { CalendarPress() }
-    val code = if (row.kind == CalendarRowKind.EPISODE && row.season != null && row.episode != null) {
-        stringResource(R.string.calendar_episode_code, row.season, row.episode)
-    } else null
-    val cardModifier = Modifier
-        .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-        .calendarOptionsKeys(press) { onOptions(row) }
-    val details = listOfNotNull(row.time?.let(formats::time), row.network)
-    if (big) {
-        Column {
-            CalendarFocusCard(
-                onClick = { press.click { onOpen(row) } },
-                shape = shape,
-                performance = performance,
-                focusedScale = 1.02f,
-                modifier = cardModifier.fillMaxWidth().aspectRatio(16f / 9f),
-                onFocus = { if (it) onFocused(row) }
-            ) {
-                CalendarArtTile(row, code, row.time, showLabel = true, logoHeight = 30.dp, modifier = Modifier.fillMaxSize().clip(shape), formats = formats)
-            }
-            Spacer(Modifier.height(NuvioTheme.spacing.xs))
-            Text(
-                text = calendarRowLine(row),
+                text = (listOf(day) + counts).joinToString(" · "),
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = NuvioTheme.colors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                color = NuvioTheme.colors.TextSecondary,
+                modifier = Modifier.padding(top = NuvioTheme.spacing.sm)
             )
-            if (details.isNotEmpty()) {
-                Text(
-                    text = details.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NuvioTheme.colors.TextSecondary,
-                    maxLines = 1
-                )
-            }
-        }
-        return
-    }
-    CalendarFocusCard(
-        onClick = { press.click { onOpen(row) } },
-        shape = shape,
-        performance = performance,
-        focusedScale = 1.02f,
-        modifier = cardModifier.fillMaxWidth(),
-        onFocus = { if (it) onFocused(row) }
-    ) { focused ->
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .then(if (v2 && focused) Modifier.nuvioGlass(GlassRole.CONTROL, focused = true, shape = shape) else Modifier)
-                .background(if (!v2 && focused) NuvioTheme.colors.FocusBackground else Color.Transparent)
-                .padding(NuvioTheme.spacing.xxs),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(Modifier.size(100.dp, 56.dp).clip(RoundedCornerShape(NuvioTheme.radii.sm))) {
-                CalendarArtImage(url = row.backdrop, fallback = row.poster, modifier = Modifier.fillMaxSize())
-                if (!row.logo.isNullOrBlank()) {
-                    Box(Modifier.fillMaxSize().background(calendarArtScrim()))
-                    CalendarLogo(
-                        logo = row.logo,
-                        name = row.name,
-                        height = 16.dp,
-                        maxWidth = 80.dp,
-                        textStyle = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.align(Alignment.BottomStart).padding(4.dp)
-                    )
+            rows.forEachIndexed { index, row ->
+                val press = remember(row.key) { CalendarPress() }
+                val shape = RoundedCornerShape(NuvioTheme.radii.sm)
+                CalendarFocusCard(
+                    onClick = { press.click { onOpen(row) } },
+                    shape = shape,
+                    performance = performance,
+                    focusedScale = 1f,
+                    modifier = Modifier.fillMaxWidth()
+                        .then(if (index == 0) Modifier.focusRequester(firstRequester) else Modifier)
+                        .calendarOptionsKeys(press) { onOptions(row) },
+                    onFocus = { if (it) onFocused(row) }
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .background(NuvioTheme.colors.Secondary.copy(alpha = if (row.personal) 0.12f else 0.03f), shape)
+                            .padding(NuvioTheme.spacing.sm)
+                    ) {
+                        Text(row.name ?: stringResource(R.string.calendar_unknown_title), style = MaterialTheme.typography.titleSmall,
+                            color = NuvioTheme.colors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(calendarRowLine(row), style = MaterialTheme.typography.bodySmall,
+                            color = NuvioTheme.colors.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
-            Spacer(Modifier.width(NuvioTheme.spacing.sm))
-            Column(Modifier.weight(1f).alpha(if (row.dimmed) 0.6f else 1f)) {
-                Text(
-                    text = row.name ?: stringResource(R.string.calendar_unknown_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = NuvioTheme.colors.TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = (listOfNotNull(code ?: calendarRowLine(row).takeIf { it.isNotEmpty() }) + details).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NuvioTheme.colors.TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
-    }
+    )
 }

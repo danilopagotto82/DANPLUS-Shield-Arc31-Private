@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -148,7 +149,10 @@ fun CalendarScreen(
     val modeFocusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     var finding by remember { mutableStateOf<CalendarRow?>(null) }
-    LaunchedEffect(Unit) { viewModel.onScreenShown() }
+    DisposableEffect(viewModel) {
+        viewModel.onScreenShown()
+        onDispose { viewModel.cancelMovieReleases() }
+    }
     BackHandler(enabled = finding != null) { finding = null }
 
     val backdrop = focus?.details?.backdrop ?: focus?.row?.backdrop
@@ -193,8 +197,20 @@ fun CalendarScreen(
                 formats = formats,
                 viewMode = viewMode,
                 modeFocusRequester = modeFocusRequester,
-                onViewMode = viewModel::setViewMode
+                onViewMode = viewModel::setViewMode,
+                onWindowDays = viewModel::setWindowDays
             )
+            if (uiState.movieReleasesUnavailable) {
+                Button(onClick = viewModel::loadMovieReleases) {
+                    Text(stringResource(R.string.calendar_br_release_retry))
+                }
+            } else if (uiState.movieReleasesLoading) {
+                Text(
+                    stringResource(R.string.calendar_br_release_loading),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NuvioTheme.colors.TextSecondary
+                )
+            }
             Spacer(Modifier.height(NuvioTheme.spacing.lg))
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 when (uiState.phase) {
@@ -224,6 +240,7 @@ fun CalendarScreen(
                             formats = formats,
                             performance = performance,
                             onOpen = open,
+                            onWatch = watch,
                             onOptions = { optionsRow = it },
                             tabsRequester = modeFocusRequester
                         )
@@ -269,7 +286,8 @@ private fun CalendarHeader(
     formats: CalendarFormats,
     viewMode: CalendarViewMode,
     modeFocusRequester: FocusRequester,
-    onViewMode: (CalendarViewMode) -> Unit
+    onViewMode: (CalendarViewMode) -> Unit,
+    onWindowDays: (Int) -> Unit
 ) {
     val v2 = LocalV2Appearance.current != null
     Row(
@@ -302,6 +320,14 @@ private fun CalendarHeader(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+            if (uiState.brazilMovieReleases) {
+                val windows = listOf(30, 60, 90)
+                val displayedDays = uiState.windowDays
+                val nextDays = windows.firstOrNull { it > displayedDays } ?: windows.first()
+                Button(onClick = { onWindowDays(nextDays) }) {
+                    Text(stringResource(R.string.calendar_br_release_days, displayedDays))
+                }
+            }
             CalendarViewMode.entries.forEach { mode ->
                 val selected = mode == viewMode
                 val pill = RoundedCornerShape(NuvioTheme.radii.full)
@@ -648,7 +674,7 @@ internal fun CalendarRowItem(
                 .then(if (v2 && focused) Modifier.nuvioGlass(GlassRole.CONTROL, focused = true, shape = shape) else Modifier),
             shape = CardDefaults.shape(shape),
             colors = CardDefaults.colors(
-                containerColor = Color.Transparent,
+                containerColor = if (row.personal) NuvioTheme.colors.Secondary.copy(alpha = 0.10f) else Color.Transparent,
                 focusedContainerColor = if (v2) Color.Transparent else NuvioTheme.colors.FocusBackground
             ),
             border = CardDefaults.border(
@@ -869,6 +895,7 @@ internal fun calendarRowLine(row: CalendarRow): String = when (row.kind) {
             else -> code ?: row.episodeTitle.orEmpty()
         }
     }
+    CalendarRowKind.FILM_BR_RELEASE -> stringResource(R.string.calendar_film_br_release)
     CalendarRowKind.FILM_CINEMA -> stringResource(R.string.calendar_film_cinema)
     CalendarRowKind.FILM_DIGITAL -> stringResource(R.string.calendar_film_digital)
     CalendarRowKind.SHOW -> when (row.showStatus) {
@@ -908,7 +935,7 @@ internal fun calendarWhenLine(row: CalendarRow, formats: CalendarFormats, today:
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun CalendarSidePanel(
+internal fun CalendarSidePanel(
     focus: CalendarFocus?,
     formats: CalendarFormats,
     today: LocalDate?,
@@ -917,7 +944,8 @@ private fun CalendarSidePanel(
     onWatch: (CalendarRow) -> Unit,
     onOpen: (CalendarRow) -> Unit,
     onBell: (CalendarRow) -> Unit,
-    modifier: Modifier
+    modifier: Modifier,
+    footer: @Composable () -> Unit = {}
 ) {
     val v2 = LocalV2Appearance.current != null
     val shape = RoundedCornerShape(if (v2) NuvioTheme.radii.xxl else NuvioTheme.radii.md)
@@ -953,25 +981,29 @@ private fun CalendarSidePanel(
             }
             Column(
                 Modifier.fillMaxWidth().padding(NuvioTheme.spacing.sidePanel.inner),
-                verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)
+                verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
-                calendarWhenLine(row, formats, today)?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = NuvioTheme.colors.Secondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
                 Text(
-                    text = calendarRowLine(row).ifEmpty { row.name ?: stringResource(R.string.calendar_unknown_title) },
+                    text = row.name ?: stringResource(R.string.calendar_unknown_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = NuvioTheme.colors.TextPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                val releaseLine = listOfNotNull(
+                    calendarWhenLine(row, formats, today),
+                    calendarRowLine(row).takeIf { it.isNotBlank() && it != row.name }
+                )
+                if (releaseLine.isNotEmpty()) {
+                    Text(
+                        text = releaseLine.joinToString(" · "),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = NuvioTheme.colors.Secondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 val meta = listOfNotNull(
                     calendarLabelText(row.label),
                     row.network,
@@ -992,11 +1024,10 @@ private fun CalendarSidePanel(
                         text = it,
                         style = MaterialTheme.typography.bodyMedium,
                         color = NuvioTheme.colors.TextSecondary,
-                        maxLines = if (next.isEmpty()) 5 else 2,
+                        maxLines = 4,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(Modifier.height(NuvioTheme.spacing.xs))
                 CalendarPanelActions(row, performance, onWatch, onOpen, onBell)
                 if (next.isNotEmpty()) {
                     Spacer(Modifier.height(NuvioTheme.spacing.xs))
@@ -1009,6 +1040,7 @@ private fun CalendarSidePanel(
                     )
                     next.forEach { upcoming -> CalendarNextRow(upcoming, details, formats, today, performance, onOpen) }
                 }
+                footer()
             }
         }
     }

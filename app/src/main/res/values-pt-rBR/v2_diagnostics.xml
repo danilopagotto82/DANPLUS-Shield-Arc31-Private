@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="v2_ui_diagnostics_title">Diagnóstico da interface do dispositivo</string>
+    <string name="v2_ui_diagnostics_subtitle">Tamanho da janela, densidade, área útil da tela e tempo dos últimos quadros da interface</string>
+</resources>

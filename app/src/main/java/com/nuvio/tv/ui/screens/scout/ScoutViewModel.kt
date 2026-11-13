@@ -32,6 +32,8 @@ import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.core.sync.ProfileSyncService
 import com.nuvio.tv.data.local.ProfileLockStateDataStore
 import com.nuvio.tv.data.local.ScoutStore
+import com.nuvio.tv.data.local.WatchedItemsPreferences
+import com.nuvio.tv.data.local.WatchedSeriesStateHolder
 import com.nuvio.tv.domain.model.ScoutPick
 import com.nuvio.tv.domain.model.UserProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -49,6 +51,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -63,6 +66,18 @@ import javax.inject.Inject
 import kotlin.math.abs
 
 data class ScoutShownPick(val pick: ScoutPick, val detail: ScoutPickDetail? = null, val suitsEveryone: Boolean = false, val reason: String? = null)
+
+internal data class ScoutWatchDisplay(
+    val profileId: Int,
+    val showWatched: Boolean = true,
+    val movieIds: Set<Int> = emptySet(),
+    val seriesIds: Set<Int> = emptySet()
+) {
+    fun isWatched(pick: ScoutPick): Boolean = pick.tmdbId in (if (pick.tv) seriesIds else movieIds)
+}
+
+private fun scoutWatchedTmdbId(id: String): Int? =
+    id.removePrefix("tmdb:").removePrefix("movie:").removePrefix("series:").removePrefix("tv:").toIntOrNull()
 
 sealed interface ScoutTab {
     data object ForYou : ScoutTab
@@ -126,7 +141,9 @@ class ScoutViewModel @Inject constructor(
     private val profileManager: ProfileManager,
     private val locks: ProfileLockStateDataStore,
     private val sync: ProfileSyncService,
-    store: ScoutStore,
+    private val store: ScoutStore,
+    watchedItems: WatchedItemsPreferences,
+    watchedSeries: WatchedSeriesStateHolder,
     localAvatars: LocalProfileAvatars,
     private val avatars: AvatarRepository,
     private val memberAccess: MemberAccessRepository
@@ -139,6 +156,26 @@ class ScoutViewModel @Inject constructor(
 
     val profiles: StateFlow<List<UserProfile>> = profileManager.profiles
     val activeProfileId: StateFlow<Int> = profileManager.activeProfileId
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    internal val watchedDisplay = activeProfileId.flatMapLatest { id ->
+        combine(store.observeShowWatched(id), watchedItems.observeAllItems(id), watchedSeries.observeCompletedIds(id)) { show, items, series ->
+            ScoutWatchDisplay(
+                profileId = id,
+                showWatched = show,
+                movieIds = items.mapNotNull { item ->
+                    item.takeIf { it.contentType.equals("movie", true) && it.season == null && it.episode == null }
+                        ?.contentId?.let(::scoutWatchedTmdbId)
+                }.toSet(),
+                seriesIds = series.mapNotNull(::scoutWatchedTmdbId).toSet()
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScoutWatchDisplay(activeProfileId.value))
+
+    internal fun toggleShowWatched(display: ScoutWatchDisplay) {
+        if (display.profileId != activeProfileId.value) return
+        viewModelScope.launch { store.setShowWatched(display.profileId, !display.showWatched) }
+    }
 
     private val avatarCatalog = flow {
         val full = memberAccess.access.value.entitlements.includes(CosmeticEntitlement.PROFILE_AVATARS)

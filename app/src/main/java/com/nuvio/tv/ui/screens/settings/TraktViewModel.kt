@@ -42,7 +42,6 @@ data class TraktUiState(
     val pollIntervalSeconds: Int = 5,
     val deviceCodeExpiresAtMillis: Long? = null,
     val continueWatchingDaysCap: Int = TraktSettingsDataStore.DEFAULT_CONTINUE_WATCHING_DAYS_CAP,
-    val showMetaComments: Boolean = TraktSettingsDataStore.DEFAULT_SHOW_META_COMMENTS,
     val connectedStats: TraktProgressService.TraktCachedStats? = null,
     val statusMessage: String? = null,
     val errorMessage: String? = null,
@@ -81,22 +80,6 @@ class TraktViewModel @Inject constructor(
                 it.copy(
                     continueWatchingDaysCap = days,
                     statusMessage = context.getString(R.string.trakt_status_cw_window_updated)
-                )
-            }
-        }
-    }
-
-    fun onShowMetaCommentsChanged(enabled: Boolean) {
-        viewModelScope.launch {
-            traktSettingsDataStore.setShowMetaComments(enabled)
-            _uiState.update {
-                it.copy(
-                    showMetaComments = enabled,
-                    statusMessage = if (enabled) {
-                        context.getString(R.string.trakt_comments_now_shown)
-                    } else {
-                        context.getString(R.string.trakt_comments_now_hidden)
-                    }
                 )
             }
         }
@@ -229,19 +212,16 @@ class TraktViewModel @Inject constructor(
         viewModelScope.launch {
             combine(
                 traktSettingsDataStore.continueWatchingDaysCap,
-                traktSettingsDataStore.showMetaComments,
                 traktSettingsDataStore.moreLikeThisSource
-            ) { daysCap, showMetaComments, moreLikeThisSource ->
+            ) { daysCap, moreLikeThisSource ->
                 SettingsSnapshot(
                     continueWatchingDaysCap = daysCap,
-                    showMetaComments = showMetaComments,
                     moreLikeThisSource = moreLikeThisSource
                 )
             }.collectLatest { snapshot ->
                 _uiState.update {
                     it.copy(
                         continueWatchingDaysCap = snapshot.continueWatchingDaysCap,
-                        showMetaComments = snapshot.showMetaComments,
                         moreLikeThisSource = snapshot.moreLikeThisSource
                     )
                 }
@@ -251,7 +231,6 @@ class TraktViewModel @Inject constructor(
 
     private data class SettingsSnapshot(
         val continueWatchingDaysCap: Int,
-        val showMetaComments: Boolean,
         val moreLikeThisSource: MoreLikeThisSourcePreference
     )
 

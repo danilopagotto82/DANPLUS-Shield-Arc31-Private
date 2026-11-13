@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="tv_channel_continue_watching">Megtekintés folytatása</string>
     <string name="type_movie">Film</string>
     <string name="type_movies">Filmek</string>
@@ -2461,7 +2461,7 @@
     <string name="cd_preview">Előnézet</string>
     <string name="cd_test">Tesztelés</string>
     <string name="cd_unlink">Leválasztás</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">Trakt logó</string>
     <string name="cd_trakt_qr">Trakt aktivációs QR-kód</string>
     <string name="cd_imdb">IMDb</string>

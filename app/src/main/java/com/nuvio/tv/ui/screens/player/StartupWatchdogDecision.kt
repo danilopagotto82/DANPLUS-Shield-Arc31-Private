@@ -68,6 +68,16 @@ internal object StartupWatchdogDecision {
         )
     }
 
+    fun canSkipSlowHttpSource(
+        reason: String,
+        slowStart: Boolean,
+        bufferedAheadMs: Long,
+        playbackThreadAnswers: Boolean,
+        url: String
+    ): Boolean = !slowStart && bufferedAheadMs == 0L && playbackThreadAnswers &&
+        (reason == "tracks_not_read" || reason == "no_data_buffered" || reason == "no_video_track") &&
+        (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true))
+
     /**
      * MP4 and QuickTime files whose picture is in a format the reader does not know (Apple ProRes and other editing
      * formats) come back with their sound tracks only, so the tracks show no video at all.

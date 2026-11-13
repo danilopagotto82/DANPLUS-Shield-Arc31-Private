@@ -8,6 +8,34 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface TmdbApi {
+    @GET("movie/{id}/reviews")
+    suspend fun getMovieReviews(
+        @Path("id") id: Int,
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String,
+        @Query("page") page: Int
+    ): Response<TmdbReviewsPage>
+
+    @GET("tv/{id}/reviews")
+    suspend fun getTvReviews(
+        @Path("id") id: Int,
+        @Query("api_key") apiKey: String,
+        @Query("language") language: String,
+        @Query("page") page: Int
+    ): Response<TmdbReviewsPage>
+
+    @GET("movie/{id}/watch/providers")
+    suspend fun getMovieWatchProviders(
+        @Path("id") id: Int,
+        @Query("api_key") apiKey: String
+    ): Response<TmdbWatchProviders>
+
+    @GET("tv/{id}/watch/providers")
+    suspend fun getTvWatchProviders(
+        @Path("id") id: Int,
+        @Query("api_key") apiKey: String
+    ): Response<TmdbWatchProviders>
+
     
     @GET("find/{external_id}")
     suspend fun findByExternalId(
@@ -200,6 +228,14 @@ interface TmdbApi {
         @Path("network_id") networkId: Int,
         @Query("api_key") apiKey: String
     ): Response<TmdbNetworkDetailsResponse>
+
+    @GET("discover/movie?language=pt-BR&region=BR&with_release_type=3%7C4&sort_by=popularity.desc")
+    suspend fun discoverBrazilianMovieReleases(
+        @Query("api_key") apiKey: String,
+        @Query("release_date.gte") from: String,
+        @Query("release_date.lte") to: String,
+        @Query("page") page: Int
+    ): Response<TmdbDiscoverResponse>
 
     @GET("discover/movie")
     suspend fun discoverMovies(
@@ -841,4 +877,48 @@ data class TmdbNetworkDetailsResponse(
     @Json(name = "homepage") val homepage: String? = null,
     @Json(name = "logo_path") val logoPath: String? = null,
     @Json(name = "origin_country") val originCountry: String? = null
+)
+
+
+@JsonClass(generateAdapter = true)
+data class TmdbWatchProviders(val results: Map<String, TmdbWatchRegion> = emptyMap())
+
+@JsonClass(generateAdapter = true)
+data class TmdbWatchRegion(
+    val link: String? = null,
+    @Json(name = "flatrate") val subscription: List<TmdbWatchProvider> = emptyList(),
+    val free: List<TmdbWatchProvider> = emptyList(),
+    val ads: List<TmdbWatchProvider> = emptyList(),
+    val rent: List<TmdbWatchProvider> = emptyList(),
+    val buy: List<TmdbWatchProvider> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbWatchProvider(
+    @Json(name = "provider_id") val id: Int,
+    @Json(name = "provider_name") val name: String,
+    @Json(name = "logo_path") val logo: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbReviewsPage(
+    val page: Int,
+    @Json(name = "total_pages") val totalPages: Int,
+    val results: List<TmdbReviewDto>
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbReviewDto(
+    val id: String,
+    val author: String,
+    val content: String,
+    @Json(name = "author_details") val authorDetails: TmdbReviewAuthorDto? = null,
+    @Json(name = "created_at") val createdAt: String? = null,
+    @Json(name = "updated_at") val updatedAt: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbReviewAuthorDto(
+    val username: String? = null,
+    val rating: Double? = null
 )

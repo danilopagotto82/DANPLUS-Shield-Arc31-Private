@@ -162,5 +162,25 @@ data class Collection(
     val focusGlowEnabled: Boolean = true,
     val viewMode: FolderViewMode = FolderViewMode.TABBED_GRID,
     val showAllTab: Boolean = true,
-    val folders: List<CollectionFolder> = emptyList()
+    val folders: List<CollectionFolder> = emptyList(),
+    val highlight: CollectionHighlight? = null,
+    val highlightColors: CollectionHighlightColors = CollectionHighlightColors()
 )
+
+enum class CollectionHighlight { SOLID, GRADIENT }
+
+@Immutable
+data class CollectionHighlightColors(
+    val solid: Int? = null,
+    val gradient: Int? = null
+) {
+    fun forStyle(style: CollectionHighlight): Int? = when (style) {
+        CollectionHighlight.SOLID -> solid
+        CollectionHighlight.GRADIENT -> gradient
+    }
+
+    fun withColor(style: CollectionHighlight, rgb: Int): CollectionHighlightColors = when (style) {
+        CollectionHighlight.SOLID -> copy(solid = rgb and 0xFFFFFF)
+        CollectionHighlight.GRADIENT -> copy(gradient = rgb and 0xFFFFFF)
+    }
+}

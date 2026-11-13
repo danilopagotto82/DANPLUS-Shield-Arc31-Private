@@ -2,6 +2,8 @@ package com.nuvio.tv.ui.screens.player
 
 import com.nuvio.tv.ui.screens.player.StartupWatchdogDecision.Step
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class StartupWatchdogDecisionTest {
@@ -32,6 +34,21 @@ class StartupWatchdogDecisionTest {
         loadErrorSeen = loadErrorSeen,
         readWaitGiven = readWaitGiven,
     )
+
+    @Test
+    fun onlyUnresponsiveHttpSourcesWithoutDataQualifyForSameAddonSwitch() {
+        fun skip(reason: String, url: String = "https://cdn.example/video", slowStart: Boolean = false,
+                 bufferedMs: Long = 0, threadAnswers: Boolean = true) =
+            StartupWatchdogDecision.canSkipSlowHttpSource(reason, slowStart, bufferedMs, threadAnswers, url)
+
+        assertTrue(skip("tracks_not_read"))
+        assertTrue(skip("no_data_buffered", url = "http://cdn.example/video"))
+        assertFalse(skip("tracks_not_read", bufferedMs = 500))
+        assertFalse(skip("tracks_not_read", slowStart = true))
+        assertFalse(skip("tracks_not_read", threadAnswers = false))
+        assertFalse(skip("no_data_buffered", url = "file:///video.mkv"))
+        assertFalse(skip("video_never_decoded"))
+    }
 
     @Test
     fun anOpenDecoderFedWellAheadWithNoPictureIsAFormatTheBoxCannotShow() {

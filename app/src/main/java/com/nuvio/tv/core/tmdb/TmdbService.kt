@@ -1,8 +1,8 @@
 package com.nuvio.tv.core.tmdb
 
 import android.util.Log
-import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.data.remote.api.TmdbApi
+import com.nuvio.tv.data.remote.api.TmdbReviewsPage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +14,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "TmdbService"
-private val TMDB_API_KEY = BuildConfig.TMDB_API_KEY
+private val TMDB_API_KEY get() = TmdbApiKey.value
 
 /**
  * Service to handle TMDB ID conversions and lookups.
@@ -145,6 +145,33 @@ class TmdbService @Inject constructor(
     }
     
     /** The IMDB ID if it is already known, with no request. */
+    suspend fun watchProvidersInBrazil(id: String, mediaType: String, imdbId: String?) =
+        withContext(Dispatchers.IO) {
+            val tmdbId = ensureTmdbId(id, mediaType, fallbackImdbId = imdbId)?.toIntOrNull()
+                ?: return@withContext null
+            val response = if (mediaType == "movie") {
+                tmdbApi.getMovieWatchProviders(tmdbId, TMDB_API_KEY)
+            } else {
+                tmdbApi.getTvWatchProviders(tmdbId, TMDB_API_KEY)
+            }
+            if (response.code() == 404) return@withContext null
+            check(response.isSuccessful) { "TMDB watch providers HTTP ${response.code()}" }
+            checkNotNull(response.body()).results["BR"]
+        }
+
+    suspend fun getPortugueseReviews(id: Int, mediaType: String, page: Int): TmdbReviewsPage? {
+        if (TMDB_API_KEY.isBlank()) return null
+        // TMDB returns Portuguese reviews for pt-BR without distinguishing Brazil and Portugal.
+        val response = if (mediaType == "movie") {
+            tmdbApi.getMovieReviews(id, TMDB_API_KEY, "pt-BR", page)
+        } else {
+            tmdbApi.getTvReviews(id, TMDB_API_KEY, "pt-BR", page)
+        }
+        if (response.code() == 404) return null
+        check(response.isSuccessful) { "TMDB reviews HTTP ${response.code()}" }
+        return response.body()
+    }
+
     fun cachedImdbId(tmdbId: Int, mediaType: String): String? =
         tmdbToImdbCache["$tmdbId:${normalizeMediaType(mediaType)}"]
 

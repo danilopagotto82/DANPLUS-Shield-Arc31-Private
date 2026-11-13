@@ -576,7 +576,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 @Composable
-private fun ThemeSwatchChip(
+internal fun ThemeSwatchChip(
     theme: AppTheme,
     customColors: CustomThemeColors,
     isSelected: Boolean,

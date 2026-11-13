@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="scout_title" translatable="false">Scout</string>
+    <string name="scout_title">For You</string>
     <string name="scout_rate">Rate</string>
     <string name="scout_rate_not_for_me">Not for me</string>
     <string name="scout_rate_like">I like this</string>

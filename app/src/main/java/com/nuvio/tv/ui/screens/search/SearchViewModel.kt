@@ -166,6 +166,7 @@ class SearchViewModel @Inject constructor(
     init {
         posterOptions.bind(viewModelScope)
         viewModelScope.launch {
+            watchedSeriesStateHolder.loadFromDisk()
             watchProgressRepository.observeWatchedMovieIds()
                 .collect { ids -> _watchedMovieIds.value = ids }
         }
@@ -186,7 +187,8 @@ class SearchViewModel @Inject constructor(
                             selectedDiscoverCatalogKey = null,
                             selectedDiscoverGenre = null,
                             selectedDiscoverLetter = null,
-                            discoverUnwatchedOnly = false,
+                            discoverWatchFilter = DiscoverWatchFilter.ALL,
+                            discoverYear = null,
                             discoverResults = emptyList(),
                             pendingDiscoverResults = emptyList(),
                             discoverHasMore = true,
@@ -298,7 +300,19 @@ class SearchViewModel @Inject constructor(
             is SearchEvent.SelectDiscoverCatalog -> selectDiscoverCatalog(event.catalogKey)
             is SearchEvent.SelectDiscoverGenre -> selectDiscoverGenre(event.genre)
             is SearchEvent.SelectDiscoverLetter -> selectDiscoverFilter { it.copy(selectedDiscoverLetter = event.letter) }
-            is SearchEvent.SetDiscoverUnwatched -> selectDiscoverFilter { it.copy(discoverUnwatchedOnly = event.unwatched) }
+            is SearchEvent.SetDiscoverWatchFilter -> {
+                val current = _uiState.value
+                val usesRemoteFilter = current.discoverCatalogs.any {
+                    it.key == current.selectedDiscoverCatalogKey && it.offersUnwatched
+                } && (current.discoverWatchFilter == DiscoverWatchFilter.UNWATCHED ||
+                    event.filter == DiscoverWatchFilter.UNWATCHED)
+                if (usesRemoteFilter) {
+                    selectDiscoverFilter { it.copy(discoverWatchFilter = event.filter) }
+                } else {
+                    _uiState.update { it.copy(discoverWatchFilter = event.filter) }
+                }
+            }
+            is SearchEvent.SetDiscoverYear -> _uiState.update { it.copy(discoverYear = event.year) }
             SearchEvent.LoadNextDiscoverResults -> loadNextDiscoverResults()
             SearchEvent.Retry -> {
                 // An explicit retry must refetch even though nothing about the request changed.
@@ -1103,7 +1117,8 @@ class SearchViewModel @Inject constructor(
                 selectedDiscoverCatalogKey = selectedCatalog?.key,
                 selectedDiscoverGenre = selectedGenre,
                 selectedDiscoverLetter = null,
-                discoverUnwatchedOnly = false,
+                discoverWatchFilter = DiscoverWatchFilter.ALL,
+                discoverYear = null,
                 discoverInitialized = true,
                 discoverLoading = false,
                 discoverResults = emptyList(),
@@ -1134,7 +1149,8 @@ class SearchViewModel @Inject constructor(
                 selectedDiscoverCatalogKey = selectedCatalog?.key,
                 selectedDiscoverGenre = selectedGenre,
                 selectedDiscoverLetter = null,
-                discoverUnwatchedOnly = false,
+                discoverWatchFilter = DiscoverWatchFilter.ALL,
+                discoverYear = null,
                 discoverResults = emptyList(),
                 pendingDiscoverResults = emptyList(),
                 discoverPage = 1,
@@ -1157,7 +1173,8 @@ class SearchViewModel @Inject constructor(
                 selectedDiscoverType = catalog.type,
                 selectedDiscoverGenre = null,
                 selectedDiscoverLetter = null,
-                discoverUnwatchedOnly = false,
+                discoverWatchFilter = DiscoverWatchFilter.ALL,
+                discoverYear = null,
                 discoverResults = emptyList(),
                 pendingDiscoverResults = emptyList(),
                 discoverPage = 1,
@@ -1253,7 +1270,7 @@ class SearchViewModel @Inject constructor(
             val extraArgs = buildMap<String, String> {
                 state.selectedDiscoverGenre?.takeIf { it.isNotBlank() }?.let { put("genre", it) }
                 state.selectedDiscoverLetter?.takeIf { it in selectedCatalog.letters }?.let { put(ServerCatalog.LETTER_EXTRA, it) }
-                if (state.discoverUnwatchedOnly && selectedCatalog.offersUnwatched) put(ServerCatalog.UNWATCHED_EXTRA, "true")
+                if (state.discoverWatchFilter == DiscoverWatchFilter.UNWATCHED && selectedCatalog.offersUnwatched) put(ServerCatalog.UNWATCHED_EXTRA, "true")
             }
 
             catalogRepository.getCatalog(

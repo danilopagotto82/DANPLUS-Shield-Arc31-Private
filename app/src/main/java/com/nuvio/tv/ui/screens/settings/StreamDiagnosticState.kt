@@ -31,12 +31,18 @@ internal class StreamDiagnosticState {
     var resultScope by mutableStateOf<String?>(null)
     var bitrate by mutableStateOf<Long?>(null)
     var bitrateIsMux by mutableStateOf(false)
+    var fileSizeBytes by mutableStateOf<Long?>(null)
+        private set
+    var baselineMbps by mutableStateOf<Double?>(null)
+        private set
 
     private var networkObservation: Any? = null
     private fun clear() {
         networkObservation = null
         status = "Idle"; rows = emptyList(); notes = emptyMap()
         error = null; verdict = null; endpoint = null; resultScope = null; bitrate = null; bitrateIsMux = false
+        fileSizeBytes = null
+        baselineMbps = null
     }
     fun cancel() { run.cancel(); clear() }
     fun invalidateNetwork(context: Context, identity: Any?) {
@@ -77,6 +83,7 @@ internal class StreamDiagnosticState {
                         })
                     if (error == null) {
                         endpoint = result.servingEndpoint
+                        baselineMbps = result.mbps
                         rows = listOf(label to result.mbps)
                         notes = mapOf(label to StreamSweepEngine.PassNote("", context.getString(
                             R.string.stream_test_baseline_scope, result.servingEndpoint.orEmpty(),
@@ -87,9 +94,10 @@ internal class StreamDiagnosticState {
                     // A quick sample never selects or recommends a playback configuration.
                 } else {
                     val outcome = DiagnosticRunCoordinator.shared.run(DiagnosticRunCoordinator.COMPARISON) {
-                        if (bitrate == null && durationMs > 0) {
+                        if (durationMs > 0) {
                             val size = StreamSpeedTester.getStreamContentLength(url, requestHeaders)
                             if (current() && size > 0) {
+                                fileSizeBytes = size
                                 bitrate = (size * 8_000.0 / durationMs).toLong()
                                 bitrateIsMux = true
                             }
@@ -105,6 +113,7 @@ internal class StreamDiagnosticState {
                     }
                     if (!current()) return@execute
                     error = outcome.errorText; verdict = outcome.verdictText
+                    baselineMbps = outcome.baselineMbps.takeIf { it.isFinite() && it > 0 }
                 }
                 if (startNetwork == null || startNetwork != networkIdentity()) {
                     rows = emptyList(); notes = emptyMap(); endpoint = null; verdict = null

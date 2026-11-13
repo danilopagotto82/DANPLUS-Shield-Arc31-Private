@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="tv_channel_continue_watching">தொடர்ந்து பார்க்கவும்</string>
     <string name="type_movie">திரைப்படம்</string>
     <string name="type_movies">திரைப்படங்கள்</string>
@@ -1750,7 +1750,7 @@
     <string name="cd_preview">முன்னோட்டம்</string>
     <string name="cd_test">சோதனை</string>
     <string name="cd_unlink">இணைப்பை நீக்கு</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">ட்ராக்ட் லோகோ</string>
     <string name="cd_trakt_qr">ட்ராக்ட் செயல்படுத்தும் க்யூஆர்</string>
     <string name="cd_imdb">ஐஎம்டிபி</string>

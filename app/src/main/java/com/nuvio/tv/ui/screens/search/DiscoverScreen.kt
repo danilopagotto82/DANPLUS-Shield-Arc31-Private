@@ -49,6 +49,13 @@ fun DiscoverScreen(
     val uiState by viewModel.uiState.collectAsState()
     val watchedMovieIds by viewModel.watchedMovieIds.collectAsState()
     val watchedSeriesIds by viewModel.watchedSeriesIds.collectAsState()
+    val visibleResults = remember(
+        uiState.discoverResults, uiState.discoverYear, uiState.discoverWatchFilter, watchedMovieIds, watchedSeriesIds
+    ) {
+        uiState.discoverResults.filter { item ->
+            item.matchesDiscoverFilters(uiState.discoverYear, uiState.discoverWatchFilter, watchedMovieIds, watchedSeriesIds)
+        }
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     val discoverFirstItemFocusRequester = remember { FocusRequester() }
     var discoverFocusedItemIndex by rememberSaveable { mutableStateOf(0) }
@@ -91,6 +98,7 @@ fun DiscoverScreen(
         } else {
             DiscoverSection(
                 uiState = uiState,
+                visibleResults = visibleResults,
                 posterCardStyle = posterCardStyle,
                 watchedMovieIds = watchedMovieIds,
                 watchedSeriesIds = watchedSeriesIds,
@@ -107,7 +115,7 @@ fun DiscoverScreen(
                 },
                 onDiscoverItemFocused = { index ->
                     discoverFocusedItemIndex = index
-                    uiState.discoverResults.getOrNull(index)?.let { item ->
+                    visibleResults.getOrNull(index)?.let { item ->
                         viewModel.prefetchMetaOnFocus(item.id, item.rawType)
                     }
                 },
@@ -127,9 +135,13 @@ fun DiscoverScreen(
                     discoverFocusedItemIndex = 0
                     viewModel.onEvent(SearchEvent.SelectDiscoverLetter(it))
                 },
-                onSetUnwatched = {
+                onSelectYear = {
                     discoverFocusedItemIndex = 0
-                    viewModel.onEvent(SearchEvent.SetDiscoverUnwatched(it))
+                    viewModel.onEvent(SearchEvent.SetDiscoverYear(it))
+                },
+                onSelectWatchFilter = {
+                    discoverFocusedItemIndex = 0
+                    viewModel.onEvent(SearchEvent.SetDiscoverWatchFilter(it))
                 },
                 onLoadMore = { viewModel.onEvent(SearchEvent.LoadNextDiscoverResults) },
                 onItemLongPress = { item, addonBaseUrl ->

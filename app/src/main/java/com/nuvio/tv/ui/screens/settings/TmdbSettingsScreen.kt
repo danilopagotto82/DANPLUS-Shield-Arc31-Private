@@ -23,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,6 +33,9 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.data.local.AVAILABLE_TMDB_LANGUAGES
 import com.nuvio.tv.data.local.displayName
+import com.nuvio.tv.core.tmdb.TmdbApiKey
+import com.nuvio.tv.ui.components.NuvioDialog
+import com.nuvio.tv.ui.screens.account.InputField
 
 @Composable
 fun TmdbSettingsScreen(
@@ -53,6 +58,8 @@ fun TmdbSettingsContent(
     initialFocusRequester: FocusRequester? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val keyConfigured by TmdbApiKey.configured.collectAsStateWithLifecycle()
+    var showKeyDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -251,6 +258,23 @@ fun TmdbSettingsContent(
                     )
                 }
 
+                item(key = "tmdb_comments") {
+                    SettingsToggleRow(
+                        title = stringResource(R.string.detail_tmdb_comments_title),
+                        subtitle = stringResource(R.string.tmdb_comments_setting_description),
+                        checked = uiState.showComments,
+                        onToggle = { viewModel.onEvent(TmdbSettingsEvent.ToggleComments(!uiState.showComments)) }
+                    )
+                }
+                item(key = "tmdb_api_key") {
+                    SettingsActionRow(
+                        title = stringResource(R.string.tmdb_personal_key_title),
+                        subtitle = stringResource(R.string.tmdb_personal_key_description),
+                        value = stringResource(if (keyConfigured) R.string.tmdb_personal_key_configured else R.string.tmdb_personal_key_missing),
+                        onClick = { showKeyDialog = true }
+                    )
+                }
+
             }
             SettingsVerticalScrollIndicators(state = tmdbListState)
             }
@@ -268,5 +292,39 @@ fun TmdbSettingsContent(
             },
             onDismiss = { showLanguageDialog = false }
         )
+    }
+    if (showKeyDialog) {
+        val context = LocalContext.current
+        var key by remember { mutableStateOf("") }
+        var failed by remember { mutableStateOf(false) }
+        fun save(value: String?) {
+            if (runCatching { TmdbApiKey.save(context, value) }.isSuccess) showKeyDialog = false
+            else failed = true
+        }
+        NuvioDialog(
+            title = stringResource(R.string.tmdb_personal_key_title),
+            subtitle = stringResource(R.string.tmdb_personal_key_description),
+            onDismiss = { showKeyDialog = false }
+        ) {
+            InputField(
+                value = key,
+                onValueChange = { key = it },
+                placeholder = stringResource(R.string.tmdb_personal_key_title),
+                keyboardType = KeyboardType.Password,
+                isPassword = true
+            )
+            if (failed) androidx.tv.material3.Text(stringResource(R.string.tmdb_personal_key_error))
+            SettingsDialogActionButton(
+                text = stringResource(R.string.action_save),
+                onClick = { save(key) },
+                enabled = key.trim().matches(Regex("[0-9a-fA-F]{32}"))
+            )
+            if (keyConfigured) {
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.tmdb_personal_key_remove),
+                    onClick = { save(null) }
+                )
+            }
+        }
     }
 }

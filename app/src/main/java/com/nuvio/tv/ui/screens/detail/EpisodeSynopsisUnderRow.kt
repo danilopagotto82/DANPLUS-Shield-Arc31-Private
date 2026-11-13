@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -17,8 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -113,21 +118,29 @@ internal fun EpisodeSynopsisUnderRow(
     val context = LocalContext.current
     val density = LocalDensity.current
     val typography = MaterialTheme.typography
-    val labelStyle = remember(typography) { typography.labelMedium.copy(letterSpacing = 1.2.sp) }
-    val titleStyle = remember(typography) { typography.titleMedium.copy(fontWeight = FontWeight.SemiBold) }
+    val labelStyle = remember(typography) { typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 1.1.sp) }
+    val titleStyle = remember(typography) { typography.titleLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.15.sp) }
     val bodyStyle = typography.bodyMedium
     val titleLineHeight = with(density) { titleStyle.lineHeight.takeIf { it.isSp }?.toDp() ?: 24.dp }
     val bodyLineHeight = with(density) { bodyStyle.lineHeight.takeIf { it.isSp }?.toDp() ?: 20.dp }
-    val blockHeight = 4.dp + titleLineHeight + 2.dp + bodyLineHeight * EPISODE_SYNOPSIS_LINES + 12.dp
+    val blockHeight = 12.dp + (titleLineHeight + 8.dp) + 7.dp + bodyLineHeight * EPISODE_SYNOPSIS_LINES + 12.dp
     val strEpisode = stringResource(R.string.episodes_episode)
-    val textSecondary = NuvioTheme.extendedColors.textSecondary
+    val textSecondary = NuvioTheme.colors.TextSecondary
+    val accent = Color(0xFFE6BC68)
+    val panelShape = RoundedCornerShape(NuvioTheme.radii.lg)
+    val panelBrush = remember {
+        Brush.horizontalGradient(listOf(Color(0x62211E24), Color(0x0E211E24)))
+    }
 
     Column(
         modifier = modifier
-            .fillMaxWidth(0.62f)
-            .height(blockHeight)
+            .fillMaxWidth(0.78f)
             .onSizeChanged { onHeightChanged(it.height) }
-            .padding(start = detailStartInset + 3.dp, top = 4.dp)
+            .padding(start = detailStartInset, top = 5.dp, bottom = 3.dp)
+            .height(blockHeight)
+            .clip(panelShape)
+            .background(panelBrush)
+            .padding(start = 16.dp, end = 20.dp, top = 9.dp, bottom = 8.dp)
             .clipToBounds()
     ) {
         if (line == null) return@Column
@@ -136,11 +149,19 @@ internal fun EpisodeSynopsisUnderRow(
             line.episodeNumber?.let { number -> "$prefix $number" } ?: prefix
         }
         Row(
-            modifier = Modifier.height(titleLineHeight),
+            modifier = Modifier.height(titleLineHeight + 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = episodeCode, style = labelStyle, color = textSecondary, maxLines = 1)
-            Spacer(modifier = Modifier.width(14.dp))
+            Text(
+                text = episodeCode,
+                style = labelStyle,
+                color = accent,
+                maxLines = 1,
+                modifier = Modifier
+                    .background(accent.copy(alpha = 0.13f), RoundedCornerShape(NuvioTheme.radii.sm))
+                    .padding(horizontal = 9.dp, vertical = 4.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = line.title.localizeEpisodeTitle(context),
                 style = titleStyle,
@@ -149,7 +170,7 @@ internal fun EpisodeSynopsisUnderRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(7.dp))
         val synopsis = line.synopsis
         if (synopsis != null) {
             Text(

@@ -2127,6 +2127,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                                         it.copy(
                                             showLoadingOverlay = false,
                                             loadingMessage = null,
+                                            sourceFailoverNotice = null,
                                             loadingProgress = if (it.loadingProgress != null) 1f else null,
                                             showPlayerEngineSwitchInfo = false
                                         )
@@ -2317,6 +2318,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                             it.copy(
                                 showLoadingOverlay = false,
                                 loadingMessage = null,
+                                sourceFailoverNotice = null,
                                 loadingProgress = if (it.loadingProgress != null) 1f else null,
                                 loadingIssueReportVisible = false,
                                 loadingIssueElapsedMs = 0L,

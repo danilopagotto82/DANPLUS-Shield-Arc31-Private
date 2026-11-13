@@ -30,7 +30,7 @@ data class ProfileRecommendation(
     val remoteChange: String? = null,
 )
 
-/** Shared by local profiles only. Deleting a profile removes its recommendations. */
+/** Persists the D12 outbox and cached recommendations on this device. */
 class DanexusRecommendations(context: Context) {
     private val prefs = context.getSharedPreferences("danplus-profile-recommendations", Context.MODE_PRIVATE)
     val changes = revision.asStateFlow()
@@ -147,7 +147,9 @@ class DanexusRecommendations(context: Context) {
 
     private fun encode(rows: List<ProfileRecommendation>): String {
         val array = JSONArray()
-        rows.take(600).forEach { r -> array.put(JSONObject().put("key", r.key).put("from", r.from).put("to", r.to)
+        var cached = 0
+        rows.filter { it.uploadPending || it.remoteChange != null || cached++ < 600 }
+            .forEach { r -> array.put(JSONObject().put("key", r.key).put("from", r.from).put("to", r.to)
             .put("id", r.contentId).put("type", r.type).put("title", r.title).put("poster", r.poster.orEmpty())
             .put("created", r.createdAt).put("seen", r.seen).put("backdrop", r.backdrop.orEmpty())
             .put("synopsis", r.synopsis.orEmpty()).put("episodes", JSONArray(r.episodeKeys.toList()))

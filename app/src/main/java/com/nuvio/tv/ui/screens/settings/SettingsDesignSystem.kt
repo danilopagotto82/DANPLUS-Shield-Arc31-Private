@@ -224,7 +224,8 @@ internal data class SettingsPickerOption<T>(
     val trailing: String? = null,
     val titleFontFamily: FontFamily? = null,
     val warning: String? = null,
-    val note: String? = null
+    val note: String? = null,
+    val annotatedTitle: AnnotatedString? = null
 )
 
 @Composable
@@ -896,7 +897,8 @@ internal fun SettingsActionRow(
     leadingArtworkSize: Dp = NuvioTheme.spacing.xl,
     valueColor: Color = NuvioTheme.colors.TextSecondary,
     annotatedTitle: AnnotatedString? = null,
-    jumpAnchor: Boolean = true
+    jumpAnchor: Boolean = true,
+    annotatedValue: AnnotatedString? = null
 ) {
     val contentAlpha = if (enabled) 1f else 0.4f
     var isFocused by remember { mutableStateOf(false) }
@@ -981,10 +983,10 @@ internal fun SettingsActionRow(
                 }
             }
 
-            if (!value.isNullOrBlank()) {
+            if (annotatedValue != null || !value.isNullOrBlank()) {
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = value,
+                    text = annotatedValue ?: AnnotatedString(value.orEmpty()),
                     style = MaterialTheme.typography.labelLarge,
                     color = valueColor.copy(alpha = contentAlpha),
                     maxLines = 1,
@@ -1078,7 +1080,7 @@ internal fun <T> SettingsSingleChoiceDialog(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = option.title,
+                                    text = option.annotatedTitle ?: AnnotatedString(option.title),
                                     color = if (isSelected) NuvioTheme.colors.Secondary else NuvioTheme.colors.TextPrimary,
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontFamily = option.titleFontFamily

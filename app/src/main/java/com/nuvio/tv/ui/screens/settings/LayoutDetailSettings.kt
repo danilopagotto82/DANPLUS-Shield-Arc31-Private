@@ -107,13 +107,6 @@ internal fun LayoutDetailPageSection(
             onEvent(LayoutSettingsEvent.SetDetailPageTrailerButtonEnabled(!uiState.detailPageTrailerButtonEnabled))
         }
     )
-    SettingsToggleRow(
-        title = "Use IMDb trailers",
-        subtitle = "Play ad-free IMDb trailers when available (HD only); otherwise falls back to YouTube. IMDb discovery runs in the background.",
-        checked = uiState.imdbTrailersEnabled,
-        onToggle = { onEvent(LayoutSettingsEvent.SetImdbTrailersEnabled(!uiState.imdbTrailersEnabled)) }
-    )
-
     SettingsSectionLabel(text = stringResource(R.string.layout_detail_group_metadata))
     SettingsToggleRow(
         title = stringResource(R.string.layout_prefer_external_meta),

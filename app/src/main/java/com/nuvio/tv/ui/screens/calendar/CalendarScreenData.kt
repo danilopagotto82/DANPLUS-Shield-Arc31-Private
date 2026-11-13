@@ -1,6 +1,10 @@
 package com.nuvio.tv.ui.screens.calendar
 
 import com.nuvio.tv.core.calendar.CalendarClock
+import com.nuvio.tv.core.calendar.CalendarTitleRecord
+import com.nuvio.tv.core.calendar.TmdbCalendarClient
+import com.nuvio.tv.core.player.ScreensaverController
+import java.time.LocalDate
 import com.nuvio.tv.core.calendar.CalendarEpisodeResolver
 import com.nuvio.tv.core.calendar.CalendarReminder
 import com.nuvio.tv.core.calendar.CalendarWatchTarget
@@ -58,10 +62,12 @@ interface CalendarScreenData {
     val settings: StateFlow<CalendarSettings?>
     val zones: Flow<ZoneId>
     fun now(): Instant
+    suspend fun upcomingBrazilianMovies(today: LocalDate): List<CalendarTitleRecord> = emptyList()
     fun requestRefresh(reason: CalendarRefreshReason)
     suspend fun setBell(titleKey: String, on: Boolean)
     suspend fun setHidden(titleKey: String, hidden: Boolean, name: String?)
     suspend fun setWindowDays(days: Int)
+    suspend fun setBrazilMovieReleases(enabled: Boolean) = Unit
     suspend fun setMenuVisible(visible: Boolean)
     suspend fun setZoneOverride(zone: String?)
     suspend fun setCornerMessage(enabled: Boolean)
@@ -94,7 +100,9 @@ class DefaultCalendarScreenData @Inject constructor(
     private val episodeResolver: CalendarEpisodeResolver,
     @CalendarClock private val clock: Clock,
     private val traktSettings: TraktSettingsDataStore,
-    private val trackingProviders: TrackingProviderRegistry
+    private val trackingProviders: TrackingProviderRegistry,
+    private val tmdbCalendar: TmdbCalendarClient,
+    private val screensaverController: ScreensaverController
 ) : CalendarScreenData {
     override val state get() = refresher.state
     override val settings get() = settingsStore.settings
@@ -102,6 +110,11 @@ class DefaultCalendarScreenData @Inject constructor(
 
     private val snapshotLock = Mutex()
     private var snapshots: Pair<List<CachedNextUpItem>, List<CachedInProgressItem>>? = null
+
+    override suspend fun upcomingBrazilianMovies(today: LocalDate): List<CalendarTitleRecord> {
+        screensaverController.playbackActive.first { !it }
+        return tmdbCalendar.brazilianMovieReleases(today)
+    }
 
     override fun now(): Instant = clock.instant()
     override fun requestRefresh(reason: CalendarRefreshReason) = refresher.requestRefresh(reason)
@@ -118,6 +131,10 @@ class DefaultCalendarScreenData @Inject constructor(
     }
     override suspend fun setWindowDays(days: Int) {
         settingsStore.setWindowDays(days)
+    }
+
+    override suspend fun setBrazilMovieReleases(enabled: Boolean) {
+        settingsStore.setBrazilMovieReleases(enabled)
     }
     override suspend fun setMenuVisible(visible: Boolean) {
         settingsStore.setMenuVisible(visible)

@@ -9,7 +9,7 @@ import com.nuvio.tv.R
  */
 fun Context.readAppLogoBytes(): ByteArray? =
     try {
-        resources.openRawResource(R.drawable.app_logo_wordmark).use { it.readBytes() }
+        resources.openRawResource(R.drawable.danplus_startup_logo).use { it.readBytes() }
     } catch (_: Exception) {
         null
     }

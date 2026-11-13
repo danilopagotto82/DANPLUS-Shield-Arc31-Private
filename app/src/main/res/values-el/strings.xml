@@ -1,5 +1,5 @@
 <resources>
-  <string name="app_name">Nuvio Arc</string>
+  <string name="app_name">DAN+</string>
   <string name="tv_channel_continue_watching">Συνέχεια παρακολούθησης</string>
   <string name="type_movie">Ταινία</string>
   <string name="type_movies">Ταινίες</string>
@@ -2327,7 +2327,7 @@
   <string name="cd_clear_search">Εκκαθάριση αναζήτησης</string>
   <string name="cd_seek_bar">Γραμμή προόδου αναπαραγωγής</string>
   <string name="cd_unlink">Αποσύνδεση</string>
-  <string name="cd_nuvio_logo">Nuvio Arc</string>
+  <string name="cd_nuvio_logo">DAN+</string>
   <string name="cd_trakt_logo">Λογότυπο Trakt</string>
   <string name="cd_trakt_qr">QR ενεργοποίησης Trakt</string>
   <string name="cd_imdb">IMDb</string>

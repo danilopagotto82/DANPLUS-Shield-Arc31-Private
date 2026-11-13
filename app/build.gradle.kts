@@ -154,11 +154,18 @@ android {
         buildConfigField("String", "SIMKL_APP_NAME", buildConfigString(resolveProperty(devProperties, localProperties, "SIMKL_APP_NAME", "nuvio")))
         buildConfigField("String", "MDBLIST_CLIENT_ID", buildConfigString(resolveProperty(devProperties, localProperties, "MDBLIST_CLIENT_ID")))
         buildConfigField("String", "WETRAKR_CLIENT_ID", buildConfigString(resolveProperty(devProperties, localProperties, "WETRAKR_CLIENT_ID")))
-        buildConfigField("String", "TMDB_API_KEY", "\"${localProperties.getProperty("TMDB_API_KEY", "")}\"")
+        val publicDistribution = providers.gradleProperty("danplusPublicDistribution").orNull == "true"
+        buildConfigField("String", "TMDB_API_KEY", buildConfigString(
+            if (publicDistribution) "" else localProperties.getProperty("TMDB_API_KEY", "")
+        ))
         buildConfigField("String", "TVDB_API_KEY", "\"${localProperties.getProperty("TVDB_API_KEY", "")}\"")
         buildConfigField("String", "TV_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("TV_LOGIN_WEB_BASE_URL", "https://nuvio.tv/tv-login")}\"")
         buildConfigField("String", "DEVICE_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("DEVICE_LOGIN_WEB_BASE_URL", "https://nuvio.tv/link")}\"")
-        buildConfigField("boolean", "SCOUT_ENABLED", localProperties.getProperty("SCOUT_ENABLED", "false").toBoolean().toString())
+        buildConfigField(
+            "boolean",
+            "SCOUT_ENABLED",
+            resolveProperty(devProperties, localProperties, "SCOUT_ENABLED", "true").toBoolean().toString()
+        )
         buildConfigField("boolean", "DANPLUS_D12_SYNC_ENABLED", parseBooleanProperty(localProperties.getProperty("DANPLUS_D12_SYNC_ENABLED")).toString())
         buildConfigField("boolean", "DOVI_NATIVE_ENABLED", enableDoviNative.toString())
         buildConfigField("boolean", "DOVI_EXTRACTOR_HOOK_READY", doviExtractorHookReady.toString())
@@ -194,9 +201,8 @@ android {
         buildConfigField("String", "SPONSOR_NAMES", buildConfigString(sponsorNames))
 
         // One beta stream for this fork, including GitHub prereleases.
-        buildConfigField("String", "GITHUB_OWNER", "\"ysosrs123\"")
-        buildConfigField("String", "GITHUB_REPO", "\"NuvioTV-Fork\"")
-        buildConfigField("String", "GITHUB_REPO_NEW_NAME", "\"Nuvio-Arc\"")
+        buildConfigField("String", "GITHUB_OWNER", "\"danilopagotto82\"")
+        buildConfigField("String", "GITHUB_REPO", "\"DANPLUS-Shield-Arc31-Private\"")
         buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "true")
     }
 

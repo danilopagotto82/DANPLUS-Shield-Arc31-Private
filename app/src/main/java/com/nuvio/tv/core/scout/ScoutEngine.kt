@@ -2,7 +2,6 @@ package com.nuvio.tv.core.scout
 
 import android.content.Context
 import android.util.Log
-import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.core.util.ArcDispatchers
@@ -362,8 +361,8 @@ class ScoutEngine @Inject constructor(
         val media = if (seed.tv) "tv" else "movie"
         val id = runCatching { tmdbService.ensureTmdbId(seed.contentId, media)?.toIntOrNull() }.getOrNull() ?: return null
         val response = runCatching {
-            if (seed.tv) tmdbApi.getTvRecommendations(id, BuildConfig.TMDB_API_KEY, language)
-            else tmdbApi.getMovieRecommendations(id, BuildConfig.TMDB_API_KEY, language)
+            if (seed.tv) tmdbApi.getTvRecommendations(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language)
+            else tmdbApi.getMovieRecommendations(id, com.nuvio.tv.core.tmdb.TmdbApiKey.value, language)
         }.getOrNull()?.body() ?: return id to emptyList()
         return id to response.results.orEmpty().mapNotNull { it.toPick(seed.tv) }
     }
@@ -382,11 +381,11 @@ class ScoutEngine @Inject constructor(
     ): List<ScoutPick> {
         val body = runCatching {
             if (tv) tmdbApi.discoverTv(
-                apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page, sortBy = sortBy, voteCountGte = votes,
+                apiKey = com.nuvio.tv.core.tmdb.TmdbApiKey.value, language = language, page = page, sortBy = sortBy, voteCountGte = votes,
                 voteCountLte = votesMax, voteAverageGte = average, withGenres = genres?.ifBlank { null },
                 withoutGenres = without ?: TV_LEFT_OUT
             ) else tmdbApi.discoverMovies(
-                apiKey = BuildConfig.TMDB_API_KEY, language = language, page = page, sortBy = sortBy, voteCountGte = votes,
+                apiKey = com.nuvio.tv.core.tmdb.TmdbApiKey.value, language = language, page = page, sortBy = sortBy, voteCountGte = votes,
                 voteCountLte = votesMax, voteAverageGte = average, withGenres = genres?.ifBlank { null },
                 withoutGenres = without, certificationCountry = certification?.let { CERTIFICATION_COUNTRY },
                 certificationLte = certification

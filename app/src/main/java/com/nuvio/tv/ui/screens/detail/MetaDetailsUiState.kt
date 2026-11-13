@@ -7,7 +7,7 @@ import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.MetaTrailer
 import com.nuvio.tv.domain.model.NextToWatch
-import com.nuvio.tv.domain.model.TraktCommentReview
+import com.nuvio.tv.domain.model.TmdbReview
 import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.domain.model.LibraryListTab
@@ -20,11 +20,6 @@ enum class MoreLikeThisSource {
     TMDB,
     TRAKT,
     SIMKL
-}
-
-enum class CommentsMode {
-    TITLE,
-    EPISODE
 }
 
 data class MetaDetailsUiState(
@@ -89,16 +84,12 @@ data class MetaDetailsUiState(
     val mdbListRatingOrder: List<String> = com.nuvio.tv.domain.model.MDBListSettings.DEFAULT_RATING_ORDER,
     val isMdbListRatingsActive: Boolean = false,
     val tmdbRating: Float? = null,
-    val comments: List<TraktCommentReview> = emptyList(),
+    val comments: List<TmdbReview> = emptyList(),
     val commentsCurrentPage: Int = 0,
     val commentsPageCount: Int = 0,
-    val isCommentsLoading: Boolean = false,
     val isCommentsLoadingMore: Boolean = false,
-    val commentsError: String? = null,
     val shouldShowCommentsSection: Boolean = false,
-    val commentsMode: CommentsMode = CommentsMode.TITLE,
-    val commentsEpisodeTarget: Video? = null,
-    val selectedComment: TraktCommentReview? = null,
+    val selectedComment: TmdbReview? = null,
     val userMessage: String? = null,
     val userMessageIsError: Boolean = false
 )
@@ -106,14 +97,11 @@ data class MetaDetailsUiState(
 sealed class MetaDetailsEvent {
     data class OnSeasonSelected(val season: Int) : MetaDetailsEvent()
     data class OnEpisodeClick(val video: Video) : MetaDetailsEvent()
-    data class OnCommentsModeSelected(val mode: CommentsMode) : MetaDetailsEvent()
-    data class OnCommentsEpisodeSelected(val video: Video) : MetaDetailsEvent()
     data object OnPlayClick : MetaDetailsEvent()
     data object OnToggleLibrary : MetaDetailsEvent()
     data object OnRetry : MetaDetailsEvent()
-    data object OnRetryComments : MetaDetailsEvent()
     data object OnLoadMoreComments : MetaDetailsEvent()
-    data class OnCommentSelected(val review: TraktCommentReview) : MetaDetailsEvent()
+    data class OnCommentSelected(val review: TmdbReview) : MetaDetailsEvent()
     data class OnAdvanceCommentOverlay(val direction: Int) : MetaDetailsEvent()
     data object OnDismissCommentOverlay : MetaDetailsEvent()
     data object OnBackPress : MetaDetailsEvent()

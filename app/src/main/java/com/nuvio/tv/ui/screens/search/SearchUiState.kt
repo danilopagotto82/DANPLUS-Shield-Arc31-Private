@@ -21,6 +21,8 @@ internal fun shouldShowDiscoverInSearch(
         submittedQuery.isBlank()
 
 @Immutable
+enum class DiscoverWatchFilter { ALL, WATCHED, UNWATCHED }
+
 data class SearchUiState(
     val query: String = "",
     val submittedQuery: String = "",
@@ -43,7 +45,8 @@ data class SearchUiState(
     val selectedDiscoverCatalogKey: String? = null,
     val selectedDiscoverGenre: String? = null,
     val selectedDiscoverLetter: String? = null,
-    val discoverUnwatchedOnly: Boolean = false,
+    val discoverWatchFilter: DiscoverWatchFilter = DiscoverWatchFilter.ALL,
+    val discoverYear: Int? = null,
     val discoverResults: List<MetaPreview> = emptyList(),
     val pendingDiscoverResults: List<MetaPreview> = emptyList(),
     val discoverHasMore: Boolean = true,

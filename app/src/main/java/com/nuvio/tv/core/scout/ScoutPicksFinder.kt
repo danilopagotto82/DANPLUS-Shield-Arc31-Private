@@ -2,7 +2,6 @@ package com.nuvio.tv.core.scout
 
 import android.content.Context
 import android.util.Log
-import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.data.local.ScoutStore
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
 import com.nuvio.tv.data.remote.api.TmdbApi
@@ -309,7 +308,7 @@ class ScoutPicksFinder @Inject constructor(
 
     suspend fun moreLike(pick: ScoutPick): List<ScoutPick> {
         val language = tmdbSettings.settings.first().language
-        val key = BuildConfig.TMDB_API_KEY
+        val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
         val body = runCatching {
             if (pick.tv) tmdbApi.getTvRecommendations(pick.tmdbId, key, language) else tmdbApi.getMovieRecommendations(pick.tmdbId, key, language)
         }.getOrNull()?.body()
@@ -322,7 +321,7 @@ class ScoutPicksFinder @Inject constructor(
         val total = fromCountryCounts[country] ?: run {
             val language = tmdbSettings.settings.first().language
             val answers = ScoutAnswers(tunes = setOf(ScoutTune.FROM_COUNTRY)).slice(country = country)
-            val key = BuildConfig.TMDB_API_KEY
+            val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
             val counted = coroutineScope {
                 val films = async {
                     val f = answers.movie ?: return@async null
@@ -355,7 +354,7 @@ class ScoutPicksFinder @Inject constructor(
 
     private suspend fun fetchDetail(pick: ScoutPick, withRating: Boolean): ScoutPickDetail? {
         val language = tmdbSettings.settings.first().language
-        val key = BuildConfig.TMDB_API_KEY
+        val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
         val details = runCatching {
             if (pick.tv) tmdbApi.getTvDetails(pick.tmdbId, key, language) else tmdbApi.getMovieDetails(pick.tmdbId, key, language)
         }.getOrNull()?.body() ?: return null
@@ -377,7 +376,7 @@ class ScoutPicksFinder @Inject constructor(
         expireTitles()
         val keptAs = "$tv:$tmdbId|$language"
         keptLogos[keptAs]?.let { return it.ifEmpty { null } }
-        val key = BuildConfig.TMDB_API_KEY
+        val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
         val body = runCatching {
             val wanted = "$language,en,null"
             if (tv) tmdbApi.getTvImages(tmdbId, key, wanted) else tmdbApi.getMovieImages(tmdbId, key, wanted)
@@ -391,7 +390,7 @@ class ScoutPicksFinder @Inject constructor(
 
     private suspend fun certification(pick: ScoutPick): String? = runCatching {
         val country = Locale.getDefault().country.uppercase(Locale.ROOT)
-        val key = BuildConfig.TMDB_API_KEY
+        val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
         if (pick.tv) {
             val results = tmdbApi.getTvContentRatings(pick.tmdbId, key).body()?.results.orEmpty()
             results.firstOrNull { it.iso31661 == country }?.rating?.takeIf { it.isNotBlank() }
@@ -409,7 +408,7 @@ class ScoutPicksFinder @Inject constructor(
         discover(f, true, sortBy, page, tmdbSettings.settings.first().language)
 
     private suspend fun discover(f: TmdbCollectionFilters, tv: Boolean, sortBy: String?, page: Int, language: String): List<ScoutPick> {
-        val key = BuildConfig.TMDB_API_KEY
+        val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
         val body = runCatching {
             if (tv) tmdbApi.discoverTv(
                 apiKey = key, language = language, page = page, sortBy = sortBy ?: POPULAR,

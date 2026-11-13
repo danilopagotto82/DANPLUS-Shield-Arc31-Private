@@ -11,10 +11,7 @@ internal class NoEligibleUpdateException : IllegalStateException("No compatible 
 
 @Singleton
 class UpdateRepository @Inject constructor(private val gitHubReleaseApi: GitHubReleaseApi) {
-    // After the repository rename GitHub serves release files under the new name; the old name still redirects.
-    private val downloadPrefixes = listOf(BuildConfig.GITHUB_REPO, BuildConfig.GITHUB_REPO_NEW_NAME).map {
-        "https://github.com/${BuildConfig.GITHUB_OWNER}/$it/releases/download/"
-    }
+    private val downloadPrefix = "https://github.com/${BuildConfig.GITHUB_OWNER}/${BuildConfig.GITHUB_REPO}/releases/download/"
 
     suspend fun getLatestUpdate(
         supportedAbis: List<String> =
@@ -35,8 +32,8 @@ class UpdateRepository @Inject constructor(private val gitHubReleaseApi: GitHubR
             .filter { VersionUtils.isRemoteNewer(it.tagName, BuildConfig.VERSION_NAME,
                 ReleaseSelector.versionCode(it), BuildConfig.VERSION_CODE.toLong()) }
             .firstNotNullOfOrNull { release ->
-                AbiSelector.chooseBestApkAsset(release.assets, supportedAbis)?.takeIf { asset ->
-                    downloadPrefixes.any(asset.browserDownloadUrl::startsWith) && (asset.size == null || asset.size > 0)
+                AbiSelector.chooseBestApkAsset(release.assets, supportedAbis, debugBuild = BuildConfig.IS_DEBUG_BUILD)?.takeIf { asset ->
+                    asset.browserDownloadUrl.startsWith(downloadPrefix) && (asset.size == null || asset.size > 0)
                 }?.let { release to it }
             } ?: throw NoEligibleUpdateException()
         val (dto, asset) = selected

@@ -84,9 +84,14 @@ data class PlayerUiState(
     val currentStreamAddonName: String? = null, // Addon name of the currently playing stream
     val currentStreamDescription: String? = null, // Description of the currently playing stream
     val backdrop: String? = null,
+    val poster: String? = null,
     val logo: String? = null,
     val description: String? = null,
+    val pauseGenres: List<String> = emptyList(),
+    val pauseImdbRating: Float? = null,
     val castMembers: List<MetaCastMember> = emptyList(),
+    val directors: List<String> = emptyList(),
+    val pauseDirectorMembers: List<MetaCastMember> = emptyList(),
     val showControls: Boolean = true,
     val showSeekOverlay: Boolean = false,
     val pendingPreviewSeekPosition: Long? = null,
@@ -101,6 +106,7 @@ data class PlayerUiState(
     val playbackIssueReportsEnabled: Boolean = false,
     val showLoadingOverlay: Boolean = true,
     val loadingMessage: String? = null,
+    val sourceFailoverNotice: String? = null,
     val loadingProgress: Float? = null,
     val loadingIssueReportVisible: Boolean = false,
     val loadingIssueElapsedMs: Long = 0L,

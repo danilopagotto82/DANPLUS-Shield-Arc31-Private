@@ -177,11 +177,16 @@ fun CollectionRowSection(
             }
         }
 
+        val highlight = collection.highlight
+        val highlightPadding = if (highlight == null) 0.dp else CollectionHighlightVerticalPadding
+        val highlightRgb = highlight?.let(collection.highlightColors::forStyle)
+        val firstCardWidth = collection.folders.firstOrNull()?.let { folderWidth(it, posterCardStyle) } ?: 0.dp
         CompositionLocalProvider(LocalBringIntoViewSpec provides horizontalBringIntoViewSpec) {
             LazyRow(
                 state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .collectionHighlight(highlight, highlightRgb, NuvioTheme.spacing.xxxl + firstCardWidth)
                     .focusRequester(rowFocusRequester)
                     .focusRestorer {
                         val visibleIndices = listState.layoutInfo.visibleItemsInfo.map { it.index }
@@ -195,7 +200,10 @@ fun CollectionRowSection(
                             ?: FocusRequester.Default
                     }
                     .focusGroup(),
-                contentPadding = PaddingValues(start = NuvioTheme.spacing.xxxl, end = 200.dp),
+                contentPadding = PaddingValues(
+                    start = NuvioTheme.spacing.xxxl, end = 200.dp,
+                    top = highlightPadding, bottom = highlightPadding
+                ),
                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
             ) {
                 itemsIndexed(
@@ -239,6 +247,9 @@ fun CollectionRowSection(
     }
 }
 
+private fun folderWidth(folder: CollectionFolder, style: PosterCardStyle): Dp =
+    if (folder.tileShape == PosterShape.LANDSCAPE) style.width * (16f / 9f) else style.width
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun FolderCard(
@@ -250,14 +261,9 @@ private fun FolderCard(
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester = remember { FocusRequester() }
 ) {
-    val tileWidth: Dp
-    val tileHeight: Dp
+    val tileWidth = folderWidth(folder, posterCardStyle)
+    val tileHeight = if (folder.tileShape == PosterShape.POSTER) posterCardStyle.height else posterCardStyle.width
     var isFocused by remember { mutableStateOf(false) }
-    when (folder.tileShape) {
-        PosterShape.POSTER -> { tileWidth = posterCardStyle.width; tileHeight = posterCardStyle.height }
-        PosterShape.LANDSCAPE -> { tileWidth = posterCardStyle.width * (16f / 9f); tileHeight = posterCardStyle.width }
-        PosterShape.SQUARE -> { tileWidth = posterCardStyle.width; tileHeight = posterCardStyle.width }
-    }
 
     val shape = RoundedCornerShape(posterCardStyle.cornerRadius)
     val cardDepthStyle = LocalCardDepthStyle.current

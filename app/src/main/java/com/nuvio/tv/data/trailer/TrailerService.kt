@@ -219,7 +219,8 @@ class TrailerService(
 
     suspend fun getExternalTrailerUrl(
         tmdbId: String?,
-        type: String?
+        type: String?,
+        brazilianPortugueseOnly: Boolean = false
     ): String? = withContext(Dispatchers.IO) {
         // Parse the id first so an invalid/null tmdbId short-circuits without
         // touching the settings DataStore at all.
@@ -231,8 +232,8 @@ class TrailerService(
             return@withContext null
         }
         val mediaType = normalizeTmdbMediaType(type)
-        val tmdbLanguage = normalizeTmdbTrailerLanguage(tmdbSettings.language)
-        val tmdbResults = fetchTmdbVideos(numericTmdbId, mediaType, tmdbLanguage).orEmpty()
+        val tmdbLanguage = if (brazilianPortugueseOnly) "pt-BR" else normalizeTmdbTrailerLanguage(tmdbSettings.language)
+        val tmdbResults = trailerVideos(numericTmdbId, mediaType, tmdbLanguage, brazilianPortugueseOnly).orEmpty()
         rankTmdbVideoCandidates(tmdbResults, preferredLanguageCode = tmdbLanguage)
             .firstOrNull()
             ?.key
@@ -249,26 +250,31 @@ class TrailerService(
         type: String?,
         title: String? = null,
         year: String? = null,
-        languageOverride: String? = null
-    ): TrailerPlaybackSource? = lookupTmdbTrailer(tmdbId, type, title, year, languageOverride).source
+        languageOverride: String? = null,
+        brazilianPortugueseOnly: Boolean = false
+    ): TrailerPlaybackSource? {
+        if (brazilianPortugueseOnly && tmdbSettingsDataStore.settings.first().useTrailers.not()) return null
+        return lookupTmdbTrailer(tmdbId, type, title, year, languageOverride, brazilianPortugueseOnly).source
+    }
 
     private suspend fun lookupTmdbTrailer(
         tmdbId: String?,
         type: String?,
         title: String?,
         year: String?,
-        languageOverride: String?
+        languageOverride: String?,
+        brazilianPortugueseOnly: Boolean = false
     ): TrailerLookupResult = withContext(Dispatchers.IO) {
         val numericTmdbId = tmdbId?.toIntOrNull()
             ?: return@withContext TrailerLookupResult(null, definiteMiss = false)
         val mediaType = normalizeTmdbMediaType(type)
-        val tmdbLanguage = languageOverride ?: getPreferredTmdbTrailerLanguage()
+        val tmdbLanguage = if (brazilianPortugueseOnly) "pt-BR" else languageOverride ?: getPreferredTmdbTrailerLanguage()
         Log.d(
             TAG,
             "TMDB trailer lookup start: tmdbId=$numericTmdbId type=${mediaType ?: "unknown"} language=$tmdbLanguage"
         )
 
-        val tmdbResults = fetchTmdbVideos(numericTmdbId, mediaType, tmdbLanguage)
+        val tmdbResults = trailerVideos(numericTmdbId, mediaType, tmdbLanguage, brazilianPortugueseOnly)
             ?: return@withContext TrailerLookupResult(null, definiteMiss = false)
 
         val candidates = rankTmdbVideoCandidates(tmdbResults, preferredLanguageCode = tmdbLanguage)
@@ -453,6 +459,13 @@ class TrailerService(
             year = year
         )?.videoUrl
     }
+
+    private suspend fun trailerVideos(id: Int, type: String?, language: String, brazilianPortugueseOnly: Boolean) =
+        if (!brazilianPortugueseOnly) fetchTmdbVideos(id, type, language) else when (type) {
+            "movie" -> fetchTmdbMovieVideosOnce(id, language)
+            "tv" -> fetchTmdbTvVideosOnce(id, language)
+            else -> null
+        }?.filter { it.iso6391.equals("pt", true) && it.iso31661.equals("BR", true) }
 
     /** Null when a request failed, so an empty list always means TMDB has no videos. */
     private suspend fun fetchTmdbVideos(

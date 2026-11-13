@@ -18,12 +18,13 @@ internal object AbiSelector {
 
     fun chooseBestApkAsset(
         assets: List<GitHubAssetDto>,
-        supportedAbis: List<String> = Build.SUPPORTED_ABIS?.toList().orEmpty()
+        supportedAbis: List<String> = Build.SUPPORTED_ABIS?.toList().orEmpty(),
+        debugBuild: Boolean = false
     ): GitHubAssetDto? {
-        // Only release/full artifacts from our workflow. Never guess an ABI or flavor.
+        val buildType = if (debugBuild) "debug" else "release"
         for (abi in supportedAbis) {
-            assets.firstOrNull { it.name == "app-full-$abi-release.apk" }?.let { return it }
+            assets.firstOrNull { it.name == "app-full-$abi-$buildType.apk" }?.let { return it }
         }
-        return assets.firstOrNull { it.name == "app-full-universal-release.apk" }
+        return assets.firstOrNull { it.name == "app-full-universal-$buildType.apk" }
     }
 }

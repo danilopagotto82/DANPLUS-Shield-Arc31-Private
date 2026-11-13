@@ -3,7 +3,7 @@
     <style name="Theme.MyApplication" parent="Theme.AppCompat.DayNight.NoActionBar" />
 
     <style name="Theme.MyApplication.Launcher" parent="Theme.MyApplication">
-        <item name="android:windowBackground">@drawable/start_window</item>
+        <item name="android:windowBackground">@drawable/danplus_start_window</item>
     </style>
 
     <style name="Theme.MyApplication.Launcher.ArcticBlue">

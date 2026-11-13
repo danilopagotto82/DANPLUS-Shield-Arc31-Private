@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Nuvio Arc</string>
+    <string name="app_name">DAN+</string>
     <string name="tv_channel_continue_watching">המשך צפייה</string>
     <string name="type_movie">סרט</string>
     <string name="type_movies">סרטים</string>
@@ -2544,7 +2544,7 @@
     <string name="cd_trailer_controls">פקדי טריילר</string>
     <string name="cd_seek_bar">סרגל הדילוג</string>
     <string name="cd_unlink">ביטול קישור</string>
-    <string name="cd_nuvio_logo">Nuvio Arc</string>
+    <string name="cd_nuvio_logo">DAN+</string>
     <string name="cd_trakt_logo">לוגו Trakt</string>
     <string name="cd_trakt_qr">קוד QR להפעלת Trakt</string>
     <string name="cd_imdb">IMDb</string>

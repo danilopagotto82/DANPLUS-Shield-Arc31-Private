@@ -85,6 +85,7 @@ class CalendarSettingsViewModel @Inject constructor(
 
     fun setMenuVisible(visible: Boolean) = viewModelScope.launch { data.setMenuVisible(visible) }
     fun setWindowDays(days: Int) = viewModelScope.launch { data.setWindowDays(days) }
+    fun setBrazilMovieReleases(enabled: Boolean) = viewModelScope.launch { data.setBrazilMovieReleases(enabled) }
     fun setZone(zone: String?) = viewModelScope.launch { data.setZoneOverride(zone) }
     fun setCornerMessage(enabled: Boolean) = viewModelScope.launch { data.setCornerMessage(enabled) }
     fun setIncludePersonalLists(include: Boolean) = viewModelScope.launch { data.setIncludePersonalLists(include) }
@@ -208,6 +209,12 @@ internal fun LayoutCalendarSection(viewModel: CalendarSettingsViewModel = hiltVi
         subtitle = stringResource(R.string.calendar_setting_days_sub),
         value = pluralStringResource(R.plurals.calendar_setting_days_value, current.windowDays, current.windowDays),
         onClick = { dialog = "days" }
+    )
+    SettingsToggleRow(
+        title = stringResource(R.string.calendar_setting_br_movies),
+        subtitle = stringResource(R.string.calendar_setting_br_movies_sub),
+        checked = current.brazilMovieReleases,
+        onToggle = { viewModel.setBrazilMovieReleases(!current.brazilMovieReleases) }
     )
     val boxZone = ZoneId.systemDefault()
     val shownZone = current.zoneOverride?.let(ZoneId::of) ?: boxZone

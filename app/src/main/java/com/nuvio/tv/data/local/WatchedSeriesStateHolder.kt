@@ -1,5 +1,7 @@
 package com.nuvio.tv.data.local
 
+import kotlinx.coroutines.flow.map
+
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -53,6 +55,8 @@ class WatchedSeriesStateHolder @Inject constructor(
     private var loadedForProfileId: Int? = null
 
     private fun store(profileId: Int = profileManager.activeProfileId.value) = factory.get(profileId, FEATURE)
+
+    fun observeCompletedIds(profileId: Int) = store(profileId).data.map { it[KEY].orEmpty() }
 
     suspend fun loadFromDisk(profileId: Int = profileManager.activeProfileId.value) {
         if (loadedForProfileId == profileId) return
