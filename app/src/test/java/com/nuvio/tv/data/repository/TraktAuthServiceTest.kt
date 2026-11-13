@@ -5,9 +5,15 @@ import com.nuvio.tv.data.local.AuthSessionNoticeDataStore
 import com.nuvio.tv.data.local.TraktAuthDataStore
 import com.nuvio.tv.data.local.TraktAuthState
 import com.nuvio.tv.data.remote.api.TraktApi
+import com.nuvio.tv.data.remote.dto.trakt.TraktDeviceTokenRequestDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktRefreshTokenRequestDto
+import com.nuvio.tv.data.remote.dto.trakt.TraktRevokeRequestDto
+import com.squareup.moshi.Moshi
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
@@ -21,6 +27,31 @@ import retrofit2.Response
 @OptIn(ExperimentalCoroutinesApi::class)
 class TraktAuthServiceTest {
     @Test
+    fun `device authorization refresh and revoke send the public client id only`() {
+        val moshi = Moshi.Builder().build()
+
+        val poll = moshi.adapter(TraktDeviceTokenRequestDto::class.java)
+            .toJson(TraktDeviceTokenRequestDto("device-code", "public-client"))
+        val refresh = moshi.adapter(TraktRefreshTokenRequestDto::class.java)
+            .toJson(TraktRefreshTokenRequestDto("refresh-token", "public-client", "urn:ietf:wg:oauth:2.0:oob"))
+        val revoke = moshi.adapter(TraktRevokeRequestDto::class.java)
+            .toJson(TraktRevokeRequestDto("access-token", "public-client"))
+
+        val json = moshi.adapter(Map::class.java)
+        assertEquals(mapOf("code" to "device-code", "client_id" to "public-client"), json.fromJson(poll))
+        assertEquals(
+            mapOf(
+                "refresh_token" to "refresh-token",
+                "client_id" to "public-client",
+                "redirect_uri" to "urn:ietf:wg:oauth:2.0:oob",
+                "grant_type" to "refresh_token"
+            ),
+            json.fromJson(refresh)
+        )
+        assertEquals(mapOf("token" to "access-token", "client_id" to "public-client"), json.fromJson(revoke))
+    }
+
+    @Test
     fun `refresh token 400 clears credentials and prevents another refresh`() = runTest {
         val traktApi = mockk<TraktApi>()
         val traktAuthDataStore = mockk<TraktAuthDataStore>()
@@ -32,12 +63,13 @@ class TraktAuthServiceTest {
         coEvery { authSessionNoticeDataStore.markTraktReconnectRequired() } returns Unit
         coEvery { traktApi.refreshToken(any()) } returns Response.error(400, "invalid_grant".toResponseBody())
 
-        val service = TraktAuthService(
+        val service = spyk(TraktAuthService(
             context = mockk<Context>(relaxed = true),
             traktApi = traktApi,
             traktAuthDataStore = traktAuthDataStore,
             authSessionNoticeDataStore = authSessionNoticeDataStore
-        )
+        ))
+        every { service.hasRequiredCredentials() } returns true
 
         assertFalse(service.refreshTokenIfNeeded(force = true))
         assertEquals(2_000L, currentTime)

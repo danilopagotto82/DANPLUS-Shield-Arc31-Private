@@ -175,6 +175,13 @@ private fun PlaybackNavHost(
             )
         }
 
+        composable(Screen.DanexusRecommendations.route) {
+            com.nuvio.tv.ui.screens.profile.DanexusRecommendationsScreen(
+                onOpen = { id, type -> navController.navigate(Screen.Detail.createRoute(id, type)) },
+                onNewRecommendation = { navController.navigate(Screen.Search.route) }
+            )
+        }
+
         composable(Screen.LayoutSelection.route) {
             LayoutSelectionScreen(
                 onContinue = {

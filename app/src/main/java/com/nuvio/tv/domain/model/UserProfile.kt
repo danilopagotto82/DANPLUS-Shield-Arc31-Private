@@ -9,7 +9,8 @@ data class UserProfile(
     val avatarId: String? = null,
     val avatarUrl: String? = null,
     val profileBackgroundId: String? = null,
-    val profileBackgroundUrl: String? = null
+    val profileBackgroundUrl: String? = null,
+    val serverProfileId: String? = null
 ) {
     val isPrimary: Boolean get() = id == 1
 }

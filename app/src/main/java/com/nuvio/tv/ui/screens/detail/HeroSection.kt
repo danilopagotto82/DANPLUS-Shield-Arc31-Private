@@ -101,6 +101,7 @@ import com.nuvio.tv.ui.components.MDBListRatingsRow
 import com.nuvio.tv.ui.components.SynopsisDescription
 import com.nuvio.tv.ui.theme.NuvioTheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Stop
@@ -267,6 +268,10 @@ fun HeroContentSection(
     heroLogoUrl: String? = null
 ) {
     val context = LocalContext.current
+    var showDanPlusIndications by remember(meta.id, meta.apiType) { mutableStateOf(false) }
+    if (showDanPlusIndications) {
+        com.nuvio.tv.ui.screens.profile.DanexusRecommendDialog(meta, onDismiss = { showDanPlusIndications = false })
+    }
     val v2Hero = com.nuvio.tv.ui.v2.appearance.LocalV2Appearance.current != null
     val isSeriesApi = remember(meta.apiType) {
         meta.apiType.equals("series", ignoreCase = true) || meta.apiType.equals("tv", ignoreCase = true)
@@ -497,6 +502,15 @@ fun HeroContentSection(
                                 painter = trailerPainter,
                                 contentDescription = stringResource(R.string.hero_play_trailer),
                                 onClick = onTrailerClick,
+                                onFocused = onHeroActionFocused
+                            )
+                        }
+
+                        if (com.nuvio.tv.core.danexus.ProfileRecommendationRules.isSupportedType(meta.apiType)) {
+                            ActionIconButton(
+                                icon = Icons.Default.FavoriteBorder,
+                                contentDescription = stringResource(R.string.d12_recommend_action),
+                                onClick = { showDanPlusIndications = true },
                                 onFocused = onHeroActionFocused
                             )
                         }

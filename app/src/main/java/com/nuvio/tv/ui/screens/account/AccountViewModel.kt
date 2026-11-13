@@ -284,6 +284,16 @@ class AccountViewModel @Inject constructor(
     }
 
     fun startQrLogin() {
+        if (serverConfiguration.backendUrl.isBlank() || serverConfiguration.publishableKey.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    error = context.getString(R.string.account_error_backend_not_configured),
+                    qrLoginStatus = context.getString(R.string.qr_login_start_failed)
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             val traceId = qrLoginTraceCounter.incrementAndGet()
             val startedAtMs = SystemClock.elapsedRealtime()
@@ -308,13 +318,12 @@ class AccountViewModel @Inject constructor(
                     "redirectBaseUrl" to serverConfiguration.deviceLoginWebBaseUrl,
                     "legacyRedirectBaseUrl" to serverConfiguration.tvLoginWebBaseUrl,
                     "supabaseUrl" to serverConfiguration.backendUrl,
-                    "anonKeyConfigured" to serverConfiguration.publishableKey.isNotBlank().toString(),
-                    "nonce" to nonce
+                    "anonKeyConfigured" to serverConfiguration.publishableKey.isNotBlank().toString()
                 )
             )
             Log.d(
                 TAG,
-                "QR_LOGIN[$traceId] start requested auth=${_uiState.value.authState.nameForLog()} model=${Build.MODEL.bodySnippetForLog()} redirect=${serverConfiguration.deviceLoginWebBaseUrl.urlForLog()} legacyRedirect=${serverConfiguration.tvLoginWebBaseUrl.urlForLog()} supabase=${serverConfiguration.backendUrl.urlForLog()} anonKeyConfigured=${serverConfiguration.publishableKey.isNotBlank()} nonce=${nonce.rawForLog()}"
+                "QR_LOGIN[$traceId] start requested auth=${_uiState.value.authState.nameForLog()} model=${Build.MODEL.bodySnippetForLog()} redirect=${serverConfiguration.deviceLoginWebBaseUrl.urlForLog()} legacyRedirect=${serverConfiguration.tvLoginWebBaseUrl.urlForLog()} supabase=${serverConfiguration.backendUrl.urlForLog()} anonKeyConfigured=${serverConfiguration.publishableKey.isNotBlank()}"
             )
             _uiState.update {
                 it.copy(
@@ -350,14 +359,14 @@ class AccountViewModel @Inject constructor(
                         runCatching { QrCodeGenerator.generate(result.verificationUriComplete, 420, margin = 1) }
                     }
                         .onFailure { e ->
-                            Log.e(TAG, "QR_LOGIN[$traceId] QR bitmap generation failed url=${result.verificationUriComplete.urlForLog()} urlLength=${result.verificationUriComplete.length} error=${e.diagnosticSummary()}", e.forLog())
+                            Log.e(TAG, "QR_LOGIN[$traceId] QR bitmap generation failed urlLength=${result.verificationUriComplete.length} error=${e.diagnosticSummary()}", e.forLog())
                         }
                         .getOrNull()
                     // The session can be cleared or replaced while the bitmap is built off the main thread.
                     if (activeQrLoginTraceId != traceId) return@launch
                     Log.d(
                         TAG,
-                        "QR_LOGIN[$traceId] start_device_login_session ok totalElapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} deviceCode=${result.deviceCode.rawForLog()} userCode=${result.userCode.rawForLog()} url=${result.verificationUriComplete.urlForLog()} urlLength=${result.verificationUriComplete.length} legacy=${result.legacy} expiresAt=${result.expiresAt} expiresAtMs=${expiresAtMillis ?: "-"} pollInterval=${result.pollIntervalSeconds} qrBitmap=${qrBitmap != null} qrElapsedMs=${SystemClock.elapsedRealtime() - qrStartedAtMs}"
+                        "QR_LOGIN[$traceId] start_device_login_session ok totalElapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} urlLength=${result.verificationUriComplete.length} legacy=${result.legacy} expiresAt=${result.expiresAt} expiresAtMs=${expiresAtMillis ?: "-"} pollInterval=${result.pollIntervalSeconds} qrBitmap=${qrBitmap != null} qrElapsedMs=${SystemClock.elapsedRealtime() - qrStartedAtMs}"
                     )
                     _uiState.update {
                         it.copy(
@@ -414,7 +423,7 @@ class AccountViewModel @Inject constructor(
             }
             qrLoginExchangeInFlight = true
             val startedAtMs = SystemClock.elapsedRealtime()
-            Log.d(TAG, "QR_LOGIN[${traceId ?: "-"}] exchange begin code=${code.rawForLog()} nonce=${nonce.rawForLog()} auth=${current.authState.nameForLog()}")
+            Log.d(TAG, "QR_LOGIN[${traceId ?: "-"}] exchange begin auth=${current.authState.nameForLog()}")
             _uiState.update { it.copy(isLoading = true, error = null, qrLoginStatus = context.getString(R.string.qr_login_signing_in)) }
             try {
                 authManager.exchangeTvLoginSession(code = code, deviceNonce = nonce, traceId = traceId, diagnostics = diagnostics).fold(
@@ -448,7 +457,7 @@ class AccountViewModel @Inject constructor(
     }
 
     fun clearQrLoginSession() {
-        Log.d(TAG, "QR_LOGIN[${activeQrLoginTraceId ?: "-"}] clearing session code=${_uiState.value.qrLoginCode.rawForLog()} pollAttempts=$qrLoginPollAttempt exchangeInFlight=$qrLoginExchangeInFlight")
+        Log.d(TAG, "QR_LOGIN[${activeQrLoginTraceId ?: "-"}] clearing session pollAttempts=$qrLoginPollAttempt exchangeInFlight=$qrLoginExchangeInFlight")
         val diagnostics = activeQrLoginDiagnostics
         activeQrLoginDiagnostics = null
         if (diagnostics != null && !diagnostics.isFinished()) {
@@ -648,7 +657,7 @@ class AccountViewModel @Inject constructor(
         cancelQrLoginPolling()
         val traceId = activeQrLoginTraceId
         qrLoginPollAttempt = 0
-        Log.d(TAG, "QR_LOGIN[${traceId ?: "-"}] polling started intervalSeconds=${_uiState.value.qrLoginPollIntervalSeconds.coerceAtLeast(2)} code=${_uiState.value.qrLoginCode.rawForLog()}")
+        Log.d(TAG, "QR_LOGIN[${traceId ?: "-"}] polling started intervalSeconds=${_uiState.value.qrLoginPollIntervalSeconds.coerceAtLeast(2)}")
         qrLoginPollJob = viewModelScope.launch {
             while (isActive) {
                 val interval = _uiState.value.qrLoginPollIntervalSeconds.coerceAtLeast(2)
@@ -685,7 +694,7 @@ class AccountViewModel @Inject constructor(
         }
         val attempt = ++qrLoginPollAttempt
         val startedAtMs = SystemClock.elapsedRealtime()
-        Log.d(TAG, "QR_LOGIN[${traceId ?: "-"}] poll attempt=$attempt begin code=${code.rawForLog()} nonce=${nonce.rawForLog()}")
+        Log.d(TAG, "QR_LOGIN[${traceId ?: "-"}] poll attempt=$attempt begin")
         authManager.pollTvLoginSession(code = code, deviceNonce = nonce, traceId = traceId, attempt = attempt, diagnostics = diagnostics).fold(
             onSuccess = { result ->
                 val normalizedStatus = result.status.lowercase()

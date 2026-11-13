@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vincular TV — DAN+ Shield</title>
+<main>
+  <h1>Vincular TV</h1>
+  <form id="sign-in">
+    <p>Entre na conta DAN+ que você quer usar na TV.</p>
+    <p><label>E-mail <input name="email" type="email" autocomplete="username" required></label></p>
+    <p><label>Senha <input name="password" type="password" autocomplete="current-password" required></label></p>
+    <p><label>Código exibido na TV <input name="code" autocomplete="off" maxlength="100" required></label></p>
+    <button>Entrar</button>
+  </form>
+  <section id="confirmation" hidden>
+    <p id="device"></p>
+    <p>Confira se o código abaixo é o mesmo exibido na sua TV.</p>
+    <p id="code"></p>
+    <button id="approve" type="button">Aprovar esta TV</button>
+    <button id="cancel" type="button">Cancelar</button>
+  </section>
+  <p id="status" role="status" aria-live="polite"></p>
+</main>
+<script type="module" src="/portal.mjs"></script>
+</html>

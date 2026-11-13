@@ -642,7 +642,7 @@ class AuthManager @Inject constructor(
                 put("p_device_type", deviceType)
                 if (!deviceName.isNullOrBlank()) put("p_device_name", deviceName)
             }
-            Log.d(TAG, "$trace startDeviceLoginSession begin nonce=${deviceNonce.rawForLog()} deviceType=$deviceType redirect=${redirectBaseUrl.urlForLog()}")
+            Log.d(TAG, "$trace startDeviceLoginSession begin deviceType=$deviceType redirect=${redirectBaseUrl.urlForLog()}")
             val body = executeSupabaseJsonRequest(
                 diagnostics = diagnostics,
                 endpoint = AUTH_ENDPOINT_START_DEVICE_LOGIN,
@@ -653,7 +653,7 @@ class AuthManager @Inject constructor(
             val results = json.decodeFromString<List<DeviceLoginStartResult>>(body)
             val result = results.firstOrNull()
                 ?: throw Exception("Empty response from start_device_login_session")
-            Log.d(TAG, "$trace startDeviceLoginSession ok elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} deviceCode=${result.deviceCode.rawForLog()} userCode=${result.userCode.rawForLog()} url=${result.verificationUriComplete.urlForLog()}")
+            Log.d(TAG, "$trace startDeviceLoginSession ok elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs}")
             Result.success(result)
         } catch (error: Exception) {
             val message = error.message.orEmpty().lowercase()
@@ -694,7 +694,7 @@ class AuthManager @Inject constructor(
     ): Result<TvLoginStartResult> {
         val startedAtMs = SystemClock.elapsedRealtime()
         val trace = qrTrace(traceId)
-        Log.d(TAG, "$trace startTvLoginSession begin nonce=${deviceNonce.rawForLog()} deviceNamePresent=${!deviceName.isNullOrBlank()} redirect=${redirectBaseUrl.urlForLog()}")
+        Log.d(TAG, "$trace startTvLoginSession begin deviceNamePresent=${!deviceName.isNullOrBlank()} redirect=${redirectBaseUrl.urlForLog()}")
         return try {
             val result = startTvLoginSessionRpc(
                 deviceNonce = deviceNonce,
@@ -703,7 +703,7 @@ class AuthManager @Inject constructor(
                 traceId = traceId,
                 diagnostics = diagnostics
             )
-            Log.d(TAG, "$trace startTvLoginSession ok elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} code=${result.code.rawForLog()} url=${result.webUrl.urlForLog()} urlLength=${result.webUrl.length} expiresAt=${result.expiresAt} pollInterval=${result.pollIntervalSeconds}")
+            Log.d(TAG, "$trace startTvLoginSession ok elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} urlLength=${result.webUrl.length} expiresAt=${result.expiresAt} pollInterval=${result.pollIntervalSeconds}")
             Result.success(result)
         } catch (e: Exception) {
             val message = e.message.orEmpty().lowercase()
@@ -722,7 +722,7 @@ class AuthManager @Inject constructor(
                         traceId = traceId,
                         diagnostics = diagnostics
                     )
-                    Log.d(TAG, "$trace startTvLoginSession legacy retry ok elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} code=${result.code.rawForLog()} url=${result.webUrl.urlForLog()} urlLength=${result.webUrl.length} expiresAt=${result.expiresAt} pollInterval=${result.pollIntervalSeconds}")
+                    Log.d(TAG, "$trace startTvLoginSession legacy retry ok elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} urlLength=${result.webUrl.length} expiresAt=${result.expiresAt} pollInterval=${result.pollIntervalSeconds}")
                     Result.success(result)
                 } catch (retryError: Exception) {
                     Log.e(TAG, "$trace startTvLoginSession legacy retry failed elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} error=${retryError.diagnosticSummary()}", retryError.forLog())
@@ -749,7 +749,7 @@ class AuthManager @Inject constructor(
             put("p_redirect_base_url", redirectBaseUrl)
             if (!deviceName.isNullOrBlank()) put("p_device_name", deviceName)
         }
-        Log.d(TAG, "$trace rpc start_tv_login_session request nonce=${deviceNonce.rawForLog()} redirect=${redirectBaseUrl.urlForLog()} deviceNamePresent=${!deviceName.isNullOrBlank()}")
+        Log.d(TAG, "$trace rpc start_tv_login_session request redirect=${redirectBaseUrl.urlForLog()} deviceNamePresent=${!deviceName.isNullOrBlank()}")
         val body = executeSupabaseJsonRequest(
             diagnostics = diagnostics,
             endpoint = AUTH_ENDPOINT_START_TV_LOGIN,
@@ -758,7 +758,7 @@ class AuthManager @Inject constructor(
             body = params.toString()
         ).body
         val results = json.decodeFromString<List<TvLoginStartResult>>(body)
-        Log.d(TAG, "$trace rpc start_tv_login_session response rows=${results.size} elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} firstCode=${results.firstOrNull()?.code.rawForLog()} firstUrl=${results.firstOrNull()?.webUrl.urlForLog()}")
+        Log.d(TAG, "$trace rpc start_tv_login_session response rows=${results.size} elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs}")
         return results.firstOrNull()
             ?: throw Exception("Empty response from start_tv_login_session")
     }
@@ -773,7 +773,7 @@ class AuthManager @Inject constructor(
         val startedAtMs = SystemClock.elapsedRealtime()
         val trace = qrTrace(traceId)
         return try {
-            Log.d(TAG, "$trace pollTvLoginSession begin attempt=${attempt ?: "-"} code=${code.rawForLog()} nonce=${deviceNonce.rawForLog()}")
+            Log.d(TAG, "$trace pollTvLoginSession begin attempt=${attempt ?: "-"}")
             val params = buildJsonObject {
                 put("p_code", code)
                 put("p_device_nonce", deviceNonce)
@@ -810,7 +810,7 @@ class AuthManager @Inject constructor(
                 put("device_nonce", deviceNonce)
             }.toString()
             val url = supabaseUrl(AUTH_ENDPOINT_EXCHANGE_TV_LOGIN)
-            Log.d(TAG, "$trace exchangeTvLoginSession request url=${url.urlForLog()} code=${code.rawForLog()} nonce=${deviceNonce.rawForLog()} payloadBytes=${payload.length}")
+            Log.d(TAG, "$trace exchangeTvLoginSession request url=${url.urlForLog()} payloadBytes=${payload.length}")
             val body = executeSupabaseJsonRequest(
                 diagnostics = diagnostics,
                 endpoint = AUTH_ENDPOINT_EXCHANGE_TV_LOGIN,
@@ -966,7 +966,7 @@ private class AuthHttpException(
     val endpoint: String,
     val statusCode: Int,
     val responseBody: String
-) : Exception("Auth request failed endpoint=$endpoint status=$statusCode body=$responseBody")
+) : Exception("Auth request failed endpoint=$endpoint status=$statusCode body=${authDiagnosticFilteredBody(responseBody)}")
 
 private fun Headers.toDiagnosticMap(): Map<String, String> =
     names().associateWith { name -> values(name).joinToString(", ") }

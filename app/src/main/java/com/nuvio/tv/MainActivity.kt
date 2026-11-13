@@ -60,6 +60,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -1237,6 +1238,7 @@ open class MainActivity : ComponentActivity() {
                     val strNavDiscover = stringResource(R.string.nav_discover)
                     val strNavSearch = stringResource(R.string.nav_search)
                     val strNavLibrary = stringResource(R.string.nav_library)
+                    val strNavIndications = stringResource(R.string.d12_screen_title)
                     val strNavSettings = stringResource(R.string.nav_settings)
                     val strNavCalendar = stringResource(R.string.nav_calendar)
                     val strNavScout = stringResource(R.string.scout_title)
@@ -1245,6 +1247,7 @@ open class MainActivity : ComponentActivity() {
                         strNavDiscover,
                         strNavSearch,
                         strNavLibrary,
+                        strNavIndications,
                         strNavSettings,
                         strNavCalendar,
                         discoverLocation,
@@ -1282,6 +1285,13 @@ open class MainActivity : ComponentActivity() {
                                     route = Screen.Library.route,
                                     label = strNavLibrary,
                                     iconRes = R.raw.sidebar_library
+                                )
+                            )
+                            add(
+                                DrawerItem(
+                                    route = Screen.DanexusRecommendations.route,
+                                    label = strNavIndications,
+                                    icon = Icons.Default.FavoriteBorder
                                 )
                             )
                             if (calendarInMenu) {
@@ -2873,6 +2883,7 @@ internal fun appRootRoutes(discoverInSidebar: Boolean, calendarInMenu: Boolean):
     add(Screen.Search.route)
     if (com.nuvio.tv.domain.model.ScoutFeature.available) add(Screen.Scout.route)
     add(Screen.Library.route)
+    add(Screen.DanexusRecommendations.route)
     if (calendarInMenu) add(Screen.Calendar.route)
     add(Screen.Settings.route)
     if (discoverInSidebar) add(Screen.Discover.route)

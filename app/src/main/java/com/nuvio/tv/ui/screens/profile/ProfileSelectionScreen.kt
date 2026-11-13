@@ -487,7 +487,7 @@ fun ProfileSelectionScreen(
                             }
 
                             is ProfilePinOverlayState.Unlock -> {
-                                viewModel.verifyProfilePin(activePinOverlay.profile.id, pin) { result ->
+                                viewModel.verifyProfilePin(activePinOverlay.profile.id, pin, unlockRecommendations = true) { result ->
                                     result.onSuccess { verify ->
                                         if (verify.unlocked) {
                                             pinOverlayError = null

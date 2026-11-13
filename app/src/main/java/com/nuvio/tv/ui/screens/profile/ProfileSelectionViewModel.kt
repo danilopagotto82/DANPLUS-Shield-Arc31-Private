@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.party.PartyAvatars
+import com.nuvio.tv.core.danexus.RecommendationSync
 import com.nuvio.tv.core.profile.LocalProfileAvatars
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sync.ProfileSettingsSyncService
@@ -55,7 +56,8 @@ class ProfileSelectionViewModel @Inject constructor(
     memberAccessRepository: MemberAccessRepository,
     private val profileLockStateDataStore: ProfileLockStateDataStore,
     private val localAvatars: LocalProfileAvatars,
-    private val ratingLimits: com.nuvio.tv.core.ratinglimit.RatingLimitGate
+    private val ratingLimits: com.nuvio.tv.core.ratinglimit.RatingLimitGate,
+    private val recommendationSync: RecommendationSync
 ) : ViewModel() {
     val activeProfileId: StateFlow<Int> = profileManager.activeProfileId
 
@@ -174,6 +176,7 @@ class ProfileSelectionViewModel @Inject constructor(
         isSelectingProfile = true
         viewModelScope.launch {
             try {
+                recommendationSync.retainUnlock(profileManager.profiles.value.firstOrNull { it.id == id }?.serverProfileId)
                 profileManager.setActiveProfile(id)
                 StartupLatencyTrace.mark("profile_active_set")
                 onComplete()
@@ -344,13 +347,27 @@ class ProfileSelectionViewModel @Inject constructor(
         }
     }
 
-    fun verifyProfilePin(profileId: Int, pin: String, onComplete: (Result<SupabaseProfilePinVerifyResult>) -> Unit) {
+    fun verifyProfilePin(
+        profileId: Int,
+        pin: String,
+        unlockRecommendations: Boolean = false,
+        onComplete: (Result<SupabaseProfilePinVerifyResult>) -> Unit
+    ) {
         if (_isPinOperationInProgress.value) return
         viewModelScope.launch {
             _isPinOperationInProgress.value = true
-            val result = profileSyncService.verifyProfilePin(profileId, pin)
-            _isPinOperationInProgress.value = false
-            onComplete(result)
+            try {
+                val profile = profileManager.profiles.value.firstOrNull { it.id == profileId }
+                val result = profileSyncService.verifyProfilePin(profileId, pin)
+                if (unlockRecommendations && result.getOrNull()?.unlocked == true &&
+                    profile != null && profileManager.profiles.value.any { it.id == profileId && it.serverProfileId == profile.serverProfileId }) {
+                    recommendationSync.authorize(profile, pin)
+                }
+                _isPinOperationInProgress.value = false
+                onComplete(result)
+            } finally {
+                _isPinOperationInProgress.value = false
+            }
         }
     }
 }
