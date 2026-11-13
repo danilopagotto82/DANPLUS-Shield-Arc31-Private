@@ -5,6 +5,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
@@ -348,6 +350,10 @@ fun CollectionEditorScreen(
 
         item(key = "collection_highlight") {
             var showColorPicker by rememberSaveable { mutableStateOf(false) }
+            var focusColorsOnOpen by remember { mutableStateOf(false) }
+            val chooseColorFocus = remember { FocusRequester() }
+            val colorRowFocus = remember { FocusRequester() }
+            val firstColorFocus = remember { FocusRequester() }
             Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
                 Text(
                     stringResource(R.string.collection_highlight_title),
@@ -377,7 +383,17 @@ fun CollectionEditorScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
                     ) {
-                        Button(onClick = { showColorPicker = !showColorPicker }) {
+                        Button(
+                            onClick = {
+                                showColorPicker = !showColorPicker
+                                focusColorsOnOpen = showColorPicker
+                            },
+                            modifier = Modifier
+                                .focusRequester(chooseColorFocus)
+                                .focusProperties {
+                                    down = if (showColorPicker) colorRowFocus else FocusRequester.Default
+                                }
+                        ) {
                             Text(stringResource(R.string.collection_highlight_color))
                         }
                         Box(Modifier.width(104.dp).height(36.dp).collectionHighlight(style, rgb, 52.dp))
@@ -391,13 +407,36 @@ fun CollectionEditorScreen(
                         val themes = remember(access.entitlements) {
                             availableAppThemes(access.entitlements).sortedBy { if (it == AppTheme.GLASS) 0 else 1 }
                         }
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
-                            items(themes, key = { it.name }) { theme ->
+                        LaunchedEffect(focusColorsOnOpen) {
+                            if (focusColorsOnOpen) {
+                                repeat(3) {
+                                    withFrameNanos { }
+                                    val moved = runCatching { firstColorFocus.requestFocus() }.getOrDefault(false) ||
+                                        runCatching { colorRowFocus.requestFocus() }.getOrDefault(false)
+                                    if (moved) {
+                                        focusColorsOnOpen = false
+                                        return@LaunchedEffect
+                                    }
+                                }
+                                focusColorsOnOpen = false
+                            }
+                        }
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth()
+                                .focusRequester(colorRowFocus)
+                                .focusRestorer()
+                                .focusGroup(),
+                            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
+                        ) {
+                            itemsIndexed(themes, key = { _, theme -> theme.name }) { index, theme ->
                                 val themeRgb = ThemeColors.getColorPalette(theme, customColors).secondary.toArgb() and 0xFFFFFF
                                 ThemeSwatchChip(
                                     theme = theme,
                                     customColors = customColors,
                                     isSelected = themeRgb == rgb,
+                                    modifier = Modifier
+                                        .then(if (index == 0) Modifier.focusRequester(firstColorFocus) else Modifier)
+                                        .focusProperties { up = chooseColorFocus },
                                     onClick = { viewModel.setHighlightColor(style, themeRgb) }
                                 )
                             }
@@ -414,49 +453,53 @@ fun CollectionEditorScreen(
                 color = NuvioTheme.colors.TextSecondary
             )
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
-            ) {
-                val viewModes = listOf(
-                    FolderViewMode.TABBED_GRID to stringResource(R.string.collections_editor_view_mode_tabs),
-                    FolderViewMode.ROWS to stringResource(R.string.collections_editor_view_mode_rows),
-                    FolderViewMode.FOLLOW_LAYOUT to stringResource(R.string.collections_editor_view_mode_follow)
-                )
-                viewModes.forEach { (mode, label) ->
-                    val isSelected = uiState.viewMode == mode
-                    Button(
-                        onClick = { viewModel.setViewMode(mode) },
-                        modifier = Modifier.semantics {
-                            role = Role.RadioButton
-                            selected = isSelected
-                        },
-                        colors = ButtonDefaults.colors(
-                            containerColor = if (isSelected) NuvioTheme.colors.Secondary.copy(alpha = 0.3f) else NuvioTheme.colors.BackgroundCard,
-                            contentColor = if (isSelected) NuvioTheme.colors.Secondary else NuvioTheme.colors.TextSecondary,
-                            focusedContainerColor = NuvioTheme.colors.FocusBackground,
-                            focusedContentColor = NuvioTheme.colors.Primary
-                        ),
-                        border = ButtonDefaults.border(
-                            border = if (isSelected) Border(
-                                border = BorderStroke(NuvioTheme.spacing.xxs, NuvioTheme.colors.Secondary),
-                                shape = RoundedCornerShape(NuvioTheme.radii.md)
-                            ) else Border.None,
-                            focusedBorder = Border(
-                                border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
-                                shape = RoundedCornerShape(NuvioTheme.radii.md)
-                            )
-                        ),
-                        shape = ButtonDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md))
-                    ) {
-                        Text(label)
+            val viewModes = listOf(
+                FolderViewMode.TABBED_GRID to stringResource(R.string.collections_editor_view_mode_tabs),
+                FolderViewMode.ROWS to stringResource(R.string.collections_editor_view_mode_rows),
+                FolderViewMode.FOLLOW_LAYOUT to stringResource(R.string.collections_editor_view_mode_follow),
+                FolderViewMode.PREVIEW_GRID to stringResource(R.string.dan_folder_preview_grid),
+                FolderViewMode.SHOWCASE to stringResource(R.string.dan_folder_showcase)
+            )
+            viewModes.chunked(3).forEach { modes ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = NuvioTheme.spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+                ) {
+                    modes.forEach { (mode, label) ->
+                        val isSelected = uiState.viewMode == mode
+                        Button(
+                            onClick = { viewModel.setViewMode(mode) },
+                            modifier = Modifier.semantics {
+                                role = Role.RadioButton
+                                selected = isSelected
+                            },
+                            colors = ButtonDefaults.colors(
+                                containerColor = if (isSelected) NuvioTheme.colors.Secondary.copy(alpha = 0.3f) else NuvioTheme.colors.BackgroundCard,
+                                contentColor = if (isSelected) NuvioTheme.colors.Secondary else NuvioTheme.colors.TextSecondary,
+                                focusedContainerColor = NuvioTheme.colors.FocusBackground,
+                                focusedContentColor = NuvioTheme.colors.Primary
+                            ),
+                            border = ButtonDefaults.border(
+                                border = if (isSelected) Border(
+                                    border = BorderStroke(NuvioTheme.spacing.xxs, NuvioTheme.colors.Secondary),
+                                    shape = RoundedCornerShape(NuvioTheme.radii.md)
+                                ) else Border.None,
+                                focusedBorder = Border(
+                                    border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
+                                    shape = RoundedCornerShape(NuvioTheme.radii.md)
+                                )
+                            ),
+                            shape = ButtonDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md))
+                        ) {
+                            Text(label)
+                        }
                     }
                 }
             }
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.md))
         }
 
-        if (uiState.viewMode == FolderViewMode.TABBED_GRID) {
+        if (uiState.viewMode.usesTabs) {
             item(key = "show_all_tab") {
                 Card(
                     onClick = { viewModel.setShowAllTab(!uiState.showAllTab) },

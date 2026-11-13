@@ -22,7 +22,7 @@ import javax.crypto.spec.SecretKeySpec
 
 /** The client that carries reports to Arc's relay: signed, compressed, and able to get past a DNS block. */
 object ReportTransport {
-    fun client(context: Context, base: OkHttpClient, signingKey: String): OkHttpClient {
+    fun client(context: Context, base: OkHttpClient, signingKey: String, danplusAnonKey: String? = null): OkHttpClient {
         val installId = ReportInstallId(context)
         val bootstrap = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS).build()
         val dns = ReportDns(
@@ -35,14 +35,27 @@ object ReportTransport {
                     .build()
             }
         )
-        return base.newBuilder()
+        val builder = base.newBuilder()
             .cache(null)
             .dns(dns)
+            .followRedirects(false)
+            .followSslRedirects(false)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(ReportRetryInterceptor(dns))
-            .addInterceptor(ReportSigningInterceptor(signingKey, installId::get))
-            .build()
+        if (danplusAnonKey == null) {
+            builder.addInterceptor(ReportSigningInterceptor(signingKey, installId::get))
+        } else {
+            builder.addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .header("apikey", danplusAnonKey)
+                    .header("Authorization", "Bearer $danplusAnonKey")
+                    .header("X-Arc-Install", installId.get())
+                    .build()
+                chain.proceed(request)
+            }
+        }
+        return builder.build()
     }
 }
 

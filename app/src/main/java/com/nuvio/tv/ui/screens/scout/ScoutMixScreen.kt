@@ -116,9 +116,11 @@ fun ScoutMixScreen(
     onOpenShow: (ScoutMixShow) -> Unit,
     onFindShow: () -> Unit,
     onAdjust: (recipe: String) -> Unit = {},
-    viewModel: ScoutMixViewModel = hiltViewModel()
+    viewModel: ScoutMixViewModel = hiltViewModel(),
+    ratings: com.nuvio.tv.ui.scout.ScoutRatingViewModel = hiltViewModel()
 ) {
     val mix by viewModel.mix.collectAsStateWithLifecycle()
+    val scoutProfile by ratings.profile.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val gone by viewModel.gone.collectAsStateWithLifecycle()
     val pickSources by viewModel.pickSources.collectAsStateWithLifecycle()
@@ -183,7 +185,13 @@ fun ScoutMixScreen(
             Row(Modifier.fillMaxWidth().padding(start = ScoutFocusRoom), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Shuffle, null, tint = NuvioTheme.colors.Secondary, modifier = Modifier.size(NuvioTheme.spacing.lg))
                 Spacer(Modifier.width(NuvioTheme.spacing.xs))
-                Text(current?.name.orEmpty(), style = MaterialTheme.typography.titleSmall, color = NuvioTheme.colors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(
+                    current?.let { com.nuvio.tv.core.scout.scoutListTitle(
+                        it.name, com.nuvio.tv.core.scout.scoutMixEmoji(it.id), scoutProfile.settings.listEmojis
+                    ) }.orEmpty(),
+                    style = MaterialTheme.typography.titleSmall, color = NuvioTheme.colors.TextPrimary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+                )
                 if (current != null && !ranOut) {
                     ScoutWord(stringResource(R.string.scout_mixes_unwatched_only), { viewModel.setUnwatchedOnly(!current.unwatchedOnly) }, focus("unwatched"), on = current.unwatchedOnly)
                     ScoutWord(stringResource(R.string.scout_mixes_keep_playing), { viewModel.setKeepPlaying(!current.keepPlaying) }, focus("keep"), on = current.keepPlaying)

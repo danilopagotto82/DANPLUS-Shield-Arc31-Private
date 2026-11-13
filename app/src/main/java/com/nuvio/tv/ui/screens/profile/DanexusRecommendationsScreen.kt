@@ -32,8 +32,8 @@ import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.danexus.ProfileRecommendation
 import com.nuvio.tv.core.danexus.ProfileRecommendationRules
+import com.nuvio.tv.core.danexus.RecommendationProfile
 import com.nuvio.tv.domain.model.Meta
-import com.nuvio.tv.domain.model.UserProfile
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.components.ProfileAvatarCircle
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -46,26 +46,35 @@ fun DanexusRecommendDialog(
     onDismiss: () -> Unit,
     viewModel: DanexusProfilesViewModel = hiltViewModel()
 ) {
-    val profiles by viewModel.profileManager.profiles.collectAsState()
-    val active by viewModel.profileManager.activeProfileId.collectAsState()
+    val profiles by viewModel.recommendationProfiles.collectAsStateWithLifecycle()
+    val active by viewModel.viewer.collectAsStateWithLifecycle()
+    val email by viewModel.accountEmail.collectAsStateWithLifecycle()
+    val locked by viewModel.locked.collectAsStateWithLifecycle()
     val pictures by viewModel.profilePictures.collectAsStateWithLifecycle()
     val colors = NuvioTheme.colors
-    val recipients = profiles.filter { it.id != active }
-    var selected by remember(active, meta.id, meta.apiType) { mutableStateOf(emptySet<Int>()) }
-    val activeServerId = profiles.firstOrNull { it.id == active }?.serverProfileId
-    val canReview = viewModel.remoteEnabled && activeServerId != null &&
-        selected.isNotEmpty() && recipients.count { it.id in selected && it.serverProfileId != null } == selected.size
-    var confirmation by remember(active, activeServerId, meta.id) { mutableStateOf<Map<Int, String?>?>(null) }
+    val recipients = profiles.filter { it.id != active?.id }
+    var selected by remember(active, meta.id, meta.apiType) { mutableStateOf(emptySet<String>()) }
+    val canReview = active != null && !locked && selected.isNotEmpty()
+    var confirmation by remember(active, meta.id) { mutableStateOf<Map<Int, String>?>(null) }
     var sentCount by remember(active, meta.id) { mutableIntStateOf(0) }
     var error by remember(active, meta.id) { mutableStateOf(false) }
+    var accountOpen by remember { mutableStateOf(false) }
     val firstRecipient = remember { FocusRequester() }
 
-    LaunchedEffect(active, meta.id, confirmation == null, recipients.map { it.id }) {
+    DisposableEffect(viewModel) {
+        viewModel.startSync()
+        onDispose { viewModel.stopSync() }
+    }
+    LaunchedEffect(active, meta.id, confirmation == null, recipients.map { it.id }, accountOpen, locked) {
         repeat(2) { withFrameNanos { } }
-        if (confirmation == null && recipients.isNotEmpty()) runCatching { firstRecipient.requestFocus() }
+        if (confirmation == null && !accountOpen && !locked && active != null && recipients.isNotEmpty()) {
+            runCatching { firstRecipient.requestFocus() }
+        }
     }
 
-    if (confirmation == null) NuvioDialog(
+    if (accountOpen) {
+        RecommendationAccountDialog(viewModel) { accountOpen = false }
+    } else if (confirmation == null) NuvioDialog(
         onDismiss = onDismiss,
         title = stringResource(R.string.d12_select_title),
         subtitle = meta.name,
@@ -75,12 +84,12 @@ fun DanexusRecommendDialog(
         Text(stringResource(R.string.d12_select_hint), Modifier.fillMaxWidth(), color = colors.TextSecondary, textAlign = TextAlign.Center)
         if (!viewModel.remoteEnabled) {
             Text(stringResource(R.string.d12_sync_unavailable), color = colors.TextSecondary)
-        } else if (activeServerId == null) {
-            Text(stringResource(R.string.d12_sync_profile_required), color = colors.TextSecondary)
+        } else if (active == null || locked) {
+            Text(stringResource(if (locked) R.string.d12_unlock_hint else R.string.d12_setup_hint), color = colors.TextSecondary)
         }
-        if (recipients.isEmpty()) {
+        if (active != null && !locked && recipients.isEmpty()) {
             Text(stringResource(R.string.d12_no_profiles), color = colors.TextSecondary)
-        } else {
+        } else if (active != null && !locked) {
             LazyColumn(
                 Modifier.align(Alignment.CenterHorizontally).widthIn(max = 460.dp).fillMaxWidth().heightIn(max = 250.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -98,7 +107,7 @@ fun DanexusRecommendDialog(
                         colors = indicationButtonColors(chosen)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            IndicationProfileName(profile, pictures[profile.id])
+                            IndicationProfileName(profile, viewModel.localProfileFor(profile)?.id?.let(pictures::get))
                             Spacer(Modifier.weight(1f))
                             Icon(if (chosen) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, Modifier.size(20.dp))
                         }
@@ -109,20 +118,20 @@ fun DanexusRecommendDialog(
         }
         if (error) Text(stringResource(R.string.d12_send_error), Modifier.fillMaxWidth(), color = colors.Error, textAlign = TextAlign.Center)
         if (sentCount > 0) Text(stringResource(R.string.d12_send_queued, sentCount), Modifier.fillMaxWidth(), color = colors.Secondary, textAlign = TextAlign.Center)
-        if (viewModel.remoteEnabled && activeServerId != null &&
-            recipients.any { it.id in selected && it.serverProfileId == null }
-        ) {
-            Text(stringResource(R.string.d12_sync_recipient_required), color = colors.TextSecondary)
-        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (recipients.isNotEmpty()) {
+            if (viewModel.remoteEnabled && (email == null || active == null || locked)) {
+                Button(onClick = { accountOpen = true }) {
+                    Text(stringResource(if (locked) R.string.d12_unlock_action else R.string.d12_account_action))
+                }
+            }
+            if (active != null && !locked && recipients.isNotEmpty()) {
                 Button(onClick = { selected = if (selected.size == recipients.size) emptySet() else recipients.map { it.id }.toSet() }) {
                     Text(stringResource(R.string.d12_all_profiles))
                 }
             }
-            if (viewModel.remoteEnabled && activeServerId != null) {
+            if (active != null && !locked) {
                 Button(onClick = {
-                    confirmation = recipients.filter { it.id in selected }.associate { it.id to it.serverProfileId }
+                    confirmation = recipients.filter { it.id in selected }.associate { it.index to it.id }
                 }, enabled = canReview) {
                     Text(stringResource(R.string.d12_review_send))
                 }
@@ -132,7 +141,7 @@ fun DanexusRecommendDialog(
     }
 
     confirmation?.let { targets ->
-        val names = recipients.filter { it.id in targets && targets[it.id] == it.serverProfileId }.map { it.name }
+        val names = recipients.filter { targets[it.index] == it.id }.map { it.name }
         val cancelFocus = remember { FocusRequester() }
         LaunchedEffect(targets) {
             repeat(2) { withFrameNanos { } }
@@ -147,7 +156,8 @@ fun DanexusRecommendDialog(
                 }
                 Button(onClick = {
                     confirmation = null // Avoid duplicate DPAD delivery.
-                    viewModel.send(active, activeServerId, targets, meta).onSuccess {
+                    val viewerId = active?.id ?: return@Button
+                    viewModel.send(viewerId, targets, meta).onSuccess {
                         sentCount = it
                         error = it == 0
                         if (it > 0) selected = emptySet()
@@ -166,19 +176,22 @@ fun DanexusRecommendationsScreen(
     onNewRecommendation: () -> Unit,
     viewModel: DanexusProfilesViewModel = hiltViewModel()
 ) {
-    val active by viewModel.profileManager.activeProfileId.collectAsState()
-    val profiles by viewModel.profileManager.profiles.collectAsState()
+    val active by viewModel.viewer.collectAsStateWithLifecycle()
+    val profiles by viewModel.recommendationProfiles.collectAsStateWithLifecycle()
+    val locked by viewModel.locked.collectAsStateWithLifecycle()
     val records by viewModel.items.collectAsState()
+    val syncFailed by viewModel.syncFailed.collectAsStateWithLifecycle()
     val pictures by viewModel.profilePictures.collectAsStateWithLifecycle()
     val colors = NuvioTheme.colors
     var sent by remember(active) { mutableStateOf(false) }
     var person by remember(active, sent) { mutableStateOf<Int?>(null) }
+    var accountOpen by remember { mutableStateOf(false) }
     var toRemove by remember(active) { mutableStateOf<ProfileRecommendation?>(null) }
     val receivedFocus = remember { FocusRequester() }
     val sentFocus = remember { FocusRequester() }
-    val available = profiles.associateBy(UserProfile::id)
-    val visible = ProfileRecommendationRules.inbox(records, active, sent, person?.takeIf { it in available })
-        .filter { ProfileRecommendationRules.belongsToCurrentProfiles(it, available) }
+    val visible = active?.let { viewer ->
+        ProfileRecommendationRules.inbox(records, viewer.index, sent, person)
+    }.orEmpty()
 
     LaunchedEffect(active) { viewModel.refresh() }
     DisposableEffect(viewModel) {
@@ -204,6 +217,11 @@ fun DanexusRecommendationsScreen(
                 }
                 if (!viewModel.remoteEnabled) {
                     Text(stringResource(R.string.d12_sync_unavailable), color = colors.TextSecondary)
+                } else if (active == null || locked) {
+                    Text(stringResource(if (locked) R.string.d12_unlock_hint else R.string.d12_setup_hint), color = colors.TextSecondary)
+                }
+                if (syncFailed && !locked) {
+                    Text(stringResource(R.string.d12_sync_retry), color = colors.TextSecondary)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -218,8 +236,11 @@ fun DanexusRecommendationsScreen(
                     Spacer(Modifier.width(7.dp))
                     Text(stringResource(R.string.d12_find_to_send))
                 }
+                if (viewModel.remoteEnabled) Button(onClick = { accountOpen = true }, colors = indicationButtonColors()) {
+                    Text(stringResource(if (locked) R.string.d12_unlock_action else R.string.d12_account_action))
+                }
             }
-            if (profiles.size > 1) {
+            if (active != null && !locked && profiles.size > 1) {
                 androidx.compose.foundation.lazy.LazyRow(
                     modifier = Modifier.widthIn(max = 820.dp).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
@@ -229,9 +250,9 @@ fun DanexusRecommendationsScreen(
                             Text(stringResource(R.string.d12_all_profiles_filter))
                         }
                     }
-                    items(profiles.filter { it.id != active }, key = { it.id }) { profile ->
-                        Button(onClick = { person = profile.id }, colors = indicationButtonColors(person == profile.id)) {
-                            IndicationProfileName(profile, pictures[profile.id])
+                    items(profiles.filter { it.id != active?.id }, key = { it.id }) { profile ->
+                        Button(onClick = { person = profile.index }, colors = indicationButtonColors(person == profile.index)) {
+                            IndicationProfileName(profile, viewModel.localProfileFor(profile)?.id?.let(pictures::get))
                         }
                     }
                 }
@@ -247,8 +268,8 @@ fun DanexusRecommendationsScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(visible, key = { it.key }) { row ->
-                        val other = profiles.firstOrNull { it.id == if (sent) row.to else row.from }
-                        val watchedFlow = remember(row.key, row.to, row.episodeKeys) { viewModel.isRecipientWatched(row) }
+                        val other = profiles.firstOrNull { it.index == if (sent) row.to else row.from }
+                        val watchedFlow = remember(row) { viewModel.isRecipientWatched(row) }
                         val watchedByRecipient by watchedFlow.collectAsState(initial = false)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Button(
@@ -322,10 +343,11 @@ fun DanexusRecommendationsScreen(
             }
         }
     }
+    if (accountOpen) RecommendationAccountDialog(viewModel) { accountOpen = false }
 }
 
 @Composable
-private fun IndicationProfileName(profile: UserProfile, picture: String?) {
+internal fun IndicationProfileName(profile: RecommendationProfile, picture: String?) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ProfileAvatarCircle(
             name = profile.name,

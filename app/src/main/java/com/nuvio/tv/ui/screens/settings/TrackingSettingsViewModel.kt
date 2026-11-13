@@ -13,7 +13,6 @@ import com.nuvio.tv.data.local.TraktAuthDataStore
 import com.nuvio.tv.data.local.TraktSettingsDataStore
 import com.nuvio.tv.data.local.WatchProgressSource
 import com.nuvio.tv.data.simkl.SimklAnimeIdPreference
-import com.nuvio.tv.data.simkl.SimklAuthRepository
 import com.nuvio.tv.data.simkl.SimklSyncRepository
 import com.nuvio.tv.data.mdblist.MdbListAuthStore
 import com.nuvio.tv.domain.model.LibrarySourceMode
@@ -46,7 +45,6 @@ class TrackingSettingsViewModel @Inject constructor(
     private val settingsDataStore: TraktSettingsDataStore,
     private val simklSyncRepository: SimklSyncRepository,
     traktAuthDataStore: TraktAuthDataStore,
-    simklAuthRepository: SimklAuthRepository,
     mdbListAuth: MdbListAuthStore,
     weTrakrAuth: com.nuvio.tv.data.wetrakr.WeTrakrAuthStore,
     profiles: ProfileManager
@@ -56,10 +54,9 @@ class TrackingSettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val connected = combine(traktAuthDataStore.state, simklAuthRepository.state, mdbListAuth.state, weTrakrAuth.state, profiles.activeProfileId) { trakt, simkl, mdblist, wetrakr, profileId ->
+            val connected = combine(traktAuthDataStore.state, mdbListAuth.state, weTrakrAuth.state, profiles.activeProfileId) { trakt, mdblist, wetrakr, profileId ->
                 if (mdblist.scope.profileId != profileId) null else buildSet<TrackingProviderId> {
                     if (trakt.isAuthenticated) add(TrackingProviderId.TRAKT)
-                    if (simkl.isAuthenticated) add(TrackingProviderId.SIMKL)
                     if (mdblist.isAuthenticated) add(TrackingProviderId.MDBLIST)
                     if (wetrakr.isAuthenticated && wetrakr.scope.profileId == profileId) add(TrackingProviderId.WETRAKR)
                 }

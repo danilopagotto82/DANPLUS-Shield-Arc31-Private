@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.settings
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import androidx.compose.foundation.layout.Arrangement
@@ -204,18 +207,22 @@ private fun PlaybackThumbnailRows(
         seekThumbStoredBytes = withContext(Dispatchers.IO) { SeekThumbnails.storedBytes(context) }
     }
 
-    SettingsToggleRow(
-        title = stringResource(R.string.seek_thumbnails_title),
-        subtitle = stringResource(R.string.seek_thumbnails_mode_all_desc),
-        checked = seekThumbModeRead == SeekThumbMode.ALL,
-        onToggle = {
-            val read = seekThumbModeRead ?: return@SettingsToggleRow
-            seekThumbScope.launch {
-                SeekThumbnailPreferences.setMode(context, if (read == SeekThumbMode.OFF) SeekThumbMode.ALL else SeekThumbMode.OFF)
-            }
-        },
-        enabled = internalPlayer
-    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        SettingsToggleRow(
+            title = stringResource(R.string.seek_thumbnails_title),
+            modifier = Modifier.weight(1f),
+            subtitle = stringResource(R.string.seek_thumbnails_mode_all_desc),
+            checked = seekThumbModeRead == SeekThumbMode.ALL,
+            onToggle = {
+                val read = seekThumbModeRead ?: return@SettingsToggleRow
+                seekThumbScope.launch {
+                    SeekThumbnailPreferences.setMode(context, if (read == SeekThumbMode.OFF) SeekThumbMode.ALL else SeekThumbMode.OFF)
+                }
+            },
+            enabled = internalPlayer
+        )
+        SettingsHelpButton(R.string.seek_thumbnails_title, R.string.dan_help_seek_thumbnails)
+    }
     SettingsActionRow(
         title = stringResource(R.string.seek_thumbnails_prepare_title),
         subtitle = null,
@@ -223,6 +230,7 @@ private fun PlaybackThumbnailRows(
         enabled = internalPlayer && seekThumbsOn,
         onClick = { onOpenDialog(PlaybackDialog.SEEK_THUMBNAIL_PREPARE) }
     )
+    SeekrSettingsRow(enabled = internalPlayer && seekThumbsOn)
     SettingsActionRow(
         title = stringResource(R.string.seek_thumbnails_before_play_title),
         subtitle = null,

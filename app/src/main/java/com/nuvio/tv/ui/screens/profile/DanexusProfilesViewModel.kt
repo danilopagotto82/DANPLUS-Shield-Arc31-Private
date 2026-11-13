@@ -3,20 +3,18 @@ package com.nuvio.tv.ui.screens.profile
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.danexus.DanexusRecommendations
 import com.nuvio.tv.core.danexus.ProfileRecommendation
 import com.nuvio.tv.core.danexus.ProfileRecommendationRules
 import com.nuvio.tv.core.danexus.RecommendationSync
+import com.nuvio.tv.core.danexus.RecommendationProfile
 import com.nuvio.tv.core.danexus.RemoteRecommendation
 import com.nuvio.tv.core.party.PartyAvatars
 import com.nuvio.tv.core.profile.LocalProfileAvatars
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.local.WatchedItemsPreferences
-import com.nuvio.tv.data.local.ProfileLockStateDataStore
 import com.nuvio.tv.data.remote.supabase.AvatarRepository
 import com.nuvio.tv.data.repository.MemberAccessRepository
-import com.nuvio.tv.domain.model.AuthState
 import com.nuvio.tv.domain.model.CosmeticEntitlement
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.UserProfile
@@ -28,14 +26,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,16 +42,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.OffsetDateTime
+import com.nuvio.tv.R
 
 @HiltViewModel
 class DanexusProfilesViewModel @Inject constructor(
     val profileManager: ProfileManager,
     private val watched: WatchedItemsPreferences,
-    private val authManager: AuthManager,
-    private val profileLocks: ProfileLockStateDataStore,
     private val sync: RecommendationSync,
     localAvatars: LocalProfileAvatars,
     avatarRepository: AvatarRepository,
@@ -64,6 +60,19 @@ class DanexusProfilesViewModel @Inject constructor(
     private val _items = MutableStateFlow(emptyList<ProfileRecommendation>())
     val items: StateFlow<List<ProfileRecommendation>> = _items
     internal val remoteEnabled: Boolean get() = sync.enabled
+    private val account = sync.account
+    private val remoteProfiles = MutableStateFlow<List<RecommendationProfile>>(emptyList())
+    internal val recommendationProfiles = remoteProfiles.asStateFlow()
+    private val _viewer = MutableStateFlow<RecommendationProfile?>(null)
+    internal val viewer = _viewer.asStateFlow()
+    private val _accountEmail = MutableStateFlow<String?>(null)
+    internal val accountEmail = _accountEmail.asStateFlow()
+    private val _locked = MutableStateFlow(false)
+    internal val locked = _locked.asStateFlow()
+    private val _busy = MutableStateFlow(false)
+    internal val busy = _busy.asStateFlow()
+    private val _message = MutableStateFlow<Int?>(null)
+    internal val message = _message.asStateFlow()
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private val avatarCatalog = memberAccess.access
         .map { it.entitlements.includes(CosmeticEntitlement.PROFILE_AVATARS) }
@@ -87,34 +96,132 @@ class DanexusProfilesViewModel @Inject constructor(
             picture?.let { profile.id to it }
         }.toMap()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
-    private val pinStates = profileLocks.pinEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
     private var syncJob: Job? = null
     private val syncRequests = Channel<Unit>(Channel.CONFLATED)
-    private val syncMutex = Mutex()
+    private var loadedOwner: String? = null
+    private val _syncFailed = MutableStateFlow(false)
+    internal val syncFailed = _syncFailed.asStateFlow()
 
     init {
         viewModelScope.launch {
-            combine(authManager.authState, profileManager.activeProfileId, profileManager.profiles, pinStates, store.changes) { auth, _, _, _, _ ->
-                auth
-            }
-                .collect { state ->
-                    if (state !is AuthState.FullAccount) sync.clearUnlock()
+            combine(account.changes, profileManager.profileSelectionRevision) { owner, _ -> owner }
+                .collect { owner ->
+                    if (loadedOwner != owner) {
+                        loadedOwner = owner
+                        remoteProfiles.value = emptyList()
+                        _syncFailed.value = false
+                    }
+                    _accountEmail.value = account.email
+                    if (owner == null) sync.clearUnlock()
                     refresh()
+                    syncRequests.trySend(Unit)
                 }
+        }
+        viewModelScope.launch {
+            combine(profileManager.activeProfileId, profileManager.profiles, sync.changes, store.changes) { _, _, _, _ -> Unit }
+                .collect { refresh() }
         }
     }
 
+    internal fun clearMessage() { _message.value = null }
+
+    internal fun login(email: String, password: String, create: Boolean) = accountAction {
+        if (!account.signIn(email.trim(), password, create)) {
+            _message.value = R.string.d12_confirm_email
+        } else {
+            refreshProfiles(checkNotNull(account.owner))
+        }
+    }
+
+    internal fun signOut() = accountAction {
+        account.signOut()
+        sync.clearUnlock()
+    }
+
+    internal fun loadProfiles() = accountAction {
+        account.owner?.let { refreshProfiles(it) }
+    }
+
+    internal fun bindProfile(local: UserProfile, remote: RecommendationProfile, pin: String) = accountAction {
+        val owner = checkNotNull(account.owner)
+        val revision = profileManager.profileSelectionRevision.value
+        check(local == profileManager.activeProfile)
+        refreshProfiles(owner)
+        val selected = checkNotNull(remoteProfiles.value.firstOrNull { it.id == remote.id })
+        if (selected.pinEnabled && !sync.authorize(owner, selected.id, pin, revision)) {
+            _message.value = R.string.d12_wrong_pin
+        } else {
+            check(local == profileManager.activeProfile && selected in remoteProfiles.value &&
+                revision == profileManager.profileSelectionRevision.value && localProfileFor(selected)?.id.let { it == null || it == local.id })
+            withContext(Dispatchers.IO) { sync.bind(owner, local, selected.id) }
+            syncRequests.trySend(Unit)
+        }
+    }
+
+    internal fun createProfile(local: UserProfile, pin: String) = accountAction {
+        val owner = checkNotNull(account.owner)
+        val revision = profileManager.profileSelectionRevision.value
+        check(local == profileManager.activeProfile)
+        val color = local.avatarColorHex.takeIf { it.matches(Regex("#[a-fA-F0-9]{6}")) } ?: "#1E88E5"
+        val id = account.createProfile(owner, local.name, color, pin.ifBlank { null })
+        refreshProfiles(owner)
+        check(local == profileManager.activeProfile && revision == profileManager.profileSelectionRevision.value)
+        if (pin.isNotBlank()) check(sync.authorize(owner, id, pin, revision))
+        withContext(Dispatchers.IO) { sync.bind(owner, local, id) }
+        syncRequests.trySend(Unit)
+    }
+
+    internal fun unlockProfile(pin: String) = accountAction {
+        val owner = checkNotNull(account.owner)
+        val profile = checkNotNull(currentViewer(owner))
+        if (!sync.authorize(owner, profile.id, pin)) {
+            _message.value = R.string.d12_wrong_pin
+        } else {
+            syncRequests.trySend(Unit)
+        }
+    }
+
+    private fun accountAction(action: suspend () -> Unit) {
+        if (_busy.value) return
+        _busy.value = true
+        _message.value = null
+        viewModelScope.launch {
+            try {
+                sync.operationLock.withLock { action() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _message.value = R.string.d12_account_error
+            } finally {
+                _busy.value = false
+                _accountEmail.value = account.email
+                refresh()
+            }
+        }
+    }
+
+    private suspend fun refreshProfiles(owner: String) {
+        val profiles = account.profiles(owner)
+        if (owner != account.owner) return
+        loadedOwner = owner
+        remoteProfiles.value = profiles
+        refresh()
+    }
+
     fun refresh() {
-        val owner = currentOwner()
-        val profiles = profileManager.profiles.value.associateBy { it.id }
-        val active = profiles[profileManager.activeProfileId.value]
-        val viewerId = active?.serverProfileId
-        val cacheAllowed = owner != null && remoteCacheAllowed(owner, active)
-        _items.value = owner?.let { store.read(it) }.orEmpty().filter {
-            (it.from == active?.id || it.to == active?.id) &&
-                (!it.uploadPending || it.from == active?.id) &&
-                (!it.remote || (cacheAllowed && it.remoteViewerId == viewerId && it.remoteChange != "dismiss")) &&
-                ProfileRecommendationRules.belongsToCurrentProfiles(it, profiles)
+        val owner = account.owner
+        val active = owner?.let(::currentViewer)
+        val permitted = owner != null && active != null && canUseProfile(owner, active)
+        _viewer.value = active
+        _locked.value = active != null && !permitted
+        _items.value = if (!permitted || owner == null || active == null) emptyList() else {
+            val profiles = remoteProfiles.value.associateBy(RecommendationProfile::index)
+            store.read(cacheOwner(owner)).filter {
+                (it.fromServerId == active.id || it.toServerId == active.id) &&
+                    (!it.uploadPending || it.fromServerId == active.id) &&
+                    (!it.remote || (it.remoteViewerId == active.id && it.remoteChange != "dismiss")) &&
+                    matchesProfiles(it, profiles)
+            }
         }
     }
 
@@ -133,21 +240,26 @@ class DanexusProfilesViewModel @Inject constructor(
         syncJob = null
     }
 
-    private suspend fun synchronize() = syncMutex.withLock {
-        val owner = authManager.currentUserId ?: return@withLock
-        val profile = profileManager.activeProfile ?: return@withLock
-        val viewerId = profile.serverProfileId ?: return@withLock
-        val revision = profileManager.profileSelectionRevision.value
-        fun isCurrentViewer() = authManager.currentUserId == owner &&
-            profileManager.activeProfile?.serverProfileId == viewerId &&
-            profileManager.profileSelectionRevision.value == revision
-        if (!isCurrentViewer()) return@withLock
+    internal fun loadIndicationsOnce() {
+        if (sync.enabled) viewModelScope.launch { synchronize() }
+    }
+
+    private suspend fun synchronize() = sync.operationLock.withLock {
+        val owner = account.owner ?: return@withLock
         try {
-            val profiles = profileManager.profiles.value.associateBy(UserProfile::id)
-            val local = withContext(Dispatchers.IO) { store.read(owner) }
+            refreshProfiles(owner)
+            val profile = currentViewer(owner) ?: return@withLock
+            val viewerId = profile.id
+            val revision = profileManager.profileSelectionRevision.value
+            fun isCurrentViewer() = account.owner == owner &&
+                currentViewer(owner)?.id == viewerId &&
+                profileManager.profileSelectionRevision.value == revision && canUseProfile(owner, profile)
+            if (!isCurrentViewer()) return@withLock
+            val profiles = remoteProfiles.value.associateBy(RecommendationProfile::index)
+            val local = withContext(Dispatchers.IO) { store.read(cacheOwner(owner)) }
             val sentKeys = mutableSetOf<String>()
             local.filter {
-                it.fromServerId == viewerId && it.uploadPending && ProfileRecommendationRules.belongsToCurrentProfiles(it, profiles)
+                it.fromServerId == viewerId && it.uploadPending && matchesProfiles(it, profiles)
             }.forEach { row ->
                 if (!isCurrentViewer()) return@withLock
                 sync.send(owner, viewerId, row)
@@ -157,65 +269,60 @@ class DanexusProfilesViewModel @Inject constructor(
                 if (!isCurrentViewer()) return@withLock
                 val change = checkNotNull(row.remoteChange)
                 sync.update(owner, viewerId, change, row.key)
-                withContext(Dispatchers.IO) { if (isCurrentViewer()) store.acknowledgeChange(owner, viewerId, row.key, change) }
+                withContext(Dispatchers.IO) { if (isCurrentViewer()) store.acknowledgeChange(cacheOwner(owner), viewerId, row.key, change) }
             }
             if (!isCurrentViewer()) return@withLock
             val downloaded = sync.list(owner, viewerId, sent = false) + sync.list(owner, viewerId, sent = true)
             if (!isCurrentViewer()) return@withLock
-            val byUuid = profiles.values.mapNotNull { p -> p.serverProfileId?.let { it to p } }.toMap()
+            val byUuid = profiles.values.associateBy(RecommendationProfile::id)
             val rows = downloaded.mapNotNull { it.toLocal(viewerId, byUuid) }
             withContext(Dispatchers.IO) {
                 if (isCurrentViewer()) {
-                    store.cacheRemote(owner, viewerId, rows, sentKeys)
+                    store.cacheRemote(cacheOwner(owner), viewerId, rows, sentKeys)
                 }
             }
+            _syncFailed.value = false
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
-            // Local rows and the pending outbox remain available for the next attempt.
+        } catch (error: Exception) {
+            if (error.message?.contains("D12_PROFILE_LOCKED") == true) sync.clearUnlock()
+            _syncFailed.value = true
         } finally {
             refresh()
         }
     }
 
-    fun isRecipientWatched(row: ProfileRecommendation): Flow<Boolean> = flow {
-        if (row !in items.value) {
-            emit(false)
-            return@flow
-        }
-        emitAll(combine(watched.observeAllItems(row.to), profileLocks.pinEnabled, items) { history, locks, visible ->
-            row in visible &&
-                (profileManager.activeProfileId.value == row.to ||
-                    locks[row.to] == false || (currentOwner() == DanexusRecommendations.GUEST && locks[row.to] != true)) &&
-                (row.remoteWatched || ProfileRecommendationRules.isWatched(history, row.contentId, row.type, row.episodeKeys))
-        })
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun isRecipientWatched(row: ProfileRecommendation): Flow<Boolean> {
+        val history = profileManager.activeProfileId.flatMapLatest(watched::observeAllItems)
+        return combine(history, viewer, items) { items, profile, visible ->
+            row in visible && (row.remoteWatched ||
+                (profile?.id == row.toServerId && ProfileRecommendationRules.isWatched(items, row.contentId, row.type, row.episodeKeys)))
+        }.distinctUntilChanged()
     }
-            .distinctUntilChanged()
 
-    fun send(expectedSender: Int, expectedServerId: String?, requested: Map<Int, String?>, meta: Meta): Result<Int> = runCatching {
-        val active = profileManager.activeProfileId.value
-        check(active == expectedSender) { "Profile changed during selection" }
-        check(sync.enabled) { "Remote recommendations unavailable" }
-        val owner = checkNotNull(authManager.currentUserId)
+    internal fun send(expectedSender: String, requested: Map<Int, String>, meta: Meta): Result<Int> = runCatching {
+        val owner = checkNotNull(account.owner)
+        val active = checkNotNull(currentViewer(owner))
+        check(active.id == expectedSender && canUseProfile(owner, active))
         require(ProfileRecommendationRules.isSupportedType(meta.apiType))
-        val serverIds = profileManager.profiles.value.associate { it.id to it.serverProfileId }
-        check(expectedServerId != null && serverIds[active] == expectedServerId)
-        check(requested.all { (id, uuid) -> uuid != null && serverIds[id] == uuid })
-        val targets = ProfileRecommendationRules.recipients(active, requested.keys, serverIds.keys)
+        val serverIds = remoteProfiles.value.associate { it.index to it.id }
+        check(requested.all { (id, uuid) -> serverIds[id] == uuid })
+        val targets = ProfileRecommendationRules.recipients(active.index, requested.keys, serverIds.keys)
         if (targets.isEmpty()) 0
-        else store.send(active, targets, meta, owner, serverIds, syncEnabled = true)
+        else store.send(active.index, targets, meta, cacheOwner(owner), serverIds, syncEnabled = true)
             .also {
                 refresh()
-                if (syncJob?.isActive == true) syncRequests.trySend(Unit) else startSync()
+                loadIndicationsOnce()
             }
     }
 
     fun open(row: ProfileRecommendation): Boolean {
-        val owner = currentOwner() ?: return false
-        if (!isCurrent(row)) return false
-        if (row.to == profileManager.activeProfileId.value) {
-            if (row.remote) store.changeRemote(owner, checkNotNull(row.remoteViewerId), row.key, "read")
-            else store.markSeen(row.key, row.to, owner)
+        val owner = account.owner ?: return false
+        val profile = currentViewer(owner) ?: return false
+        if (!isCurrent(owner, profile, row)) return false
+        if (row.toServerId == profile.id && row.remote) {
+            store.changeRemote(cacheOwner(owner), profile.id, row.key, "read")
             syncRequests.trySend(Unit)
         }
         refresh()
@@ -223,42 +330,47 @@ class DanexusProfilesViewModel @Inject constructor(
     }
 
     fun dismiss(row: ProfileRecommendation) {
-        val active = profileManager.activeProfileId.value
-        val owner = currentOwner() ?: return
-        if (!isCurrent(row)) return
-        if (row.remote) store.changeRemote(owner, checkNotNull(row.remoteViewerId), row.key, "dismiss")
-        else store.dismiss(row.key, active, owner)
+        val owner = account.owner ?: return
+        val profile = currentViewer(owner) ?: return
+        if (!isCurrent(owner, profile, row)) return
+        if (row.remote) store.changeRemote(cacheOwner(owner), profile.id, row.key, "dismiss")
+        else store.dismiss(row.key, profile.index, cacheOwner(owner))
         syncRequests.trySend(Unit)
         refresh()
     }
 
-    private fun isCurrent(row: ProfileRecommendation): Boolean {
-        val active = profileManager.activeProfileId.value
-        return row in items.value && (row.from == active || row.to == active) &&
-            (!row.remote || currentOwner()?.let { remoteCacheAllowed(it, profileManager.activeProfile) } == true) &&
-            ProfileRecommendationRules.belongsToCurrentProfiles(row, profileManager.profiles.value.associateBy { it.id })
+    private fun isCurrent(owner: String, profile: RecommendationProfile, row: ProfileRecommendation): Boolean =
+        canUseProfile(owner, profile) && row in items.value && (row.fromServerId == profile.id || row.toServerId == profile.id)
+
+    private fun currentViewer(owner: String): RecommendationProfile? {
+        if (owner != loadedOwner) return null
+        val local = profileManager.activeProfile ?: return null
+        val id = sync.profileId(owner, local) ?: return null
+        return remoteProfiles.value.firstOrNull { it.id == id }
     }
 
-    private fun remoteCacheAllowed(owner: String, profile: UserProfile?): Boolean {
-        if (!sync.enabled || profile?.serverProfileId == null || !authManager.hasLiveSession()) return false
-        return pinStates.value[profile.id] == false || sync.hasUnlock(owner, profile.serverProfileId)
+    private fun canUseProfile(owner: String, profile: RecommendationProfile): Boolean =
+        !profile.pinEnabled || sync.hasUnlock(owner, profile.id)
+
+    private fun matchesProfiles(row: ProfileRecommendation, profiles: Map<Int, RecommendationProfile>): Boolean =
+        profiles[row.from]?.id == row.fromServerId && profiles[row.to]?.id == row.toServerId
+
+    internal fun localProfileFor(profile: RecommendationProfile): UserProfile? {
+        val owner = account.owner ?: return null
+        return profileManager.profiles.value.firstOrNull { sync.profileId(owner, it) == profile.id }
     }
 
-    private fun RemoteRecommendation.toLocal(viewerId: String, profiles: Map<String, UserProfile>): ProfileRecommendation? {
+    private fun RemoteRecommendation.toLocal(viewerId: String, profiles: Map<String, RecommendationProfile>): ProfileRecommendation? {
         val from = profiles[sender] ?: return null
         val to = profiles[recipient] ?: return null
         val time = runCatching { OffsetDateTime.parse(createdAt).toInstant().toEpochMilli() }.getOrNull() ?: return null
         return ProfileRecommendation(
-            key = id, from = from.id, to = to.id, contentId = mediaId, type = mediaType, title = title,
+            key = id, from = from.index, to = to.index, contentId = mediaId, type = mediaType, title = title,
             poster = posterPath?.let { "https://image.tmdb.org/t/p/w342$it" }, createdAt = time,
             seen = readAt != null, synopsis = synopsis, episodeKeys = episodeKeys,
             fromServerId = sender, toServerId = recipient, remote = true, remoteWatched = watched, remoteViewerId = viewerId
         )
     }
 
-    private fun currentOwner(): String? = when (val state = authManager.authState.value) {
-        is AuthState.FullAccount -> state.userId
-        AuthState.SignedOut -> DanexusRecommendations.GUEST
-        AuthState.Loading -> null
-    }
+    private fun cacheOwner(owner: String) = "d12:$owner"
 }

@@ -60,9 +60,11 @@ private const val TILE_IMAGE_WIDTH = 500
 fun ScoutPickerScreen(
     onOpenSlice: (sliceId: String) -> Unit,
     onBack: () -> Unit,
-    viewModel: ScoutPickerViewModel = hiltViewModel()
+    viewModel: ScoutPickerViewModel = hiltViewModel(),
+    ratings: com.nuvio.tv.ui.scout.ScoutRatingViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val profile by ratings.profile.collectAsStateWithLifecycle()
     val first = remember { FocusRequester() }
     val opened = remember { FocusRequester() }
     BackHandler(onBack = onBack)
@@ -102,7 +104,9 @@ fun ScoutPickerScreen(
             ) {
                 items(state.tiles, key = { it.id }) { tile ->
                     ScoutTile(
-                        tile,
+                        tile.copy(title = com.nuvio.tv.core.scout.scoutListTitle(
+                            tile.title, com.nuvio.tv.core.scout.scoutSliceEmoji(tile.id), profile.settings.listEmojis
+                        )),
                         onClick = {
                             viewModel.openedTile = tile.id
                             onOpenSlice(tile.id)

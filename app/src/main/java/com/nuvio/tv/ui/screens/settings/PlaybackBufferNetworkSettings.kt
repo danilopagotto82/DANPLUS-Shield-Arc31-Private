@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -76,19 +78,22 @@ internal fun PlaybackBufferNetworkSection(
         )
     }
 
-    SettingsToggleRow(
-        title = stringResource(R.string.playback_buffer_custom),
-        subtitle = stringResource(R.string.playback_buffer_custom_desc),
-        checked = settings.bufferEngineEnabled,
-        onToggle = {
-            val enable = !settings.bufferEngineEnabled
-            if (enable) {
-                updateMemory { setBufferEngineEnabled(true) }
-            } else {
-                onUpdate { setBufferEngineEnabled(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        SettingsToggleRow(
+            title = stringResource(R.string.playback_buffer_custom),
+            subtitle = stringResource(R.string.playback_buffer_custom_desc),
+            modifier = Modifier.weight(1f),
+            checked = settings.bufferEngineEnabled,
+            onToggle = {
+                if (settings.bufferEngineEnabled) {
+                    onUpdate { setBufferEngineEnabled(false) }
+                } else {
+                    updateMemory { setBufferEngineEnabled(true) }
+                }
             }
-        }
-    )
+        )
+        SettingsHelpButton(R.string.playback_buffer_custom, R.string.dan_help_custom_buffer)
+    }
 
     if (settings.bufferEngineEnabled) {
         CustomBufferControls(settings = settings, onUpdate = onUpdate, updateMemory = updateMemory)

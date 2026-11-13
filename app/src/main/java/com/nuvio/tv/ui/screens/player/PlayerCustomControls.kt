@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +83,7 @@ internal fun playerControlLabel(action: PlayerControlAction, playing: Boolean = 
     PlayerControlAction.REPORT -> R.string.player_report_issue
     PlayerControlAction.WATCH_PARTY -> R.string.party_title
     PlayerControlAction.INFO -> R.string.cd_stream_info
+    PlayerControlAction.DETAILS -> R.string.pause_you_are_watching
 })
 
 internal fun playerControlIcon(action: PlayerControlAction, playing: Boolean): ImageVector = when (action) {
@@ -102,6 +104,7 @@ internal fun playerControlIcon(action: PlayerControlAction, playing: Boolean): I
     PlayerControlAction.REPORT -> Icons.Default.BugReport
     PlayerControlAction.WATCH_PARTY -> Icons.Default.Groups
     PlayerControlAction.INFO -> Icons.Default.Info
+    PlayerControlAction.DETAILS -> Icons.Outlined.Info
 }
 
 @Composable
@@ -133,6 +136,7 @@ private fun actionCallback(action: PlayerControlAction, actions: V2PlayerActions
     PlayerControlAction.REPORT -> actions.report
     PlayerControlAction.WATCH_PARTY -> actions.party
     PlayerControlAction.INFO -> actions.info
+    PlayerControlAction.DETAILS -> actions.details
 }
 
 @Composable

@@ -50,9 +50,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,7 +63,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
@@ -90,8 +95,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -219,6 +227,7 @@ fun ScoutScreen(
     }
     val pictures by viewModel.profilePictures.collectAsStateWithLifecycle()
     val scoutProfile by ratings.profile.collectAsStateWithLifecycle()
+    val listEmojis = scoutProfile.profileId == activeId && scoutProfile.settings.listEmojis
     val requesters = remember { HashMap<String, FocusRequester>() }
     var choosing by rememberSaveable { mutableStateOf<String?>(null) }
     var showThumbs by rememberSaveable { mutableStateOf(false) }
@@ -336,7 +345,8 @@ fun ScoutScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = FOCUS_ROOM),
                     contentAlignment = BiasAlignment(-1f, HERO_BLOCK_BIAS)
                 ) {
-                    ScoutReadyHero(readyState, ::focus, onPlay = play, onSave = readyModel::save, onAdjust = { onMixOwn(it) })
+                    ScoutReadyHero(readyState, ::focus, onPlay = play, onSave = readyModel::save, onAdjust = { onMixOwn(it) },
+                        listEmojis = listEmojis)
                 }
                 ScoutReadyRows(
                     state = readyState,
@@ -346,7 +356,8 @@ fun ScoutScreen(
                     onTab = readyModel::focusTab,
                     onFocusMix = readyModel::focusMix,
                     onOpen = open,
-                    onOwn = { onMixOwn(null) }
+                    onOwn = { onMixOwn(null) },
+                    listEmojis = listEmojis
                 )
                 ScoutReadyFirstFocus(readyState, entry)
             } else {
@@ -396,18 +407,15 @@ fun ScoutScreen(
                     )
                 }
             } else if (!onTaste) {
-                ScoutMoodLine(state, onTaste, onAsk?.let { { viewModel.openAsk() } }, ::focus)
+                ScoutMoodLine(
+                    state = state,
+                    watchDisplay = watchDisplay.takeIf { appliesWatchFilter },
+                    onToggleWatched = { viewModel.toggleShowWatched(watchDisplay) },
+                    onAsk = onAsk?.let { { viewModel.openAsk() } },
+                    focus = ::focus
+                )
             }
-            val tabs = scoutTabItems(state)
-            if (!onTaste && appliesWatchFilter) {
-                Box(Modifier.fillMaxWidth().padding(horizontal = FOCUS_ROOM), contentAlignment = Alignment.CenterEnd) {
-                    ScoutChip(
-                        stringResource(if (watchDisplay.showWatched) R.string.scout_show_watched_on else R.string.scout_show_watched_off),
-                        onClick = { viewModel.toggleShowWatched(watchDisplay) },
-                        modifier = focus("show_watched")
-                    )
-                }
-            }
+            val tabs = scoutTabItems(state, listEmojis)
             if (!onTaste) key(state.surprise, state.asking) {
                 ScoutTabs(
                     items = tabs,
@@ -525,7 +533,7 @@ private fun scoutTileHeight(rowWidth: Dp, count: Int): Dp =
     (rowWidth - FOCUS_ROOM * 2 - NuvioTheme.spacing.xl * (count - 1)) / count * 9f / 16f
 
 @Composable
-private fun scoutTabItems(state: ScoutScreenState): List<ScoutTabItem> {
+private fun scoutTabItems(state: ScoutScreenState, listEmojis: Boolean): List<ScoutTabItem> {
     val answers = state.answers
     if (state.asking) return listOf(ScoutTabItem(SCOUT_FOCUS_FOR_YOU, stringResource(R.string.scout_for_you), false))
     if (state.surprise) {
@@ -547,9 +555,13 @@ private fun scoutTabItems(state: ScoutScreenState): List<ScoutTabItem> {
     }
     val tab = state.tab
     return buildList {
-        add(ScoutTabItem(SCOUT_FOCUS_FOR_YOU, stringResource(R.string.scout_for_you), tab == ScoutTab.ForYou))
+        add(ScoutTabItem(SCOUT_FOCUS_FOR_YOU,
+            com.nuvio.tv.core.scout.scoutListTitle(stringResource(R.string.scout_for_you), "✨", listEmojis),
+            tab == ScoutTab.ForYou))
         ScoutMood.choicesFor(answers.watch, answers.family).forEach { mood ->
-            add(ScoutTabItem(TAB_MOOD + mood.code, stringResource(mood.labelRes), tab == ScoutTab.Feeling(mood)))
+            add(ScoutTabItem(TAB_MOOD + mood.code, com.nuvio.tv.core.scout.scoutListTitle(
+                stringResource(mood.labelRes), com.nuvio.tv.core.scout.scoutMoodEmoji(mood), listEmojis
+            ), tab == ScoutTab.Feeling(mood)))
         }
         add(ScoutTabItem(TAB_SURPRISE, stringResource(R.string.scout_tile_surprise), false))
         add(ScoutTabItem(TAB_FILTERS, stringResource(R.string.scout_more_filters), false))
@@ -745,25 +757,119 @@ internal fun ScoutHeroLogo(logo: String?, name: String, height: Dp) {
 }
 
 @Composable
-private fun ScoutMoodLine(state: ScoutScreenState, onTaste: Boolean, onAsk: (() -> Unit)?, focus: (String) -> Modifier) {
-    val text = when {
-        onTaste -> null
+private fun ScoutMoodLine(
+    state: ScoutScreenState,
+    watchDisplay: ScoutWatchDisplay?,
+    onToggleWatched: () -> Unit,
+    onAsk: (() -> Unit)?,
+    focus: (String) -> Modifier
+) {
+    val otherTitle = when {
         state.moreLike != null -> stringResource(R.string.scout_more_like, state.moreLike)
         state.surprise -> stringResource(R.string.scout_tile_surprise)
-        else -> stringResource(R.string.scout_mood_question)
+        else -> null
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().height(MOOD_LINE_HEIGHT).padding(horizontal = FOCUS_ROOM),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
+    if (otherTitle != null) {
+        Box(
+            Modifier.fillMaxWidth().height(MOOD_LINE_HEIGHT).padding(horizontal = FOCUS_ROOM),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text(otherTitle, style = MaterialTheme.typography.titleLarge, color = NuvioTheme.colors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        return
+    }
+
+    val colors = NuvioTheme.colors
+    val shape = RoundedCornerShape(NuvioTheme.radii.lg)
+    val fill = remember(colors.Secondary) {
+        Brush.horizontalGradient(listOf(colors.Secondary.copy(alpha = .16f), Color.Transparent))
+    }
+    FlowRow(
+        modifier = Modifier.fillMaxWidth()
+            .padding(horizontal = FOCUS_ROOM)
+            .background(colors.BackgroundCard, shape)
+            .background(fill, shape)
+            .border(1.dp, colors.TextPrimary.copy(alpha = .14f), shape)
+            .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md, Alignment.End),
+        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
+        itemVerticalAlignment = Alignment.CenterVertically
     ) {
-        if (text != null) Text(text, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = NuvioTheme.colors.TextPrimary, maxLines = 1)
-        if (text != null && onAsk != null && !state.surprise && state.moreLike == null) {
-            ScoutChip(stringResource(R.string.scout_or_just_ask), onClick = onAsk, modifier = focus("ask"), icon = {
-                Icon(Icons.Default.Mic, null, Modifier.size(18.dp))
-            })
+        Row(
+            modifier = Modifier.weight(1f).widthIn(min = 224.dp).heightIn(min = 44.dp),
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(34.dp).background(colors.Secondary, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Movie, null, Modifier.size(19.dp), tint = colors.OnSecondary)
+            }
+            Text(
+                text = stringResource(R.string.scout_mood_question),
+                modifier = Modifier.semantics { heading() },
+                style = MaterialTheme.typography.headlineMedium,
+                color = colors.TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (onAsk != null) {
+            ScoutChip(
+                label = stringResource(R.string.scout_or_just_ask),
+                onClick = onAsk,
+                modifier = focus("ask"),
+                icon = { Icon(Icons.Default.Mic, null, Modifier.size(18.dp)) }
+            )
+        }
+        if (watchDisplay != null) {
+            ScoutWatchedButton(
+                showWatched = watchDisplay.showWatched,
+                onClick = onToggleWatched,
+                modifier = focus("show_watched")
+            )
         }
     }
+}
+
+@Composable
+internal fun ScoutWatchedButton(showWatched: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = NuvioTheme.colors
+    val state = stringResource(if (showWatched) R.string.scout_watched_yes else R.string.scout_watched_no)
+    ScoutChip(
+        label = stringResource(R.string.scout_show_watched_question),
+        onClick = onClick,
+        modifier = modifier.semantics { stateDescription = state },
+        icon = {
+            Icon(if (showWatched) Icons.Default.Visibility else Icons.Default.VisibilityOff, null, Modifier.size(18.dp))
+        },
+        trailing = { focused ->
+            val accentFocus = focused && LocalV2Appearance.current == null
+            val badgeColor = when {
+                accentFocus && showWatched -> colors.OnSecondary
+                accentFocus -> colors.OnSecondary.copy(alpha = .15f)
+                showWatched -> colors.Secondary
+                else -> colors.TextPrimary.copy(alpha = .13f)
+            }
+            val badgeText = when {
+                accentFocus && showWatched -> colors.Secondary
+                accentFocus || showWatched -> colors.OnSecondary
+                else -> colors.TextPrimary
+            }
+            Box(
+                modifier = Modifier.widthIn(min = 40.dp)
+                    .background(badgeColor, CircleShape)
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                    .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = state,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = badgeText,
+                    maxLines = 1
+                )
+            }
+        }
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)

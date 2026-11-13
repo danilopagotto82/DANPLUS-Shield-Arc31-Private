@@ -11,8 +11,9 @@ create function auth.jwt() returns jsonb language sql stable as $$
 $$;
 create function public.get_sync_owner() returns uuid language sql stable as $$ select auth.uid() $$;
 create table public.profiles (
-    id uuid primary key, user_id uuid not null references auth.users(id), profile_index integer not null,
+    id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id), profile_index integer not null,
     pin_enabled boolean not null, pin_hash text, pin_updated_at timestamptz, created_at timestamptz not null default now(),
+    profile_id integer, name text, avatar_color_hex text,
     unique (user_id, profile_index)
 );
 create table public.watched_items (
@@ -22,6 +23,6 @@ create table public.watched_items (
 -- Fixture only. The deployed function uses the native Arc PIN verifier and attempt limits.
 create function public.verify_profile_pin(p_profile_id integer, p_pin text)
 returns table(unlocked boolean, retry_after_seconds integer) language sql stable as $$
-    select coalesce((select p.pin_hash = p_pin from public.profiles p
+    select coalesce((select p.pin_hash = p_pin or p.pin_hash = extensions.crypt(p_pin, p.pin_hash) from public.profiles p
         where p.user_id = auth.uid() and p.profile_index = p_profile_id), false), 0
 $$;

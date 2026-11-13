@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="d12_account_action">Conta DAN+</string>
+    <string name="d12_unlock_action">Desbloquear Indicações</string>
+    <string name="d12_unlock_hint">Digite o PIN do perfil DAN+ para abrir Indicações.</string>
+    <string name="d12_setup_hint">Entre na conta DAN+ e vincule o perfil atual para usar Indicações.</string>
+    <string name="d12_local_profile">Perfil atual %1$s · %2$s</string>
+    <string name="d12_confirm_email">Confirme seu e-mail e depois volte aqui para entrar.</string>
+    <string name="d12_account_error">Não foi possível concluir. Confira os dados e a conexão e tente novamente.</string>
+    <string name="d12_wrong_pin">Não foi possível desbloquear este perfil. Confira o PIN ou aguarde antes de tentar novamente.</string>
+    <string name="d12_working">Conectando ao DAN+…</string>
+    <string name="d12_login_hint">Use a mesma conta DAN+ nas duas TVs para compartilhar Indicações.</string>
+    <string name="d12_email">E-mail</string>
+    <string name="d12_password">Senha</string>
+    <string name="d12_login">Entrar</string>
+    <string name="d12_register">Criar conta</string>
+    <string name="d12_signout_confirm">Sair da conta DAN+ nesta TV?</string>
+    <string name="d12_signout">Sair da conta</string>
+    <string name="d12_create_named_profile">Crie um perfil DAN+ para %1$s.</string>
+    <string name="d12_pin_for_profile">Digite o PIN DAN+ de %1$s.</string>
+    <string name="d12_pin_optional">PIN de 4 dígitos (opcional)</string>
+    <string name="d12_pin">PIN de 4 dígitos</string>
+    <string name="d12_create_profile">Criar perfil DAN+</string>
+    <string name="d12_bind_profile">Vincular perfil</string>
+    <string name="d12_confirm_link">Vincular o perfil atual a %1$s?</string>
+    <string name="d12_link_hint">Selecione um perfil DAN+ existente ou crie um aqui.</string>
+    <string name="d12_linked_profile">Perfil DAN+ vinculado · %1$s</string>
+    <string name="d12_change_link">Alterar vínculo</string>
+    <string name="d12_sync_retry">A sincronização falhou. O app tentará de novo enquanto esta tela estiver aberta.</string>
+</resources>

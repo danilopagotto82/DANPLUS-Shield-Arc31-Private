@@ -4346,6 +4346,12 @@
     <string name="addon_health_metadata">Metadados</string>
     <string name="addon_health_ok">OK</string>
     <string name="addon_health_setting">Status dos add-ons</string>
+    <string name="seekr_key_title">Chave de API do Seekr.tv</string>
+    <string name="seekr_key_description">Use sua chave do Seekr.tv para ver miniaturas compatíveis ao avançar ou voltar.</string>
+    <string name="seekr_key_configured">Configurada</string>
+    <string name="seekr_key_unconfigured">Não configurada</string>
+    <string name="seekr_key_error">Não foi possível validar ou salvar a chave do Seekr.tv. Confira a chave e a conexão.</string>
+    <string name="seekr_key_remove">Remover chave</string>
     <string name="tmdb_comments_setting_description">Mostra comentários em português nos detalhes de filmes e séries quando disponíveis.</string>
     <string name="tmdb_personal_key_title">Chave de API do TMDB</string>
     <string name="tmdb_personal_key_description">Digite sua chave de API do TMDB de 32 caracteres. Ela fica salva somente neste aparelho.</string>
@@ -4355,6 +4361,8 @@
     <string name="tmdb_personal_key_error">Não foi possível salvar a chave do TMDB.</string>
     <string name="scout_settings_show_watched">Mostrar títulos assistidos</string>
     <string name="scout_settings_show_watched_sub">Inclui no Para você os títulos que este perfil já assistiu.</string>
+    <string name="scout_settings_list_emojis">Emojis nos títulos das listas</string>
+    <string name="scout_settings_list_emojis_sub">Mostra um emoji antes do nome das listas do Para você e das que aparecem no Início.</string>
     <string name="calendar_setting_br_movies">Estreias de filmes no Brasil</string>
     <string name="calendar_setting_br_movies_sub">Inclui próximos filmes selecionados pelo TMDB, mesmo sem seguir o título.</string>
     <string name="addon_health_setting_description">Mostra OK, Lento ou Fora do ar nos add-ons e resolvedores com base no uso recente.</string>
@@ -4402,7 +4410,7 @@
     <string name="plugin_summary_stopped">%1$d no tempo limite</string>
     <string name="plugin_summary_running">%1$d ainda buscando</string>
     <string name="plugin_breakdown_title">Busca de plugins</string>
-    <string name="report_panel_title">Relatar um problema</string>
+    <string name="report_panel_title">Problemas e sugestões</string>
     <string name="report_panel_what">O que aconteceu?</string>
     <string name="report_panel_what_hint">Escolha tudo o que se aplica.</string>
     <string name="report_problem_wont_start">Não inicia ou fica carregando</string>
@@ -4421,10 +4429,10 @@
     <string name="report_next">Próximo</string>
     <string name="report_ready_title">Pronto para enviar</string>
     <string name="report_ready_hint">Links, chaves e endereços de addons são removidos antes de qualquer coisa sair do seu dispositivo.</string>
-    <string name="report_item_box">Seu dispositivo e a versão do Arc</string>
+    <string name="report_item_box">Seu dispositivo e a versão do DAN+</string>
     <string name="report_item_playback">Configurações do player e detalhes da reprodução</string>
     <string name="report_item_playback_hint">Decodificador, caminho do som, modo de imagem, velocidade, buffer</string>
-    <string name="report_item_log">Log do Arc</string>
+    <string name="report_item_log">Log do DAN+</string>
     <string name="report_item_log_hint">Eventos recentes do player, limpos da mesma forma</string>
     <string name="report_item_title">Título e nome do arquivo</string>
     <string name="report_item_note">Adicionar uma nota</string>
@@ -4436,7 +4444,7 @@
     <string name="report_sent_title">Relatório enviado</string>
     <string name="report_sent_qr_description">Código QR do seu relatório</string>
     <string name="report_sent_phone">Escaneie com o celular para adicionar fotos ou acompanhar seu relatório. O Arc é um projeto de hobby, então nem todo relatório recebe resposta.</string>
-    <string name="report_sent_no_phone">Obrigado pelo relatório. O Arc é um projeto de hobby, então nem todo relatório recebe resposta.</string>
+    <string name="report_sent_no_phone">Enviado ao DAN+. Guarde o código para identificar este relato.</string>
     <string name="report_sent_back">Voltar a assistir</string>
     <plurals name="report_panel_what_hint_kept">
         <item quantity="one">Escolha tudo o que se aplica. O Arc guardou o último minuto.</item>
@@ -4448,7 +4456,7 @@
         <item quantity="many">Configurações do player e os últimos %1$d minutos</item>
         <item quantity="other">Configurações do player e os últimos %1$d minutos</item>
     </plurals>
-    <string name="report_settings_subtitle">Conte o que deu errado ou o que você gostaria que o Arc fizesse</string>
+    <string name="report_settings_subtitle">Conte o que deu errado ou sugira uma melhoria para o DAN+</string>
     <string name="report_group_choose">O que você quer relatar?</string>
     <string name="report_group_options">Opções</string>
     <string name="report_row_playback">Um problema de reprodução</string>
@@ -4456,7 +4464,7 @@
     <string name="report_row_bug">Algo não está funcionando</string>
     <string name="report_row_bug_hint">Uma tela, botão, login, sincronização, addons ou busca</string>
     <string name="report_row_idea">Uma ideia ou pedido</string>
-    <string name="report_row_idea_hint">Algo que você gostaria que o Arc fizesse</string>
+    <string name="report_row_idea_hint">Algo que você gostaria que o DAN+ fizesse</string>
     <string name="report_row_crash">O Arc fechou ou travou</string>
     <string name="report_row_crash_hint">O Arc se encerrou sozinho ou parou de responder</string>
     <string name="report_recorder_title">Guardar os últimos 5 minutos</string>
@@ -4480,7 +4488,7 @@
     <string name="report_exit_prompt_title">Perguntar após um fechamento inesperado</string>
     <string name="report_exit_prompt_hint">Quando o Android fechar o Arc inesperadamente, oferecer um relatório na próxima vez que o Arc abrir.</string>
     <string name="report_saved_title">Relatório salvo</string>
-    <string name="report_saved">Salvo, o Arc enviará quando você voltar a ficar online</string>
+    <string name="report_saved">Salvo. O DAN+ tentará enviar quando você voltar a ficar online.</string>
     <string name="report_where_title">Onde está o problema?</string>
     <string name="report_where_home">Início e linhas</string>
     <string name="report_where_search">Busca</string>
@@ -4492,7 +4500,7 @@
     <string name="report_where_party">Sessão em grupo</string>
     <string name="report_where_other">Em outro lugar</string>
     <string name="report_item_note_bug_hint">Diga o que deu errado. Poucas palavras ajudam bastante.</string>
-    <string name="report_item_note_idea_hint">Diga o que você gostaria que o Arc fizesse.</string>
+    <string name="report_item_note_idea_hint">Diga o que você gostaria que o DAN+ fizesse.</string>
     <string name="report_sent_list_title">Relatórios enviados</string>
     <string name="report_sent_list_empty">Os relatórios que você enviar aparecerão aqui.</string>
     <string name="report_sent_list_latest">%1$s, %2$s</string>
@@ -4577,8 +4585,10 @@
     <string name="detail_watch_error">Não foi possível consultar a disponibilidade agora.</string>
     <string name="detail_watch_empty">Nenhuma oferta encontrada para este título no Brasil.</string>
     <string name="detail_watch_attribution">Disponibilidade no Brasil · Dados JustWatch via TMDB</string>
-    <string name="detail_watch_open_tmdb">Ver todas as opções no TMDB</string>
-    <string name="detail_watch_brazil">Brasil</string>
+    <string name="detail_watch_opening">Abrindo %1$s…</string>
+    <string name="detail_watch_search_in_app">Procure por “%1$s” no %2$s.</string>
+    <string name="detail_watch_store_hint">Instale %1$s pela loja de apps e tente novamente.</string>
+    <string name="detail_watch_app_unavailable">Não foi possível abrir %1$s nem a loja de apps neste aparelho.</string>
     <string name="network_estimate_general">O que esta conexão consegue rodar?</string>
     <string name="network_estimate_profiles">Exemplos para filmes de duas horas. O resultado varia com o servidor e os picos de bitrate.</string>
     <string name="network_estimate_profile_row">%1$s · %2$d Mbps · %3$.1f GB</string>

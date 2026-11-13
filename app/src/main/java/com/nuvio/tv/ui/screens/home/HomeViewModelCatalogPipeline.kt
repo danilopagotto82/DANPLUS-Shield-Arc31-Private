@@ -1098,6 +1098,11 @@ internal fun HomeViewModel.schedulePosterStatusReconcilePipeline(rows: List<Cata
 
 internal fun HomeViewModel.reconcilePosterStatusObserversPipeline(rows: List<CatalogRow>) {
     val allMovieItemsByKey = linkedMapOf<String, String>()
+    val scoutMovieItems = rows.asSequence()
+        .filter { it.addonId == com.nuvio.tv.core.scout.ScoutCatalogProvider.ADDON_ID }
+        .flatMap { it.items.asSequence() }
+        .filter { it.apiType == "movie" }
+        .associateBy { homeItemStatusKey(it.id, it.apiType) }
     rows.asSequence()
         .flatMap { row -> row.items.asSequence() }
         .filter { it.apiType.equals("movie", ignoreCase = true) }
@@ -1121,20 +1126,25 @@ internal fun HomeViewModel.reconcilePosterStatusObserversPipeline(rows: List<Cat
         }
 
 
-    if (desiredMovieKeys != lastMovieWatchedItemKeys) {
+    if (desiredMovieKeys != lastMovieWatchedItemKeys || scoutMovieItems != lastScoutWatchedItems) {
         lastMovieWatchedItemKeys = desiredMovieKeys
+        lastScoutWatchedItems = scoutMovieItems
         movieWatchedObserverJobs.values.forEach { it.cancel() }
         movieWatchedObserverJobs.clear()
         movieWatchedBatchJob?.cancel()
 
         if (desiredMovieKeys.isNotEmpty()) {
             movieWatchedBatchJob = viewModelScope.launch {
-                watchProgressRepository.observeWatchedMovieIds()
-                    .collectLatest { watchedIds ->
+                val watchedMovies = scoutFolders?.watchedMovies?.takeIf { scoutMovieItems.isNotEmpty() }
+                    ?: kotlinx.coroutines.flow.flowOf(com.nuvio.tv.core.scout.ScoutWatchedMovies())
+                combine(watchProgressRepository.observeWatchedMovieIds(), watchedMovies) { ids, scout -> ids to scout }
+                    .collectLatest { (watchedIds, scout) ->
                         _uiState.update { state ->
                             val movieStatus = buildMap {
                                 allMovieItemsByKey.forEach { (statusKey, contentId) ->
-                                    put(statusKey, contentId in watchedIds)
+                                    val item = scoutMovieItems[statusKey]
+                                    put(statusKey, contentId in watchedIds ||
+                                        (item != null && scout.contains(item.id, item.name, item.releaseInfo, item.imdbId)))
                                 }
                             }
                             // Merge with existing status to preserve series entries.
@@ -1325,7 +1335,9 @@ internal fun HomeViewModel.mergeRefreshedCatalogRow(
 ): Boolean {
     val current = readCatalogRow(key) ?: return false
     if (current.items.isEmpty()) return false
-    if (fresh.items.isEmpty()) return true
+    if (fresh.items.isEmpty()) {
+        return !(forceReplace && fresh.addonId == com.nuvio.tv.core.scout.ScoutCatalogProvider.ADDON_ID)
+    }
     if (forceReplace) return false
 
     val identity = { item: com.nuvio.tv.domain.model.MetaPreview -> item.apiType + ":" + item.id }

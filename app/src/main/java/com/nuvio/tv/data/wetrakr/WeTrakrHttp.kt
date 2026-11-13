@@ -31,11 +31,15 @@ import okhttp3.Response
 import okio.Buffer
 import okio.BufferedSource
 
-data class WeTrakrConfiguration(
-    val clientId: String,
+class WeTrakrConfiguration(
+    clientId: String,
     val appVersion: String,
-    val baseUrl: String = "https://api.wetrakr.com"
-)
+    val baseUrl: String = "https://api.wetrakr.com",
+    private val savedClientId: () -> String? = { null }
+) {
+    private val defaultClientId = clientId
+    val clientId: String get() = savedClientId()?.takeIf(String::isNotBlank) ?: defaultClientId
+}
 
 enum class WeTrakrHttpMethod { GET, POST, DELETE }
 

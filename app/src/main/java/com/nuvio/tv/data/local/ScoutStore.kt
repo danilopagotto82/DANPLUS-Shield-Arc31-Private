@@ -50,6 +50,7 @@ class ScoutStore @Inject constructor(
     private val gemsRow = booleanPreferencesKey("gems_row")
     private val tilesRow = booleanPreferencesKey("tiles_row_chosen")
     private val showWatched = booleanPreferencesKey("show_watched")
+    private val listEmojis = booleanPreferencesKey("list_emojis")
     private val leaveOutGenres = stringSetPreferencesKey("leave_out_genres")
     private val leaveOutLanguages = stringSetPreferencesKey("leave_out_languages")
     private val asked = stringSetPreferencesKey("asked")
@@ -219,6 +220,7 @@ class ScoutStore @Inject constructor(
             it[tasteRow] = next.tasteRow
             it[sendToTrackers] = next.sendToTrackers
             it[useTrackerRatings] = next.useTrackerRatings
+            it[listEmojis] = next.listEmojis
         }
     }
 
@@ -239,7 +241,8 @@ class ScoutStore @Inject constructor(
         savedSlices = p[savedSlices].orEmpty().split(",").filter(String::isNotBlank),
         tasteRow = p[tasteRow] ?: "titles",
         sendToTrackers = p[sendToTrackers] ?: false,
-        useTrackerRatings = p[useTrackerRatings] ?: true
+        useTrackerRatings = p[useTrackerRatings] ?: true,
+        listEmojis = p[listEmojis] ?: false
     )
 
     private fun readProfile(profileId: Int, p: Preferences): ScoutProfile {

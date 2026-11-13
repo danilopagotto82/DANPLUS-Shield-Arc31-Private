@@ -178,20 +178,24 @@ class ScoutCatalogProvider @Inject constructor(
 
     internal fun addonsFor(pool: ScoutPool?, profile: ScoutProfile): List<Addon> {
         val settings = profile.settings
+        fun row(id: String, title: String, emoji: String) =
+            descriptor(id, scoutListTitle(title, emoji, settings.listEmojis))
         savedAnswers = settings.savedSlices.filter { ScoutAnswers.decode(it) != null }
         val catalogs = buildList {
-            if (settings.pickedRow && !pool?.picked.isNullOrEmpty()) add(descriptor(CATALOG_PICKED, context.getString(R.string.scout_row_picked)))
-            if (settings.pickedRow && !pool?.newForYou.isNullOrEmpty()) add(descriptor(CATALOG_NEW, context.getString(R.string.scout_picks_row_new)))
-            if (settings.pickedRow && !pool?.trendingForYou.isNullOrEmpty()) add(descriptor(CATALOG_TRENDING, context.getString(R.string.scout_picks_row_trending)))
-            if (settings.genreRows) pool?.tasteRows?.take(SCOUT_ROWS_MAX)?.forEachIndexed { index, row ->
-                add(descriptor(CATALOG_TASTE + scoutTasteSlotId(index), tasteRowName(row)))
+            if (settings.pickedRow && !pool?.picked.isNullOrEmpty()) add(row(CATALOG_PICKED, context.getString(R.string.scout_row_picked), "✨"))
+            if (settings.pickedRow && !pool?.newForYou.isNullOrEmpty()) add(row(CATALOG_NEW, context.getString(R.string.scout_picks_row_new), "🆕"))
+            if (settings.pickedRow && !pool?.trendingForYou.isNullOrEmpty()) add(row(CATALOG_TRENDING, context.getString(R.string.scout_picks_row_trending), "🔥"))
+            if (settings.genreRows) pool?.tasteRows?.take(SCOUT_ROWS_MAX)?.forEachIndexed { index, taste ->
+                add(row(CATALOG_TASTE + scoutTasteSlotId(index), tasteRowName(taste), scoutSliceEmoji("genre_${taste.genre}")))
             }
             if (settings.becauseRow) pool?.because?.forEachIndexed { index, because ->
-                add(descriptor(CATALOG_BECAUSE + index, context.getString(R.string.scout_row_because_title, because.seedName)))
+                add(row(CATALOG_BECAUSE + index, context.getString(R.string.scout_row_because_title, because.seedName), "🔗"))
             }
-            if (settings.gemsRow && !pool?.gems.isNullOrEmpty()) add(descriptor(CATALOG_GEMS, context.getString(R.string.scout_row_gems)))
+            if (settings.gemsRow && !pool?.gems.isNullOrEmpty()) add(row(CATALOG_GEMS, context.getString(R.string.scout_row_gems), "💎"))
             settings.savedSlices.forEach { id ->
-                ScoutSlices.byId(id)?.let { add(descriptor(CATALOG_SAVED + id, sliceTitle(it))) }
+                ScoutSlices.byId(id)?.let { slice ->
+                    add(row(CATALOG_SAVED + id, sliceTitle(slice), scoutSliceEmoji(slice.id)))
+                }
             }
         }
         if (catalogs.isEmpty()) return emptyList()
@@ -233,7 +237,11 @@ class ScoutCatalogProvider @Inject constructor(
                 add(actionFolder(FOLDER_SURPRISE, R.string.scout_tile_surprise, actionCover("surprise_me", "acclaim_crowd")))
                 val art = (pool?.picked.orEmpty() + pool?.gems.orEmpty()).distinctBy { it.key }.drop(1)
                 ScoutSlices.homeTiles.mapNotNull(ScoutSlices::byId).forEachIndexed { index, slice ->
-                    add(folderFor(slice, tileCover(slice) ?: art.getOrNull(index)?.backdrop).copy(heroBackdropUrl = tileHeroes.value[slice.id]))
+                    val folder = folderFor(slice, tileCover(slice) ?: art.getOrNull(index)?.backdrop)
+                    add(folder.copy(
+                        title = scoutListTitle(folder.title, scoutSliceEmoji(slice.id), profile.settings.listEmojis),
+                        heroBackdropUrl = tileHeroes.value[slice.id]
+                    ))
                 }
                 add(actionFolder(FOLDER_MORE, R.string.scout_tile_more, actionCover("more_filters", "acclaim_gems")))
             }

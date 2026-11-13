@@ -26,6 +26,15 @@ class PlayerControlLayoutTest {
         assertEquals(PlayerControlPlacement(audio, centre, false), layout.entries.single { it.action == audio })
         assertEquals(listOf(play, stats), layout.visibleGroups(all).getValue(right).take(2))
     }
+    @Test fun `details appears in the primary controls for older saved layouts`() {
+        val saved = "v2|previous|stats,right,1;more,right,1;speed,right,1"
+        val layout = PlayerControlLayout.decode(saved)!!
+        val buttons = layout.visibleGroups(all).getValue(right)
+        assertEquals(listOf(stats, PlayerControlAction.DETAILS, PlayerControlAction.MORE, PlayerControlAction.SPEED),
+            buttons.take(4))
+        assertFalse(layout.withVisibility(PlayerControlAction.DETAILS, false).visibleGroups(all)
+            .getValue(right).contains(PlayerControlAction.DETAILS))
+    }
     @Test fun `first valid duplicate wins and invalid or unknown records do not erase choices`() {
         val layout = PlayerControlLayout.decode("v1|future_action,left,1;audio,left,2;audio,centre,0;audio,right,1;stats,wrong,1;play_pause,right,1")!!
         assertEquals(PlayerControlPlacement(audio, centre, false), layout.entries.single { it.action == audio })

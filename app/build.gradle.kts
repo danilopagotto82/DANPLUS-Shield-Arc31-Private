@@ -115,11 +115,11 @@ val useLocalFfmpegDecoder = truthy(
 val releaseStoreFilePath = env("NUVIO_RELEASE_STORE_FILE")
     ?: localProperties.getProperty("NUVIO_RELEASE_STORE_FILE")
 val releaseKeyAliasValue = env("NUVIO_RELEASE_KEY_ALIAS")
-    ?: localProperties.getProperty("NUVIO_RELEASE_KEY_ALIAS", "nuviotv")
+    ?: localProperties.getProperty("NUVIO_RELEASE_KEY_ALIAS")
 val releaseKeyPasswordValue = env("NUVIO_RELEASE_KEY_PASSWORD")
-    ?: localProperties.getProperty("NUVIO_RELEASE_KEY_PASSWORD", "815787")
+    ?: localProperties.getProperty("NUVIO_RELEASE_KEY_PASSWORD")
 val releaseStorePasswordValue = env("NUVIO_RELEASE_STORE_PASSWORD")
-    ?: localProperties.getProperty("NUVIO_RELEASE_STORE_PASSWORD", "815787")
+    ?: localProperties.getProperty("NUVIO_RELEASE_STORE_PASSWORD")
 
 android {
     namespace = "com.nuvio.tv"
@@ -127,12 +127,12 @@ android {
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
-        applicationId = "com.nuvio.tv.test"
+        applicationId = "com.danplus.shield"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 24
         targetSdk = 36
-        versionCode = providers.gradleProperty("arcVersionCode").orNull?.toIntOrNull() ?: 1637
-        versionName = providers.gradleProperty("arcVersionName").orNull ?: "1.1.0-arc.4"
+        versionCode = providers.gradleProperty("arcVersionCode").orNull?.toIntOrNull() ?: 1639
+        versionName = providers.gradleProperty("arcVersionName").orNull ?: "1.1.0-arc.4.1"
         // Optional -PnuvioAppIdSuffix=.name installs a local test build next to the main app.
         providers.gradleProperty("nuvioAppIdSuffix").orNull?.takeIf { it.isNotBlank() }?.let {
             applicationIdSuffix = it
@@ -166,7 +166,9 @@ android {
             "SCOUT_ENABLED",
             resolveProperty(devProperties, localProperties, "SCOUT_ENABLED", "true").toBoolean().toString()
         )
-        buildConfigField("boolean", "DANPLUS_D12_SYNC_ENABLED", parseBooleanProperty(localProperties.getProperty("DANPLUS_D12_SYNC_ENABLED")).toString())
+        buildConfigField("String", "DANPLUS_D12_SUPABASE_URL", buildConfigString(resolveProperty(devProperties, localProperties, "DANPLUS_D12_SUPABASE_URL")))
+        buildConfigField("String", "DANPLUS_D12_SUPABASE_KEY", buildConfigString(resolveProperty(devProperties, localProperties, "DANPLUS_D12_SUPABASE_KEY")))
+        buildConfigField("String", "DANPLUS_REPORTS_ANON_KEY", buildConfigString(resolveProperty(devProperties, localProperties, "DANPLUS_REPORTS_ANON_KEY")))
         buildConfigField("boolean", "DOVI_NATIVE_ENABLED", enableDoviNative.toString())
         buildConfigField("boolean", "DOVI_EXTRACTOR_HOOK_READY", doviExtractorHookReady.toString())
         buildConfigField("boolean", "AML_FEL_NATIVE_ENABLED", enableAmlFelNative.toString())
@@ -476,6 +478,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.moshi)
     implementation(libs.okhttp)
+    implementation("tv.seekr:seekr-android:0.2.0")
     implementation(libs.okhttp.logging)
     implementation(libs.okhttp.dnsoverhttps)
     implementation(libs.moshi)

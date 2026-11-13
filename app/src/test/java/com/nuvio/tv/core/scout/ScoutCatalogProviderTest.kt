@@ -80,6 +80,17 @@ class ScoutCatalogProviderTest {
     }
 
     @Test
+    fun `emoji option changes only the displayed list names`() {
+        val provider = provider()
+        val settings = ScoutSettings(savedSlices = listOf(ScoutAnswers(mood = ScoutMood.SCARY).encode()))
+        val before = provider.addonsFor(fullPool, ScoutProfile(settings = settings)).single().catalogs
+        val after = provider.addonsFor(fullPool, ScoutProfile(settings = settings.copy(listEmojis = true))).single().catalogs
+        assertEquals(before.map { it.id }, after.map { it.id })
+        assertEquals(listOf("✨ text", "🔗 text", "💎 text", "👻 text"), after.map { it.name })
+        assertTrue(before.all { it.name == "text" })
+    }
+
+    @Test
     fun `switches take rows away and none leaves no addon`() {
         val off = ScoutSettings(pickedRow = false, becauseRow = false, gemsRow = false)
         assertTrue(provider().addonsFor(fullPool, ScoutProfile(settings = off)).isEmpty())

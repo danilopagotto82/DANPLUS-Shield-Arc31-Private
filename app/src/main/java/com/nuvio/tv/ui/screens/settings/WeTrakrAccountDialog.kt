@@ -10,16 +10,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.components.NuvioDialog
+import com.nuvio.tv.ui.screens.account.InputField
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.rememberRawSvgPainter
 import java.text.NumberFormat
@@ -32,13 +38,36 @@ internal fun WeTrakrAccountDialog(
     formatTime: (Long) -> String,
     onStartConnection: () -> Unit,
     onRetryPolling: () -> Unit,
+    onSaveClientId: (String) -> Unit,
     onSync: () -> Unit,
     onDisconnect: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val logo = rememberRawSvgPainter(R.raw.wetrakr_logo, 160.dp)
-    if (state.isConnected) {
+    var editingClientId by remember { mutableStateOf(false) }
+    if (!state.credentialsConfigured || editingClientId) {
+        var value by remember { mutableStateOf("") }
+        NuvioDialog(
+            title = stringResource(R.string.wetrakr_client_title),
+            subtitle = stringResource(R.string.wetrakr_client_description),
+            onDismiss = onDismiss
+        ) {
+            InputField(
+                value = value,
+                onValueChange = { value = it },
+                placeholder = stringResource(R.string.wetrakr_client_title),
+                keyboardType = KeyboardType.Password,
+                isPassword = true
+            )
+            state.errorMessage?.let { Text(it, color = NuvioTheme.colors.Error) }
+            SettingsDialogActionButton(
+                text = stringResource(R.string.action_save),
+                onClick = { onSaveClientId(value.trim()); editingClientId = false },
+                enabled = value.trim().isNotEmpty() && value.trim().length <= 256 && value.trim().none(Char::isWhitespace)
+            )
+        }
+    } else if (state.isConnected) {
         val glyph = rememberRawSvgPainter(R.raw.wetrakr_we_white, 150.dp)
         ConnectedTrackingAccountDialog(TrackingDialogBrand.WETRAKR, glyph, onDismiss) {
             ConnectedTrackingAccountContent(
@@ -82,6 +111,11 @@ internal fun WeTrakrAccountDialog(
                 onStartConnection = onStartConnection,
                 onRetryPolling = onRetryPolling,
                 onDismiss = onDismiss
+            )
+            SettingsDialogActionButton(
+                text = stringResource(R.string.wetrakr_client_edit),
+                onClick = { editingClientId = true },
+                enabled = !state.isLoading
             )
         }
     }

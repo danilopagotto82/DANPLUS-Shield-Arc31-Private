@@ -1857,7 +1857,7 @@ internal fun PlayerRuntimeController.toggleDetails() {
     pauseOverlayJob?.cancel()
     pauseOverlayJob = null
     pauseDetails.open(resumeOnClose = playing)
-    _uiState.update { it.copy(showPauseOverlay = true, showControls = false) }
+    _uiState.update { it.copy(showPauseOverlay = true, showControls = false, showMoreDialog = false) }
 }
 
 /** Closes the pause overlay; the video plays again when the overlay was opened over a playing video. */

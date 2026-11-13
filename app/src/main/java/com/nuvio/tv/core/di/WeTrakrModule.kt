@@ -17,6 +17,7 @@ import com.nuvio.tv.data.wetrakr.WeTrakrApiClient
 import com.nuvio.tv.data.wetrakr.WeTrakrAuthRepository
 import com.nuvio.tv.data.wetrakr.WeTrakrAuthStore
 import com.nuvio.tv.data.wetrakr.WeTrakrConfiguration
+import com.nuvio.tv.data.wetrakr.WeTrakrClientId
 import com.nuvio.tv.data.wetrakr.WeTrakrHistoryService
 import com.nuvio.tv.data.wetrakr.WeTrakrHttpClient
 import com.nuvio.tv.data.wetrakr.WeTrakrScrobbleService
@@ -43,9 +44,10 @@ import okhttp3.OkHttpClient
 object WeTrakrModule {
     @Provides
     @Singleton
-    fun configuration(): WeTrakrConfiguration = WeTrakrConfiguration(
+    fun configuration(clientId: WeTrakrClientId): WeTrakrConfiguration = WeTrakrConfiguration(
         clientId = BuildConfig.WETRAKR_CLIENT_ID,
-        appVersion = BuildConfig.VERSION_NAME
+        appVersion = BuildConfig.VERSION_NAME,
+        savedClientId = clientId::current
     )
 
     @Provides

@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.local.ScoutStore
+import com.nuvio.tv.data.local.WatchedItemsPreferences
 import android.util.Log
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.ScoutProfile
@@ -17,15 +18,18 @@ import com.nuvio.tv.domain.repository.LibraryRepository
 import com.nuvio.tv.domain.repository.WatchProgressRepository
 import dagger.Lazy
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -47,12 +51,17 @@ class ScoutFolderSupport @Inject constructor(
     private val store: ScoutStore,
     private val profiles: ProfileManager,
     private val watchProgress: Lazy<WatchProgressRepository>,
-    private val library: Lazy<LibraryRepository>
+    private val library: Lazy<LibraryRepository>,
+    private val tmdbIds: com.nuvio.tv.core.tmdb.TmdbIdStore,
+    private val localWatched: WatchedItemsPreferences
 ) {
     fun sliceId(collectionId: String, folderId: String): String? =
         folderId.takeIf { collectionId == ScoutCatalogProvider.TILES_COLLECTION_ID && ScoutSlices.byId(it) != null }
 
     fun isSaved(sliceId: String): Flow<Boolean> = store.profile.map { sliceId in it.settings.savedSlices }
+
+    internal suspend fun displayTitle(sliceId: String, title: String): String =
+        scoutListTitle(title, scoutSliceEmoji(sliceId), store.current().settings.listEmojis)
 
     suspend fun toggleSaved(sliceId: String) {
         store.update { settings ->
@@ -112,29 +121,61 @@ class ScoutFolderSupport @Inject constructor(
     private val namesLock = Mutex()
     private val listedLock = Mutex()
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    internal val watchedMovies: Flow<ScoutWatchedMovies> =
+        profiles.activeProfileId.flatMapLatest(::watchedMoviesForProfile)
+
+    internal fun watchedMoviesForProfile(profileId: Int): Flow<ScoutWatchedMovies> = flow {
+        emitAll(movieHistory(profileId, useLocalFirst = true))
+    }.distinctUntilChanged().flowOn(Dispatchers.IO)
+
+    private fun movieHistory(profileId: Int, useLocalFirst: Boolean): Flow<ScoutWatchedMovies> {
+        val repository = watchProgress.get()
+        val history = repository.tasteHistory
+        return combine(
+            if (useLocalFirst) history.onStart { emit(emptyList()) } else history,
+            repository.observeWatchedMovieIds(),
+            localWatched.observeAllItems(profileId)
+        ) { remote, marked, local ->
+            scoutWatchedMovies(remote + local, marked, tmdbIds.load())
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    internal val showWatched: Flow<Boolean> = profiles.activeProfileId.flatMapLatest(store::observeShowWatched)
+
+    internal suspend fun toggleShowWatched() {
+        val profileId = profiles.activeProfileId.value
+        val show = store.observeShowWatched(profileId).first()
+        if (profiles.activeProfileId.value == profileId) store.setShowWatched(profileId, !show)
+    }
+
     private suspend fun namesToHide(profile: ScoutProfile, listed: ScoutListed): Set<String> = namesLock.withLock {
         val profileId = profiles.activeProfileId.value
         val now = System.currentTimeMillis()
         seenNames?.takeIf { it.profileId == profileId && it.profile == profile && it.listed == listed && now - it.at < LISTED_FRESH_MS }?.let { return@withLock it.names }
         val repository = watchProgress.get()
-        val names = repository.tasteHistory.first().map { scoutExclusionName(it.title, it.releaseInfo) }.toSet() +
-            repository.allProgress.first().map { scoutNormalizedName(it.name) } +
+        val names = repository.allProgress.first().filter { it.isInProgress() }.map { scoutNormalizedName(it.name) }.toSet() +
             profile.ratings.values.filter { it.rating == com.nuvio.tv.domain.model.ScoutRating.NOT_FOR_ME }.map { scoutNormalizedName(it.title.name) } +
             listed.names
         seenNames = SeenNames(profileId, profile, listed, now, names)
         names
     }
 
-    suspend fun withoutSeen(items: List<MetaPreview>): List<MetaPreview> = withContext(Dispatchers.Default) {
+    suspend fun withoutSeen(items: List<MetaPreview>, applyWatchFilter: Boolean = true): List<MetaPreview> = withContext(Dispatchers.Default) {
         val started = System.currentTimeMillis()
         val profile = store.current()
         val listed = listed()
         val names = namesToHide(profile, listed)
+        val watched = if (applyWatchFilter && !store.observeShowWatched(profile.profileId).first()) {
+            movieHistory(profile.profileId, useLocalFirst = false).flowOn(Dispatchers.IO).first()
+        } else null
         val named = System.currentTimeMillis()
         items.filterNot { item ->
             val name = scoutNormalizedName(item.name)
             val year = item.releaseInfo?.take(4)?.toIntOrNull()
             item.id in listed.ids || name in names ||
+                (item.apiType == "movie" && watched?.contains(item.id, item.name, item.releaseInfo, item.imdbId) == true) ||
                 (year != null && (year - 1..year + 1).any { "$name|$it" in names })
         }.also {
             Log.i("ScoutSpeed", "seen names=${named - started} filter=${System.currentTimeMillis() - named} items=${items.size}")
@@ -142,14 +183,15 @@ class ScoutFolderSupport @Inject constructor(
     }
 
     /** A rating, a watch or a list change: rows on Home read themselves again. */
-    @OptIn(FlowPreview::class)
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     val changes: Flow<Unit> = flow {
         emitAll(
             combine(
                 store.profile.map { profile -> profile.ratings.mapValues { it.value.rating } },
-                watchProgress.get().tasteHistory.map { items -> items.size },
+                watchedMovies,
+                showWatched,
                 library.get().libraryItems.map { items -> items.map { it.id to it.listKeys } }
-            ) { ratings, watched, lists -> Triple(ratings, watched, lists) }
+            ) { ratings, watched, show, lists -> listOf(ratings, watched, show, lists) }
                 .distinctUntilChanged()
                 .drop(1)
                 .debounce(CHANGE_SETTLE_MS)

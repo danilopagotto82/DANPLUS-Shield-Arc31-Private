@@ -7,6 +7,7 @@ import com.nuvio.tv.core.catalog.BuiltInCatalogProvider
 import com.nuvio.tv.core.image.ScoutMixArt
 import com.nuvio.tv.core.util.withAppLocale
 import com.nuvio.tv.data.local.ScoutMixStore
+import com.nuvio.tv.data.local.ScoutStore
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.Collection
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,7 +36,8 @@ import javax.inject.Singleton
 class ScoutMixCatalogProvider @Inject constructor(
     @ApplicationContext private val context: Context,
     private val store: ScoutMixStore,
-    private val ready: ScoutReadyMixBuilder
+    private val ready: ScoutReadyMixBuilder,
+    private val scoutStore: ScoutStore
 ) : BuiltInCatalogProvider {
     override val addons: Flow<List<Addon>> = flowOf(emptyList())
 
@@ -44,6 +47,14 @@ class ScoutMixCatalogProvider @Inject constructor(
                 val local = context.withAppLocale()
                 val own = scoutMixCollection(local.getString(R.string.scout_mixes_title), mixes, homeWords(local))
                 listOf(own.copy(folders = own.folders + readyFolders(local, mixes)))
+            }
+        }.let { collections ->
+            combine(collections, scoutStore.profile.map { it.settings.listEmojis }.distinctUntilChanged()) { rows, enabled ->
+                if (!enabled) rows else rows.map { row ->
+                    row.copy(folders = row.folders.map { folder ->
+                        folder.copy(title = scoutListTitle(folder.title, scoutMixEmoji(folder.id), enabled))
+                    })
+                }
             }
         }.distinctUntilChanged()
 

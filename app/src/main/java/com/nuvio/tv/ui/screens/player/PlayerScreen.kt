@@ -767,7 +767,7 @@ fun PlayerScreen(
         if (!uiState.showControls) customFocus.controlsHidden(panelOpen = uiState.showEpisodesPanel || uiState.showChaptersPanel ||
             uiState.showSourcesPanel || uiState.showAudioOverlay || uiState.showSubtitleOverlay ||
             uiState.showSubtitleStylePanel || uiState.showSubtitleDelayOverlay || uiState.showSubtitleTimingDialog ||
-            uiState.showSpeedDialog || uiState.showStreamInfoOverlay || uiState.showPartyPanel)
+            uiState.showSpeedDialog || uiState.showStreamInfoOverlay || uiState.showPartyPanel || uiState.showPauseOverlay)
         if (shouldConfirmNextEpisodeOnEnd || postPlayRecommendationState.isVisible) return@LaunchedEffect
         if (uiState.error != null) return@LaunchedEffect
         if (uiState.showControls && !uiState.showEpisodesPanel && !uiState.showChaptersPanel && !uiState.showSourcesPanel &&
@@ -1975,7 +1975,12 @@ fun PlayerScreen(
             PauseOverlay(
                 visible = uiState.showPauseOverlay && uiState.error == null &&
                     !uiState.showLoadingOverlay && !postPlayRecommendationState.isVisible && !prepareVisible,
-                onClose = { viewModel.onEvent(PlayerEvent.OnDismissPauseOverlay) },
+                onClose = {
+                    val event = if (viewModel.controller.pauseDetails.holdsOverlay(uiState.showPauseOverlay)) {
+                        PlayerEvent.OnCloseDetails
+                    } else PlayerEvent.OnDismissPauseOverlay
+                    viewModel.onEvent(event)
+                },
                 title = uiState.title,
                 logo = uiState.logo,
                 poster = uiState.poster,
@@ -2476,6 +2481,7 @@ fun PlayerScreen(
                         viewModel.onEvent(PlayerEvent.OnShowStreamInfo)
                     },
                     onTogglePlaybackStats = { viewModel.onEvent(PlayerEvent.OnTogglePlaybackStats) },
+                    onShowDetails = { viewModel.onEvent(PlayerEvent.OnToggleDetails) },
                     onResetHideTimer = {
                         viewModel.scheduleHideControls()
                         viewModel.onUserInteraction()
@@ -3563,6 +3569,7 @@ private fun PlayerControlsOverlay(
     onOpenInExternalPlayer: () -> Unit,
     onShowStreamInfo: () -> Unit,
     onTogglePlaybackStats: () -> Unit,
+    onShowDetails: () -> Unit,
     onResetHideTimer: () -> Unit,
     onHideControls: () -> Unit,
     onBack: () -> Unit,
@@ -3623,7 +3630,7 @@ private fun PlayerControlsOverlay(
                 aspect = onToggleAspectRatio, engine = requestEngineSwitch, report = onReportPlaybackIssue,
                 more = onToggleMoreActions, external = onOpenInExternalPlayer, info = onShowStreamInfo,
                 stats = onTogglePlaybackStats, interaction = onResetHideTimer, hide = onHideControls,
-                party = { viewModel.onEvent(PlayerEvent.OnShowPartyPanel) }), reportCodeVisible)
+                party = { viewModel.onEvent(PlayerEvent.OnShowPartyPanel) }, details = onShowDetails), reportCodeVisible)
         return
     }
     if (LocalV2Appearance.current != null) {
@@ -3636,7 +3643,7 @@ private fun PlayerControlsOverlay(
                 audio = onShowAudioDialog, subtitles = onShowSubtitleDialog, speed = onShowSpeedDialog,
                 aspect = onToggleAspectRatio, engine = requestEngineSwitch, report = onReportPlaybackIssue,
                 more = onToggleMoreActions, external = onOpenInExternalPlayer, info = onShowStreamInfo,
-                stats = onTogglePlaybackStats, interaction = onResetHideTimer, hide = onHideControls
+                stats = onTogglePlaybackStats, interaction = onResetHideTimer, hide = onHideControls, details = onShowDetails
             ), reportCodeVisible, playerBadges
         )
         return
@@ -3824,7 +3831,15 @@ private fun PlayerControlsOverlay(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         ControlButton(
-                            icon = Icons.Default.Info,
+                            icon = playerControlIcon(PlayerControlAction.DETAILS, false),
+                            contentDescription = stringResource(R.string.pause_you_are_watching),
+                            onClick = onShowDetails,
+                            downFocusRequester = progressBarFocusRequester,
+                            onUpKey = onHideControls,
+                            onFocused = onResetHideTimer
+                        )
+                        ControlButton(
+                            icon = playerControlIcon(PlayerControlAction.STATS, false),
                             contentDescription = stringResource(R.string.cd_playback_stats),
                             onClick = onTogglePlaybackStats,
                             focusRequester = streamInfoFocusRequester,

@@ -32,7 +32,6 @@ import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.core.sync.ProfileSyncService
 import com.nuvio.tv.data.local.ProfileLockStateDataStore
 import com.nuvio.tv.data.local.ScoutStore
-import com.nuvio.tv.data.local.WatchedItemsPreferences
 import com.nuvio.tv.data.local.WatchedSeriesStateHolder
 import com.nuvio.tv.domain.model.ScoutPick
 import com.nuvio.tv.domain.model.UserProfile
@@ -70,10 +69,11 @@ data class ScoutShownPick(val pick: ScoutPick, val detail: ScoutPickDetail? = nu
 internal data class ScoutWatchDisplay(
     val profileId: Int,
     val showWatched: Boolean = true,
-    val movieIds: Set<Int> = emptySet(),
+    val movies: com.nuvio.tv.core.scout.ScoutWatchedMovies = com.nuvio.tv.core.scout.ScoutWatchedMovies(),
     val seriesIds: Set<Int> = emptySet()
 ) {
-    fun isWatched(pick: ScoutPick): Boolean = pick.tmdbId in (if (pick.tv) seriesIds else movieIds)
+    fun isWatched(pick: ScoutPick): Boolean = if (pick.tv) pick.tmdbId in seriesIds
+        else movies.contains("tmdb:${pick.tmdbId}", pick.name, pick.released)
 }
 
 private fun scoutWatchedTmdbId(id: String): Int? =
@@ -142,7 +142,6 @@ class ScoutViewModel @Inject constructor(
     private val locks: ProfileLockStateDataStore,
     private val sync: ProfileSyncService,
     private val store: ScoutStore,
-    watchedItems: WatchedItemsPreferences,
     watchedSeries: WatchedSeriesStateHolder,
     localAvatars: LocalProfileAvatars,
     private val avatars: AvatarRepository,
@@ -159,14 +158,11 @@ class ScoutViewModel @Inject constructor(
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     internal val watchedDisplay = activeProfileId.flatMapLatest { id ->
-        combine(store.observeShowWatched(id), watchedItems.observeAllItems(id), watchedSeries.observeCompletedIds(id)) { show, items, series ->
+        combine(store.observeShowWatched(id), folders.watchedMoviesForProfile(id), watchedSeries.observeCompletedIds(id)) { show, movies, series ->
             ScoutWatchDisplay(
                 profileId = id,
                 showWatched = show,
-                movieIds = items.mapNotNull { item ->
-                    item.takeIf { it.contentType.equals("movie", true) && it.season == null && it.episode == null }
-                        ?.contentId?.let(::scoutWatchedTmdbId)
-                }.toSet(),
+                movies = movies,
                 seriesIds = series.mapNotNull(::scoutWatchedTmdbId).toSet()
             )
         }

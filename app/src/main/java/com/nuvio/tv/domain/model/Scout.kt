@@ -48,7 +48,8 @@ data class ScoutSettings(
     val savedSlices: List<String> = emptyList(),
     val tasteRow: String = "titles",
     val sendToTrackers: Boolean = false,
-    val useTrackerRatings: Boolean = true
+    val useTrackerRatings: Boolean = true,
+    val listEmojis: Boolean = false
 )
 
 data class ScoutProfile(

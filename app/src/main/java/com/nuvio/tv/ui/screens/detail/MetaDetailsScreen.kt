@@ -2976,7 +2976,7 @@ private fun MetaDetailsContent(
                                 PeopleSectionTab.WHERE_TO_WATCH -> {
                                     WhereToWatchSection(
                                         load = loadWatchProviders,
-                                        titleId = meta.id,
+                                        meta = meta,
                                         showTitle = !hasVisiblePeopleTabs,
                                         focusRequester = watchSectionFocusRequester,
                                         upFocusRequester = if (hasVisiblePeopleTabs) {

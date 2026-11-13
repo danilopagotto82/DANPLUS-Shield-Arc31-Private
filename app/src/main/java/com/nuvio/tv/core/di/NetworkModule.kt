@@ -621,12 +621,17 @@ object NetworkModule {
     @Provides
     @Singleton
     @Named("playbackReports")
-    fun providePlaybackReportsRetrofit(@ApplicationContext context: Context, okHttpClient: OkHttpClient, moshi: Moshi): Retrofit =
-        Retrofit.Builder()
-            .baseUrl(normalizedBaseUrl(BuildConfig.PLAYBACK_REPORTS_BASE_URL, "https://localhost/"))
-            .client(ReportTransport.client(context, okHttpClient, BuildConfig.REPORTS_SIGNING_KEY))
+    fun providePlaybackReportsRetrofit(@ApplicationContext context: Context, okHttpClient: OkHttpClient, moshi: Moshi): Retrofit {
+        val danplusInbox = com.nuvio.tv.core.build.IssueReports.danplusBaseUrl
+        return Retrofit.Builder()
+            .baseUrl(danplusInbox ?: normalizedBaseUrl(BuildConfig.PLAYBACK_REPORTS_BASE_URL, "https://localhost/"))
+            .client(ReportTransport.client(
+                context, okHttpClient, BuildConfig.REPORTS_SIGNING_KEY,
+                danplusAnonKey = danplusInbox?.let { BuildConfig.DANPLUS_REPORTS_ANON_KEY }
+            ))
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
+    }
 
     @Provides
     @Singleton

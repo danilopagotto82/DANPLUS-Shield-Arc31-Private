@@ -20,7 +20,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.nuvio.tv.R
 import com.nuvio.tv.core.tracking.TrackingProviderId
 import com.nuvio.tv.data.local.WatchProgressSource
-import com.nuvio.tv.data.simkl.SimklConnectionMode
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import com.nuvio.tv.ui.theme.NuvioTheme
 import org.junit.Assert.assertTrue
@@ -41,7 +40,7 @@ class TrackingSettingsOverviewTest {
         setOverview()
 
         composeRule.onNodeWithTag(TrackingSettingsTestTags.TRAKT_PROVIDER).assertIsDisplayed()
-        composeRule.onNodeWithTag(TrackingSettingsTestTags.SIMKL_PROVIDER).assertIsDisplayed()
+        composeRule.onNodeWithTag("tracking_provider_simkl").assertDoesNotExist()
         composeRule.onNodeWithTag(TrackingSettingsTestTags.MDBLIST_PROVIDER).assertIsDisplayed()
         composeRule.onAllNodesWithText(
             context.getString(R.string.tracking_status_disconnected)
@@ -52,16 +51,10 @@ class TrackingSettingsOverviewTest {
             .fetchSemanticsNode()
             .boundsInRoot
             .top
-        val simklTop = composeRule
-            .onNodeWithTag(TrackingSettingsTestTags.SIMKL_PROVIDER)
-            .fetchSemanticsNode()
-            .boundsInRoot
-            .top
 
         val mdblistTop = composeRule.onNodeWithTag(TrackingSettingsTestTags.MDBLIST_PROVIDER)
             .fetchSemanticsNode().boundsInRoot.top
-        assertTrue(traktTop < simklTop)
-        assertTrue(simklTop < mdblistTop)
+        assertTrue(traktTop < mdblistTop)
     }
 
     @Test
@@ -71,14 +64,11 @@ class TrackingSettingsOverviewTest {
                 mode = TraktConnectionMode.CONNECTED,
                 username = "trakt-user"
             ),
-            simklState = SimklSettingsUiState(
-                mode = SimklConnectionMode.CONNECTED,
-                username = "simkl-user"
-            ),
+            mdbListState = MdbListTrackerUiState(isConnected = true, username = "mdb-user"),
             trackingState = TrackingSettingsUiState(
                 connectedProviderIds = setOf(
                     TrackingProviderId.TRAKT,
-                    TrackingProviderId.SIMKL
+                    TrackingProviderId.MDBLIST
                 ),
                 isReady = true
             )
@@ -91,7 +81,7 @@ class TrackingSettingsOverviewTest {
             context.getString(R.string.trakt_connected_as, "trakt-user")
         ).assertIsDisplayed()
         composeRule.onNodeWithText(
-            context.getString(R.string.simkl_connected_as, "simkl-user")
+            context.getString(R.string.mdblist_connected_as, "mdb-user")
         ).assertIsDisplayed()
     }
 
@@ -170,24 +160,20 @@ class TrackingSettingsOverviewTest {
                 traktFocusRequester = remember { FocusRequester() }
                 TrackingSettingsOverview(
                     traktState = TraktUiState(),
-                    simklState = SimklSettingsUiState(),
                     mdbListState = MdbListTrackerUiState(),
                     trackingState = TrackingSettingsUiState(isReady = true),
                     traktFocusRequester = traktFocusRequester,
-                    simklFocusRequester = remember { FocusRequester() },
                     mdbListFocusRequester = remember { FocusRequester() },
                     libraryFocusRequester = remember { FocusRequester() },
                     watchProgressFocusRequester = remember { FocusRequester() },
                     continueWatchingFocusRequester = remember { FocusRequester() },
                     moreLikeThisFocusRequester = remember { FocusRequester() },
                     onTraktClick = {},
-                    onSimklClick = {},
                     onMdbListClick = {},
                     onLibrarySourceClick = {},
                     onWatchProgressClick = {},
                     onContinueWatchingWindowClick = {},
                     onMoreLikeThisClick = {},
-                    onAnimeIdClick = {}
                 )
             }
         }
@@ -196,8 +182,6 @@ class TrackingSettingsOverviewTest {
         }
 
         composeRule.onNodeWithTag(TrackingSettingsTestTags.TRAKT_PROVIDER)
-            .assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
-        composeRule.onNodeWithTag(TrackingSettingsTestTags.SIMKL_PROVIDER)
             .assertIsFocused().performKeyInput { pressKey(Key.DirectionDown) }
         composeRule.onNodeWithTag(TrackingSettingsTestTags.MDBLIST_PROVIDER).assertIsFocused()
     }
@@ -244,7 +228,6 @@ class TrackingSettingsOverviewTest {
 
     private fun setOverview(
         traktState: TraktUiState = TraktUiState(),
-        simklState: SimklSettingsUiState = SimklSettingsUiState(),
         mdbListState: MdbListTrackerUiState = MdbListTrackerUiState(),
         trackingState: TrackingSettingsUiState = TrackingSettingsUiState(isReady = true)
     ) {
@@ -252,24 +235,20 @@ class TrackingSettingsOverviewTest {
             NuvioTheme {
                 TrackingSettingsOverview(
                     traktState = traktState,
-                    simklState = simklState,
                     mdbListState = mdbListState,
                     trackingState = trackingState,
                     traktFocusRequester = remember { FocusRequester() },
-                    simklFocusRequester = remember { FocusRequester() },
                     mdbListFocusRequester = remember { FocusRequester() },
                     libraryFocusRequester = remember { FocusRequester() },
                     watchProgressFocusRequester = remember { FocusRequester() },
                     continueWatchingFocusRequester = remember { FocusRequester() },
                     moreLikeThisFocusRequester = remember { FocusRequester() },
                     onTraktClick = {},
-                    onSimklClick = {},
                     onMdbListClick = {},
                     onLibrarySourceClick = {},
                     onWatchProgressClick = {},
                     onContinueWatchingWindowClick = {},
                     onMoreLikeThisClick = {},
-                    onAnimeIdClick = {}
                 )
             }
         }

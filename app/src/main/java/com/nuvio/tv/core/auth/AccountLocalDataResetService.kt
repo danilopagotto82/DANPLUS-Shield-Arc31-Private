@@ -49,7 +49,7 @@ class AccountLocalDataResetService @Inject constructor(
                 .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear rating limits", it) }
             runCatching { com.nuvio.tv.data.local.SupporterMarkerStore.clear(context) }
                 .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear the supporter marker", it) }
-            runCatching { com.nuvio.tv.core.danexus.DanexusRecommendations(context).clear() }
+            runCatching { com.nuvio.tv.core.danexus.RecommendationSync.forgetBindings(context) }
                 .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear local indications", it) }
             runCatching { clearAccountFiles() }
                 .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear account files", it) }

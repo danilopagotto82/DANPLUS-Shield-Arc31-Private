@@ -535,10 +535,27 @@ internal fun LazyListScope.deviceAssessmentItems(
     }
 
     item(key = "assessment_sec_priority") {
-        AssessmentSectionLabel(stringResource(R.string.assessment_section_priority))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+        ) {
+            AssessmentSectionLabel(stringResource(R.string.assessment_section_priority))
+            SettingsHelpButton(R.string.assessment_section_priority, R.string.dan_help_buffer_profiles)
+        }
     }
     item(key = "assessment_priority") {
         SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
+            val recommendation = when (res.suggestedProfile) {
+                ProfileKind.STALL_RESISTANT -> R.string.dan_buffer_variable
+                ProfileKind.BALANCED, ProfileKind.FAST_START -> R.string.dan_buffer_stable
+                null -> R.string.dan_buffer_no_measurement
+            }
+            Text(
+                text = stringResource(recommendation),
+                style = MaterialTheme.typography.bodyMedium,
+                color = NuvioTheme.colors.TextPrimary,
+                modifier = Modifier.padding(NuvioTheme.spacing.md)
+            )
             res.profiles.forEach { profile ->
                 val values = if (profile.minCappedFromMs != null) {
                     stringResource(
@@ -564,6 +581,7 @@ internal fun LazyListScope.deviceAssessmentItems(
                         profile.title
                     },
                     subtitle = profile.subtitle + "\n" + values,
+                    expandSubtitleOnFocus = true,
                     checked = state.selectedProfile == profile.kind,
                     onToggle = {
                         state.selectedProfile =

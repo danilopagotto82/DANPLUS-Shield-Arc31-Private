@@ -1260,7 +1260,9 @@ internal fun ModernRowSection(
             }
 
             val highlightPadding = if (row.collectionHighlight == null) 0.dp else CollectionHighlightVerticalPadding
-            Box(Modifier.collectionHighlight(row.collectionHighlight, row.collectionHighlightRgb, rowStartPadding + firstCardWidth)) {
+            Box(Modifier.collectionHighlight(
+                row.collectionHighlight, row.collectionHighlightRgb, rowStartPadding + firstCardWidth, topInset = 1.dp
+            )) {
             LazyRow(
                 state = rowListState,
                 modifier = Modifier

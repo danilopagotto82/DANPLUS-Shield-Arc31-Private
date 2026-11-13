@@ -89,17 +89,21 @@ internal fun PlaybackStreamSelectionSection(
         settings.streamAutoPlaySource
     }
 
-    SettingsActionRow(
-        title = stringResource(R.string.autoplay_stream_selection),
-        subtitle = null,
-        value = when (settings.streamAutoPlayMode) {
-            StreamAutoPlayMode.MANUAL -> stringResource(R.string.autoplay_mode_manual)
-            StreamAutoPlayMode.FIRST_STREAM -> stringResource(R.string.autoplay_mode_first)
-            StreamAutoPlayMode.REGEX_MATCH -> stringResource(R.string.autoplay_mode_regex)
-            StreamAutoPlayMode.QUALITY_RANK -> stringResource(R.string.autoplay_mode_quality)
-        },
-        onClick = { onOpenDialog(PlaybackDialog.STREAM_AUTO_PLAY_MODE) }
-    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        SettingsActionRow(
+            title = stringResource(R.string.autoplay_stream_selection),
+            modifier = Modifier.weight(1f),
+            subtitle = null,
+            value = when (settings.streamAutoPlayMode) {
+                StreamAutoPlayMode.MANUAL -> stringResource(R.string.autoplay_mode_manual)
+                StreamAutoPlayMode.FIRST_STREAM -> stringResource(R.string.autoplay_mode_first)
+                StreamAutoPlayMode.REGEX_MATCH -> stringResource(R.string.autoplay_mode_regex)
+                StreamAutoPlayMode.QUALITY_RANK -> stringResource(R.string.autoplay_mode_quality)
+            },
+            onClick = { onOpenDialog(PlaybackDialog.STREAM_AUTO_PLAY_MODE) }
+        )
+        SettingsHelpButton(R.string.dan_help_sources_title, R.string.dan_help_sources)
+    }
 
     if (onOpenConnectedServices != null) {
         SettingsActionRow(

@@ -2116,7 +2116,7 @@
     <string name="player_error_title">Playback Error</string>
     <string name="player_go_back">Go back</string>
     <string name="player_switch_to_mpv">Switch to MPV player</string>
-    <string name="report_panel_title">Report a problem</string>
+    <string name="report_panel_title">Problems and suggestions</string>
     <string name="report_panel_what">What happened?</string>
     <string name="report_panel_what_hint">Choose all that fit.</string>
     <string name="report_problem_wont_start">Will not start or keeps loading</string>
@@ -2135,10 +2135,10 @@
     <string name="report_next">Next</string>
     <string name="report_ready_title">Ready to send</string>
     <string name="report_ready_hint">Links, keys and add-on addresses are removed before anything leaves your box.</string>
-    <string name="report_item_box">Your box and Arc version</string>
+    <string name="report_item_box">Your device and DAN+ version</string>
     <string name="report_item_playback">Player settings and playback details</string>
     <string name="report_item_playback_hint">Decoder, sound path, picture mode, speed, buffer</string>
-    <string name="report_item_log">Arc\'s log</string>
+    <string name="report_item_log">DAN+ log</string>
     <string name="report_item_log_hint">Recent player events, cleaned the same way</string>
     <string name="report_item_title">Title and file name</string>
     <string name="report_item_note">Add a note</string>
@@ -2150,7 +2150,7 @@
     <string name="report_sent_title">Report sent</string>
     <string name="report_sent_qr_description">QR code for your report</string>
     <string name="report_sent_phone">Scan with your phone to add photos or follow your report. Arc is a hobby project, so not every report gets a reply.</string>
-    <string name="report_sent_no_phone">Thanks for the report. Arc is a hobby project, so not every report gets a reply.</string>
+    <string name="report_sent_no_phone">Sent to DAN+. Keep the code to identify this report.</string>
     <string name="report_sent_back">Back to watching</string>
     <plurals name="report_panel_what_hint_kept">
         <item quantity="one">Choose all that fit. Arc has kept the last minute.</item>
@@ -2160,7 +2160,7 @@
         <item quantity="one">Player settings and the last minute</item>
         <item quantity="other">Player settings and the last %1$d minutes</item>
     </plurals>
-    <string name="report_settings_subtitle">Say what went wrong or what you would like Arc to do</string>
+    <string name="report_settings_subtitle">Report a problem or suggest an improvement for DAN+</string>
     <string name="report_group_choose">What would you like to report?</string>
     <string name="report_group_options">Options</string>
     <string name="report_row_playback">A playback problem</string>
@@ -2168,7 +2168,7 @@
     <string name="report_row_bug">Something is not working</string>
     <string name="report_row_bug_hint">A screen, button, sign-in, sync, add-ons or search</string>
     <string name="report_row_idea">An idea or request</string>
-    <string name="report_row_idea_hint">Something you would like Arc to do</string>
+    <string name="report_row_idea_hint">Something you would like DAN+ to do</string>
     <string name="report_row_crash">Arc closed or froze</string>
     <string name="report_row_crash_hint">Arc shut itself down or stopped responding</string>
     <string name="report_recorder_title">Keep the last 5 minutes</string>
@@ -2221,7 +2221,7 @@
     <string name="report_where_party">Watch party</string>
     <string name="report_where_other">Somewhere else</string>
     <string name="report_item_note_bug_hint">Please say what went wrong. A few words help most.</string>
-    <string name="report_item_note_idea_hint">Please say what you would like Arc to do.</string>
+    <string name="report_item_note_idea_hint">Tell us what you would like DAN+ to do.</string>
     <string name="report_sent_list_title">Sent reports</string>
     <string name="report_sent_list_empty">Reports you send will be listed here.</string>
     <string name="report_sent_list_latest">%1$s, %2$s</string>
@@ -4514,6 +4514,12 @@
     <string name="addon_health_metadata">Metadata</string>
     <string name="addon_health_ok">OK</string>
     <string name="addon_health_setting">Add-on status</string>
+    <string name="seekr_key_title">Seekr.tv API key</string>
+    <string name="seekr_key_description">Use your Seekr.tv key for compatible thumbnails while seeking.</string>
+    <string name="seekr_key_configured">Configured</string>
+    <string name="seekr_key_unconfigured">Not configured</string>
+    <string name="seekr_key_error">Could not validate or save the Seekr.tv key. Check the key and connection.</string>
+    <string name="seekr_key_remove">Remove key</string>
     <string name="tmdb_comments_setting_description">Show Portuguese reviews on movie and series details when available.</string>
     <string name="tmdb_personal_key_title">TMDB API key</string>
     <string name="tmdb_personal_key_description">Enter your 32-character TMDB API key. It is saved only on this device.</string>
@@ -4523,6 +4529,8 @@
     <string name="tmdb_personal_key_error">Could not save the TMDB API key.</string>
     <string name="scout_settings_show_watched">Show watched titles</string>
     <string name="scout_settings_show_watched_sub">Include titles this profile has already watched in For You.</string>
+    <string name="scout_settings_list_emojis">Emojis in list titles</string>
+    <string name="scout_settings_list_emojis_sub">Show emojis before For You list titles here and on Home.</string>
     <string name="calendar_setting_br_movies">Movie releases in Brazil</string>
     <string name="calendar_setting_br_movies_sub">Include selected upcoming movies from TMDB, even when you do not follow them.</string>
     <string name="addon_health_setting_description">Show OK, Slow, or Down on add-ons and resolvers based on recent use.</string>
@@ -4610,8 +4618,10 @@
     <string name="detail_watch_error">Availability could not be checked right now.</string>
     <string name="detail_watch_empty">No offers found for this title in Brazil.</string>
     <string name="detail_watch_attribution">Availability in Brazil · JustWatch data via TMDB</string>
-    <string name="detail_watch_open_tmdb">See all options on TMDB</string>
-    <string name="detail_watch_brazil">Brazil</string>
+    <string name="detail_watch_opening">Opening %1$s…</string>
+    <string name="detail_watch_search_in_app">Search for “%1$s” in %2$s.</string>
+    <string name="detail_watch_store_hint">Install %1$s from the app store, then try again.</string>
+    <string name="detail_watch_app_unavailable">Could not open %1$s or the app store on this device.</string>
     <string name="network_estimate_general">What can this connection play?</string>
     <string name="network_estimate_profiles">Example two-hour files. Your result can vary by server and bitrate peaks.</string>
     <string name="network_estimate_profile_row">%1$s · %2$d Mbps · %3$.1f GB</string>

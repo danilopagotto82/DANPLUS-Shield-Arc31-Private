@@ -17,7 +17,7 @@ Os campos pendentes já existem em `local.example.properties`:
 | `PREMIUMIZE_CLIENT_ID` | Registro OAuth para login por código. A API também aceita a chave pessoal pelo app. [API Premiumize](https://www.premiumize.me/api) |
 | `TVDB_API_KEY` | Chave v4 do projeto no painel TheTVDB. [TheTVDB](https://support.thetvdb.com/kb/faq.php?id=81) |
 
-A staging DAN+ contém o backend D12 e foi validada separadamente com o backend Nuvio self-host. O aceite é entregar Indicações pelo Supabase entre aparelhos de casas diferentes da mesma conta. Para login oficial, mantenha `DANPLUS_D12_SYNC_ENABLED=false` até existir um contrato do Nuvio para confirmar sessão ativa, owner, perfil UUID, PIN e revogação entre os serviços.
+A staging DAN+ contém o backend D12 e foi validada separadamente. O Android usa uma conta DAN+ para Indicações, com sessão própria e armazenamento no Android Keystore. O QR e a sessão nativa do Nuvio continuam atendendo às funções do Arc.
 
 ## Configuração do Android
 
@@ -29,22 +29,30 @@ Use `local.example.properties` como modelo e preencha `local.properties` na raiz
 | Rotas do QR | `start_device_login_session` ou fallback `start_tv_login_session`, `poll_tv_login_session`, `tv-logins-exchange` e portal capaz de aprovar o código. Valide de TV e celular e confirme que o QR é de uso único. |
 | Conta e perfis | `/auth/v1`, RPCs nativas de owner, registro de dispositivo, perfis, PIN, biblioteca e histórico conforme o pacote Nuvio. Valide se as sessões de aparelhos vinculados resolvem o owner esperado no servidor. |
 | Fila e cache D12 | A fila e o cache usam o armazenamento do aparelho. A fila é visível ao remetente e é reconciliada com o servidor depois do envio. |
-| D12 entre aparelhos | `DANPLUS_D12_SYNC_ENABLED=true` em `local.properties` somente para build de ambiente com o RPC `recommendations_v1` validado. O perfil ativo e cada destinatário precisam do UUID retornado por `sync_pull_profiles`. |
+| D12 entre aparelhos | `DANPLUS_D12_SUPABASE_URL` e `DANPLUS_D12_SUPABASE_KEY` apontam para o projeto DAN+ com os RPCs `recommendations_v1`, `d12_create_profile` e `sync_pull_profiles`. A chave é do tipo `sb_publishable_`. |
 | Trakt | `TRAKT_CLIENT_ID` do registro autorizado, com `TRAKT_API_URL` e `TRAKT_REDIRECT_URI` conforme o ambiente. O fluxo de código da TV usa o Client ID público. |
 | Simkl, MDBList e WeTrakr | `SIMKL_CLIENT_ID`, `MDBLIST_CLIENT_ID` e `WETRAKR_CLIENT_ID`. Floppy usa servidor/token configurados no app. |
 | Metadados | `TMDB_API_KEY`, `TVDB_API_KEY` conforme os recursos habilitados. URLs opcionais de trailers, guias parentais, IntroDB e fontes IMDb estão no exemplo. |
 | Scout e IA | `SCOUT_ENABLED=true` e TMDB quando o recurso for escolhido. Ask usa chaves próprias por perfil inseridas no app, conforme o provedor selecionado. |
 | Addons, debrid e servidores de mídia | Endpoints/contas do usuário configurados pelo app. Não colocar tokens pessoais em `local.properties`. |
-| Relatórios e updates | `PLAYBACK_REPORTS_BASE_URL` e `REPORTS_SIGNING_KEY` somente com serviço aprovado. O código original ainda referencia o GitHub do fork para updates. Isso deve ser resolvido no empacotamento de distribuição. |
+| Relatos | `DANPLUS_D12_SUPABASE_URL` e `DANPLUS_REPORTS_ANON_KEY` apontam para o projeto DAN+. A chave é o JWT legado do papel `anon`, usado pelo gateway da função `danplus-reports`. |
 
 O servidor Supabase utiliza credenciais administrativas no ambiente de execução da Edge Function. A TV recebe apenas a chave pública e a sessão do usuário. A função em `functions/tv-logins-exchange/` atende a TV antes do login. A autenticação dessa troca é o par código aprovado e nonce consumido atomicamente pelo banco. A URL do projeto Supabase por si só não é a URL do portal.
 
 O portal em `portal/` implementa `/link` e `/tv-login` com login por e-mail, confirmação explícita e as RPCs nativas de aprovação. Execute `node supabase/portal/server.mjs` com `DANPLUS_SUPABASE_URL`, `DANPLUS_SUPABASE_PUBLIC_KEY` e opcionalmente `DANPLUS_PORTAL_PORT`. O servidor escuta apenas em loopback. Publique atrás de um proxy HTTPS com domínio DAN+ e encaminhe as duas páginas, o script e `/runtime-config`. Remova query strings dos logs do proxy dessas páginas. Configure ambos os links do Android para esse domínio e valide CORS e HTTPS com o projeto alvo. A implementação atende ao fluxo de e-mail e senha.
 
+## Caixa de relatos DAN+
+
+Os formulários de **Problemas e sugestões** enviam ao endpoint `danplus-reports`. Cada envio aceito retorna um código. No painel Supabase, abra **Table Editor › public › danplus_reports** e filtre por `kind` ou pelo código em `id`. Use `summary`, `app_version` e `device_model` para triagem. O diagnóstico completo está em `payload`.
+
+O app só pode enviar. A tabela fica bloqueada ao público e às contas do app. A função exige o JWT público do projeto no gateway e aplica limites por instalação e globais. Para suspender o recebimento, aplique o rollback da função SQL, que preserva os relatos existentes.
+
 ## Indicações entre aparelhos
 
+- Em **Indicações › Conta DAN+**, entre com a mesma conta nos dois aparelhos. No perfil que estiver usando na TV, escolha explicitamente um perfil DAN+ existente ou crie um. O vínculo desta TV usa o UUID DAN+. Crie um perfil DAN+ para cada pessoa que deve poder enviar ou receber. Perfis existentes aparecem como destinatários mesmo se ainda não estiverem vinculados neste aparelho.
+- A criação de conta exige confirmação do e-mail se o Auth estiver configurado para isso. Para cadastro público, configure o SMTP do projeto e confirme a entrega a um endereço externo. [SMTP do Supabase](https://supabase.com/docs/guides/auth/auth-smtp).
 - O servidor deriva o owner do JWT e confere a sessão ativa. O remetente e os destinatários são UUIDs de perfis daquele owner. O app nunca envia owner como autorização.
-- Um perfil com PIN exige prova curta emitida pelo servidor após o PIN nativo. A prova é vinculada à sessão, ao UUID do perfil e à versão do PIN. Uma troca de conta ou de perfil invalida o acesso à prova anterior no cliente. Reabra o seletor de perfil para renovar a prova após expiração.
+- Um perfil DAN+ com PIN exige prova curta emitida pelo servidor ao digitar o PIN em Indicações. A prova é vinculada à sessão, ao UUID do perfil e à versão do PIN. Uma troca de conta ou de perfil invalida o acesso à prova anterior no cliente. Volte a Indicações para renovar a prova após expiração.
 - O Android guarda envios pendentes no aparelho e usa o UUID de cada envio para retry. A sincronização roda na tela Indicações e no fluxo de envio. A leitura e a exclusão de indicação usam operações próprias. O ✓ vem do histórico do destinatário e não da leitura. Na caixa Enviadas, a projeção de assistido fica oculta para destinatário com PIN.
 - O banco impede acesso direto às tabelas por clientes. O RPC público é invoker e delega a execução à função privada, que verifica sessão, perfil, owner e PIN. Exclusão de perfil remove suas indicações por FK, e o mesmo número de perfil pode voltar com outro UUID.
 - A lista usa páginas de 50 e o cliente recupera até 600 por caixa. O cache local tem retenção de até 600 registros e é limpo no logout. O cache remoto depende da sessão e do estado de desbloqueio local. Homologue troca de perfil/PIN e operação offline no aparelho.

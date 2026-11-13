@@ -12,6 +12,7 @@ import com.nuvio.tv.data.wetrakr.WeTrakrAuthException
 import com.nuvio.tv.data.wetrakr.WeTrakrAuthRepository
 import com.nuvio.tv.data.wetrakr.WeTrakrAuthScope
 import com.nuvio.tv.data.wetrakr.WeTrakrAuthStore
+import com.nuvio.tv.data.wetrakr.WeTrakrClientId
 import com.nuvio.tv.data.wetrakr.WeTrakrDevicePollResult
 import com.nuvio.tv.data.wetrakr.WeTrakrDeviceSession
 import com.nuvio.tv.data.wetrakr.WeTrakrHistoryUpload
@@ -81,6 +82,7 @@ class WeTrakrTrackerViewModel @Inject constructor(
     private val settings: WeTrakrSettingsDataStore,
     private val upload: WeTrakrHistoryUpload,
     api: WeTrakrApiClient,
+    private val clientId: WeTrakrClientId,
     private val profiles: ProfileManager,
     @param:ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -93,8 +95,9 @@ class WeTrakrTrackerViewModel @Inject constructor(
     val uiState = combine(
         combine(authStore.state, sync.state, action, profiles.activeProfileId) { a, b, c, d -> Quad(a, b, c, d) },
         api.quota,
-        settings.continueWatchingDays
-    ) { (authorization, syncState, action, profileId), quota, days ->
+        settings.continueWatchingDays,
+        clientId.changes
+    ) { (authorization, syncState, action, profileId), quota, days, _ ->
         val current = authorization.scope.profileId == profileId
         val transient = action.takeIf { it.scope == authorization.scope && current } ?: WeTrakrTrackerAction()
         val currentSync = syncState.takeIf { it.scope == authorization.scope && current }
@@ -147,6 +150,7 @@ class WeTrakrTrackerViewModel @Inject constructor(
     }
 
     fun onConnect() {
+        if (!auth.hasRequiredCredentials()) return
         if (connectionJob?.isActive == true || disconnectJob?.isActive == true) return
         val requestedScope = authStore.scope()
         if (requestedScope.profileId != profiles.activeProfileId.value || authStore.state.value.isAuthenticated) return
@@ -181,6 +185,26 @@ class WeTrakrTrackerViewModel @Inject constructor(
             } finally {
                 val current = action.value
                 if (current.scope == scope) action.value = current.copy(loading = false, polling = false)
+            }
+        }
+    }
+
+    fun onSaveClientId(value: String) {
+        val scope = authStore.scope()
+        if (authStore.state.value.isAuthenticated) return
+        val previous = connectionJob
+        previous?.cancel()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                previous?.join()
+                if (!authStore.isCurrent(scope)) return@launch
+                authStore.cancelSession(scope = scope)
+                clientId.save(value)
+                if (scope.profileId == profiles.activeProfileId.value) onConnect()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (authStore.isCurrent(scope)) action.value = WeTrakrTrackerAction(scope, error = context.getString(R.string.wetrakr_client_save_error))
             }
         }
     }

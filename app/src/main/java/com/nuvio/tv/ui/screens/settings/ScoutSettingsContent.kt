@@ -183,6 +183,12 @@ internal fun ScoutSettingsContent(
         }
         SettingsGroupCard(title = stringResource(R.string.scout_settings_tune)) {
             SettingsToggleRow(
+                title = stringResource(R.string.scout_settings_list_emojis),
+                subtitle = stringResource(R.string.scout_settings_list_emojis_sub),
+                checked = settings.listEmojis,
+                onToggle = { viewModel.updateSettings { it.copy(listEmojis = !it.listEmojis) } }
+            )
+            SettingsToggleRow(
                 title = stringResource(R.string.scout_settings_show_watched),
                 subtitle = stringResource(R.string.scout_settings_show_watched_sub),
                 checked = showWatched == true,

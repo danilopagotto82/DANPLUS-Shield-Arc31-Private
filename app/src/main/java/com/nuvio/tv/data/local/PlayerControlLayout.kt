@@ -6,7 +6,7 @@ import com.nuvio.tv.core.build.IssueReports
 enum class PlayerControlAction(val id: String) {
     PLAY_PAUSE("play_pause"), RESTART("restart"), EPISODES("episodes"), CHAPTERS("chapters"), NEXT_EPISODE("next_episode"),
     STATS("stats"), AUDIO("audio"), SUBTITLES("subtitles"), SOURCES("sources"), WATCH_PARTY("watch_party"),
-    MORE("more"), SPEED("speed"), ASPECT("aspect"), EXTERNAL("external"), ENGINE("engine"), REPORT("report"),
+    DETAILS("details"), MORE("more"), SPEED("speed"), ASPECT("aspect"), EXTERNAL("external"), ENGINE("engine"), REPORT("report"),
     INFO("info");
 
     companion object {
@@ -108,7 +108,7 @@ class PlayerControlLayout private constructor(private val placements: List<Playe
             val shown = setOf(PlayerControlAction.PLAY_PAUSE, PlayerControlAction.RESTART, PlayerControlAction.EPISODES,
                 PlayerControlAction.CHAPTERS, PlayerControlAction.NEXT_EPISODE, PlayerControlAction.STATS, PlayerControlAction.AUDIO,
                 PlayerControlAction.SUBTITLES, PlayerControlAction.SOURCES, PlayerControlAction.WATCH_PARTY,
-                PlayerControlAction.MORE,
+                PlayerControlAction.DETAILS, PlayerControlAction.MORE,
                 PlayerControlAction.SPEED, PlayerControlAction.ASPECT, PlayerControlAction.EXTERNAL,
                 PlayerControlAction.ENGINE, PlayerControlAction.REPORT)
             val v2Utilities = listOf(PlayerControlAction.EPISODES, PlayerControlAction.CHAPTERS)
@@ -126,7 +126,16 @@ class PlayerControlLayout private constructor(private val placements: List<Playe
             val known = entries.take(MAX_ENTRIES).distinctBy { it.action }
             val missing = defaults.filterNot { def -> known.any { it.action == def.action } }
             // Canonical group order also makes equality independent of cross-group interleaving.
-            return PlayerControlLayout(PlayerControlGroup.entries.flatMap { group -> (known + missing).filter { it.group == group } }, style)
+            val combined = (known + missing).toMutableList()
+            val details = missing.firstOrNull { it.action == PlayerControlAction.DETAILS }
+            if (details != null) {
+                val moreIndex = combined.indexOfFirst { it.action == PlayerControlAction.MORE && it.group == details.group }
+                if (moreIndex >= 0 && combined.indexOf(details) > moreIndex) {
+                    combined.remove(details)
+                    combined.add(moreIndex, details)
+                }
+            }
+            return PlayerControlLayout(PlayerControlGroup.entries.flatMap { group -> combined.filter { it.group == group } }, style)
         }
 
         /** Malformed/future data falls back for display without rewriting its saved bytes. */

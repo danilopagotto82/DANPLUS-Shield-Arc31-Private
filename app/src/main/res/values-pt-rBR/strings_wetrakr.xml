@@ -7,6 +7,9 @@
     <string name="wetrakr_account_fallback">sua conta WeTrakr</string>
     <string name="wetrakr_qr_description">Código QR para conectar o WeTrakr</string>
     <string name="wetrakr_missing_client">O WeTrakr não está configurado nesta versão.</string>
+    <string name="wetrakr_client_title">Client ID do WeTrakr</string>
+    <string name="wetrakr_client_description">Digite o Client ID do aplicativo, fornecido pelo WeTrakr, para gerar o código de pareamento.</string>
+    <string name="wetrakr_client_save_error">Não foi possível salvar o Client ID do WeTrakr.</string>
     <string name="wetrakr_status_syncing">Sincronizando com o WeTrakr…</string>
     <string name="wetrakr_status_enter_code">Aguardando você autorizar o Nuvio Arc no WeTrakr</string>
     <string name="wetrakr_status_paused">Pausado</string>
@@ -49,4 +52,5 @@
     <string name="wetrakr_upload_close">Fechar</string>
     <string name="licenses_attributions_wetrakr_body">O Nuvio Arc utiliza o WeTrakr para histórico de assistidos, listas, acompanhamento de reprodução e títulos semelhantes. Dados do WeTrakr. O Nuvio Arc não é afiliado nem endossado pelo WeTrakr.</string>
     <string name="wetrakr_revoke_failed">Você saiu aqui, mas não foi possível avisar o WeTrakr. Você pode remover o Nuvio Arc em apps conectados no wetrakr.com.</string>
+    <string name="wetrakr_client_edit">Alterar Client ID</string>
 </resources>

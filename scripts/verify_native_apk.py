@@ -7,7 +7,9 @@ import zipfile
 from pathlib import Path
 
 MACHINES = {"arm64-v8a": (2, 183), "armeabi-v7a": (1, 40)}
-REQUIRED = {"libdovi_bridge.so", "libffmpegJNI.so", "libass.so", "libasskt.so"}
+# The bundled Nuvio libass AAR ships its subtitle renderer as libasskt.so;
+# there is no separate libass.so in the AAR or as a dynamic dependency.
+REQUIRED = {"libdovi_bridge.so", "libffmpegJNI.so", "libasskt.so"}
 
 
 def verify(apk: Path, abi: str) -> dict:

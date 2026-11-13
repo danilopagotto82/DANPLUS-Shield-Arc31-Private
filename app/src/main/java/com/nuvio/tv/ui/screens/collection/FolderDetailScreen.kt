@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -108,7 +109,8 @@ import kotlinx.coroutines.launch
 fun FolderDetailScreen(
     viewModel: FolderDetailViewModel = hiltViewModel(),
     onNavigateToDetail: (String, String, String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onWatch: (MetaPreview, String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val rowsFocusState by viewModel.rowsFocusState.collectAsStateWithLifecycle()
@@ -144,30 +146,38 @@ fun FolderDetailScreen(
     val scrollToTopTrigger by viewModel.scrollToTopTrigger.collectAsStateWithLifecycle()
 
     if (uiState.viewMode == FolderViewMode.FOLLOW_LAYOUT) {
-        FollowLayoutContent(
-            uiState = uiState,
-            focusState = followLayoutFocusState,
-            enrichingItemId = enrichingItemId,
-            enrichedPreviews = enrichedPreviews,
-            failedEnrichmentIds = failedEnrichmentIds,
-            onNavigateToDetail = onNavigateToDetail,
-            onLoadMoreCatalog = viewModel::loadMoreForCatalog,
-            onSelectTab = viewModel::selectTab,
-            onLoadMoreForSelectedTab = { viewModel.loadMoreItems(viewModel.uiState.value.selectedTabIndex) },
-            onSaveFocusState = { vi, vo, rk, ikm, m, ma, ri, ii ->
-                viewModel.saveFollowLayoutFocusState(vi, vo, rk, ikm, m, ma, ri, ii)
-            },
-            onItemFocus = viewModel::onItemFocused,
-            onPreloadAdjacentItem = viewModel::preloadAdjacentItem,
-            onCatalogItemLongPress = { item, addonBaseUrl ->
-                viewModel.posterOptions.show(item, addonBaseUrl)
-            },
-            trailerPreviewUrls = trailerPreviewUrls,
-            trailerPreviewAudioUrls = trailerPreviewAudioUrls,
-            onRequestTrailerPreview = viewModel::requestTrailerPreview,
-            onFocusedRowKeyChanged = viewModel::onFocusedRowChanged,
-            scrollToTopTrigger = scrollToTopTrigger
-        )
+        Column(Modifier.fillMaxSize()) {
+            FolderHeader(
+                folder, uiState.collectionTitle,
+                Modifier.padding(horizontal = NuvioTheme.spacing.xxxl, vertical = NuvioTheme.spacing.sm)
+            )
+            Box(Modifier.weight(1f)) {
+                FollowLayoutContent(
+                    uiState = uiState,
+                    focusState = followLayoutFocusState,
+                    enrichingItemId = enrichingItemId,
+                    enrichedPreviews = enrichedPreviews,
+                    failedEnrichmentIds = failedEnrichmentIds,
+                    onNavigateToDetail = onNavigateToDetail,
+                    onLoadMoreCatalog = viewModel::loadMoreForCatalog,
+                    onSelectTab = viewModel::selectTab,
+                    onLoadMoreForSelectedTab = { viewModel.loadMoreItems(viewModel.uiState.value.selectedTabIndex) },
+                    onSaveFocusState = { vi, vo, rk, ikm, m, ma, ri, ii ->
+                        viewModel.saveFollowLayoutFocusState(vi, vo, rk, ikm, m, ma, ri, ii)
+                    },
+                    onItemFocus = viewModel::onItemFocused,
+                    onPreloadAdjacentItem = viewModel::preloadAdjacentItem,
+                    onCatalogItemLongPress = { item, addonBaseUrl ->
+                        viewModel.posterOptions.show(item, addonBaseUrl)
+                    },
+                    trailerPreviewUrls = trailerPreviewUrls,
+                    trailerPreviewAudioUrls = trailerPreviewAudioUrls,
+                    onRequestTrailerPreview = viewModel::requestTrailerPreview,
+                    onFocusedRowKeyChanged = viewModel::onFocusedRowChanged,
+                    scrollToTopTrigger = scrollToTopTrigger
+                )
+            }
+        }
     } else {
         Column(
             modifier = Modifier
@@ -175,7 +185,7 @@ fun FolderDetailScreen(
                 .padding(top = NuvioTheme.spacing.xl)
         ) {
             when (uiState.viewMode) {
-                FolderViewMode.TABBED_GRID -> TabbedGridContent(
+                FolderViewMode.TABBED_GRID, FolderViewMode.PREVIEW_GRID -> TabbedGridContent(
                     scoutAction = viewModel.scoutSliceSaved?.let { saved ->
                         {
                             val isSaved by saved.collectAsStateWithLifecycle(false)
@@ -183,6 +193,13 @@ fun FolderDetailScreen(
                                 label = stringResource(if (isSaved) R.string.scout_saved_row else R.string.scout_save_row),
                                 onClick = viewModel::toggleScoutSlice
                             )
+                            viewModel.scoutShowWatched?.let { setting ->
+                                val showWatched by setting.collectAsStateWithLifecycle(initialValue = true)
+                                com.nuvio.tv.ui.screens.scout.ScoutWatchedButton(
+                                    showWatched = showWatched,
+                                    onClick = viewModel::toggleScoutShowWatched
+                                )
+                            }
                         }
                     },
                     uiState = uiState,
@@ -190,6 +207,7 @@ fun FolderDetailScreen(
                     tabFocusState = tabFocusStates[uiState.selectedTabIndex] ?: FolderDetailGridFocusState(),
                     onSelectTab = viewModel::selectTab,
                     onNavigateToDetail = onNavigateToDetail,
+                    onPreviewFocus = viewModel::onItemFocused,
                     isItemWatched = isItemWatched,
                     onLoadMore = { viewModel.loadMoreItems(uiState.selectedTabIndex) },
                     onSaveFocusState = { verticalIndex, verticalOffset, focusedItemKey ->
@@ -204,8 +222,11 @@ fun FolderDetailScreen(
                         viewModel.posterOptions.show(item, addonBaseUrl)
                     }
                 )
-                FolderViewMode.ROWS -> {
-                    FolderHeader(folder = folder)
+                FolderViewMode.ROWS, FolderViewMode.SHOWCASE -> {
+                    FolderHeader(
+                        folder, uiState.collectionTitle,
+                        Modifier.padding(horizontal = NuvioTheme.spacing.xxxl, vertical = NuvioTheme.spacing.sm)
+                    )
                     RowsContent(
                         uiState = uiState,
                         focusState = rowsFocusState,
@@ -215,7 +236,19 @@ fun FolderDetailScreen(
                         onSaveFocusState = { vi, vo, rk, ikm, m, ma, ri, ii ->
                             viewModel.saveRowsFocusState(vi, vo, rk, ikm, m, ma, ri, ii)
                         },
-                        onItemFocus = viewModel::onItemFocused,
+                        onItemFocus = if (uiState.viewMode == FolderViewMode.ROWS) viewModel::onItemFocused else { _ -> },
+                        leadingContent = if (uiState.viewMode == FolderViewMode.SHOWCASE) {
+                            {
+                                FolderShowcase(
+                                    tabs = uiState.tabs,
+                                    onWatch = onWatch,
+                                    onOpen = { item, addon ->
+                                        HeroBackdropState.update(item.backdropUrl)
+                                        onNavigateToDetail(item.id, item.apiType, addon)
+                                    }
+                                )
+                            }
+                        } else null,
                         onItemLongPress = { item, addonBaseUrl ->
                             viewModel.posterOptions.show(item, addonBaseUrl)
                         }
@@ -237,11 +270,13 @@ fun FolderDetailScreen(
 }
 
 @Composable
-private fun FolderHeader(folder: com.nuvio.tv.domain.model.CollectionFolder) {
+private fun FolderHeader(
+    folder: com.nuvio.tv.domain.model.CollectionFolder,
+    collectionTitle: String,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = NuvioTheme.spacing.xxxl, vertical = NuvioTheme.spacing.sm),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
     ) {
@@ -268,15 +303,26 @@ private fun FolderHeader(folder: com.nuvio.tv.domain.model.CollectionFolder) {
                 style = MaterialTheme.typography.headlineLarge
             )
         }
-        Text(
-            text = folder.title,
-            style = MaterialTheme.typography.headlineMedium.copy(
-                textDirection = folder.title.contentTextDirection()
-            ),
-            color = NuvioTheme.colors.TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Column {
+            if (collectionTitle.isNotBlank() && !collectionTitle.equals(folder.title, ignoreCase = true)) {
+                Text(
+                    text = collectionTitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = NuvioTheme.colors.TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = folder.title,
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    textDirection = folder.title.contentTextDirection()
+                ),
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -292,7 +338,8 @@ private fun TabbedGridContent(
     onLoadMore: () -> Unit = {},
     isItemWatched: (MetaPreview) -> Boolean = { false },
     onItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
-    scoutAction: (@Composable () -> Unit)? = null
+    scoutAction: (@Composable () -> Unit)? = null,
+    onPreviewFocus: (MetaPreview) -> Unit = {}
 ) {
     val tabFocusRequesters = remember(uiState.tabs.size) { uiState.tabs.indices.map { FocusRequester() } }
     var gridHasFocus by remember { mutableStateOf(false) }
@@ -310,45 +357,14 @@ private fun TabbedGridContent(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
     ) {
-        if (!folder.coverImageUrl.isNullOrBlank()) {
-            val iconWidth: androidx.compose.ui.unit.Dp
-            val iconHeight: androidx.compose.ui.unit.Dp
-            when (folder.tileShape) {
-                com.nuvio.tv.domain.model.PosterShape.POSTER -> { iconWidth = NuvioTheme.spacing.xxl; iconHeight = NuvioTheme.spacing.xxxl }
-                com.nuvio.tv.domain.model.PosterShape.LANDSCAPE -> { iconWidth = 64.dp; iconHeight = 36.dp }
-                com.nuvio.tv.domain.model.PosterShape.SQUARE -> { iconWidth = NuvioTheme.spacing.xxxl; iconHeight = NuvioTheme.spacing.xxxl }
-            }
-            AsyncImage(
-                model = folder.coverImageUrl,
-                contentDescription = null,
-                modifier = Modifier
-                    .width(iconWidth)
-                    .height(iconHeight)
-                    .clip(RoundedCornerShape(NuvioTheme.radii.sm)),
-                contentScale = ContentScale.FillBounds
-            )
-        } else if (!folder.coverEmoji.isNullOrBlank()) {
-            Text(
-                text = folder.coverEmoji,
-                style = MaterialTheme.typography.headlineLarge
-            )
-        }
-        Text(
-            text = folder.title,
-            style = MaterialTheme.typography.headlineMedium.copy(
-                textDirection = folder.title.contentTextDirection()
-            ),
-            color = NuvioTheme.colors.TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 300.dp)
-        )
+        FolderHeader(folder, uiState.collectionTitle, Modifier.widthIn(max = 300.dp).weight(1f, fill = false))
         scoutAction?.invoke()
 
         if (uiState.tabs.size > 1) {
             TabRow(
                 selectedTabIndex = uiState.selectedTabIndex,
                 modifier = Modifier
+                    .weight(1f)
                     .focusRestorer {
                         tabFocusRequesters.getOrNull(uiState.selectedTabIndex) ?: FocusRequester.Default
                     }
@@ -410,10 +426,24 @@ private fun TabbedGridContent(
                 )
             }
         }
+        scoutAction != null && currentTab.catalogRow?.let { it.items.isEmpty() && it.hasMore } == true -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                if (currentTab.catalogRow?.isLoading == true) {
+                    LoadingIndicator()
+                } else {
+                    com.nuvio.tv.ui.scout.ScoutPageButton(
+                        label = stringResource(R.string.action_load_more),
+                        onClick = onLoadMore
+                    )
+                }
+            }
+        }
         currentTab.catalogRow != null -> {
             val items = currentTab.catalogRow.items
             val posterCardStyle = rememberPosterCardStyle(uiState.posterCardWidthDp, uiState.posterCardCornerRadiusDp)
             val itemFocusRequesters = remember(uiState.selectedTabIndex) { mutableMapOf<String, FocusRequester>() }
+            val previewGrid = uiState.viewMode == FolderViewMode.PREVIEW_GRID
+            var focusedPreviewKey by remember(uiState.selectedTabIndex) { mutableStateOf<String?>(null) }
             var lastFocusedItemKey by remember(
                 uiState.selectedTabIndex,
                 tabFocusState.focusedItemKey
@@ -466,7 +496,7 @@ private fun TabbedGridContent(
             }
 
             val catalogRow = currentTab.catalogRow
-            LaunchedEffect(gridState, items.size) {
+            LaunchedEffect(gridState, items.size, catalogRow.isLoading, catalogRow.hasMore) {
                 snapshotFlow {
                     val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
                     val total = gridState.layoutInfo.totalItemsCount
@@ -475,7 +505,7 @@ private fun TabbedGridContent(
                     .distinctUntilChanged()
                     .collect { (lastVisible, total) ->
                         if (total > 0 && lastVisible >= total - 10) {
-                            if (catalogRow != null && catalogRow.hasMore && !catalogRow.isLoading) {
+                            if (catalogRow.hasMore && !catalogRow.isLoading) {
                                 onLoadMore()
                             }
                         }
@@ -483,104 +513,123 @@ private fun TabbedGridContent(
             }
 
             val globalLandscape = LocalLandscapePosterMode.current
-            LazyVerticalGrid(
-                state = gridState,
-                columns = GridCells.Adaptive(minSize = if (globalLandscape) posterCardStyle.height else posterCardStyle.width),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .onFocusChanged { gridHasFocus = it.hasFocus }
-                    .focusRestorer {
-                        lastFocusedItemKey?.let { itemFocusRequesters[it] } ?: FocusRequester.Default
+            Row(Modifier.fillMaxSize()) {
+                if (previewGrid) {
+                    val preview = remember(items, focusedPreviewKey) {
+                        focusedPreviewKey?.let { key -> items.firstOrNull { it.id == key } } ?: items.firstOrNull()
                     }
-                    .dpadRepeatThrottle(),
-                contentPadding = PaddingValues(
-                    start = NuvioTheme.spacing.xxxl,
-                    end = NuvioTheme.spacing.xxxl,
-                    top = NuvioTheme.spacing.lg,
-                    bottom = NuvioTheme.spacing.xxxl
-                ),
-                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
-                verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
-            ) {
-                itemsIndexed(
-                    items = items,
-                    key = { index, item -> "${item.id}_$index" }
-                ) { index, item ->
-                    val itemKey = "${item.id}_$index"
-                    val focusReq = itemFocusRequesters.getOrPut(itemKey) { FocusRequester() }
-                    GridContentCard(
-                        item = item,
-                        posterCardStyle = posterCardStyle,
-                        focusRequester = focusReq,
-                        isWatched = isItemWatched(item),
-                        showReleaseInfo = true,
-                        onFocused = { lastFocusedItemKey = itemKey },
-                        onClick = {
-                            HeroBackdropState.update(item.backdropUrl)
-                            onNavigateToDetail(
-                                item.id,
-                                item.apiType,
-                                currentTab.catalogRow.addonBaseUrl
-                            )
-                        },
-                        onLongPress = {
-                            lastFocusedItemKey = itemKey
-                            onItemLongPress(item, currentTab.catalogRow.addonBaseUrl)
-                        }
+                    LaunchedEffect(preview?.id, preview?.apiType) { preview?.let(onPreviewFocus) }
+                    FolderSidePreview(
+                        item = preview,
+                        modifier = Modifier.fillMaxHeight().fillMaxWidth(.29f)
+                            .padding(start = NuvioTheme.spacing.xxxl, top = NuvioTheme.spacing.lg, bottom = NuvioTheme.spacing.lg)
                     )
                 }
-                if (catalogRow != null && catalogRow.isLoading) {
-                    item(
-                        key = "loading_more"
-                    ) {
-                        val cardShape = RoundedCornerShape(posterCardStyle.cornerRadius)
-                        val cardDepthStyle = LocalCardDepthStyle.current
-                        val globalLandscape = LocalLandscapePosterMode.current
-                        val loadingCardHeight = if (globalLandscape) {
-                            posterCardStyle.width / com.nuvio.tv.domain.model.PosterShape.LANDSCAPE.aspectRatio()
-                        } else {
-                            posterCardStyle.width * 1.5f
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Adaptive(minSize = if (globalLandscape) posterCardStyle.height else posterCardStyle.width),
+                    modifier = Modifier
+                        .weight(1f).fillMaxHeight()
+                        .onFocusChanged { gridHasFocus = it.hasFocus }
+                        .focusRestorer {
+                            lastFocusedItemKey?.let { itemFocusRequesters[it] } ?: FocusRequester.Default
                         }
-                        Column(
-                            modifier = Modifier.width(posterCardStyle.width)
-                        ) {
-                            Card(
-                                onClick = {},
-                                modifier = Modifier
-                                    .width(posterCardStyle.width)
-                                    .height(loadingCardHeight)
-                                    .clearAndSetSemantics {}
-                                    .focusProperties { canFocus = false },
-                                shape = CardDefaults.shape(shape = cardShape),
-                                colors = CardDefaults.colors(
-                                    containerColor = NuvioTheme.colors.BackgroundCard,
-                                    focusedContainerColor = NuvioTheme.colors.BackgroundCard
-                                )
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clip(cardShape)
-                                        .nuvioCardDepth(
-                                            shape = cardShape,
-                                            surface = CardDepthSurface.POSTERS,
-                                            style = cardDepthStyle
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    LoadingIndicator()
+                        .dpadRepeatThrottle(),
+                    contentPadding = PaddingValues(
+                        start = NuvioTheme.spacing.xxxl,
+                        end = NuvioTheme.spacing.xxxl,
+                        top = NuvioTheme.spacing.lg,
+                        bottom = NuvioTheme.spacing.xxxl
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
+                ) {
+                    itemsIndexed(
+                        items = items,
+                        key = { index, item -> "${item.id}_$index" }
+                    ) { index, item ->
+                        val itemKey = "${item.id}_$index"
+                        val focusReq = itemFocusRequesters.getOrPut(itemKey) { FocusRequester() }
+                        GridContentCard(
+                            item = item,
+                            posterCardStyle = posterCardStyle,
+                            imageCrossfade = !previewGrid,
+                            focusRequester = focusReq,
+                            isWatched = isItemWatched(item),
+                            showReleaseInfo = true,
+                            onFocused = {
+                                lastFocusedItemKey = itemKey
+                                if (previewGrid) {
+                                    focusedPreviewKey = item.id
                                 }
+                            },
+                            onClick = {
+                                HeroBackdropState.update(item.backdropUrl)
+                                onNavigateToDetail(
+                                    item.id,
+                                    item.apiType,
+                                    item.sourceAddonBaseUrl ?: catalogRow.addonBaseUrl
+                                )
+                            },
+                            onLongPress = {
+                                lastFocusedItemKey = itemKey
+                                onItemLongPress(item, item.sourceAddonBaseUrl ?: catalogRow.addonBaseUrl)
                             }
-                            // Reserve space for title + release date to match ContentCard height
-                            Spacer(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = NuvioTheme.spacing.sm)
-                                    .height(
-                                        MaterialTheme.typography.titleMedium.lineHeight.value.dp +
-                                            MaterialTheme.typography.labelMedium.lineHeight.value.dp
+                        )
+                    }
+                    if (catalogRow != null && catalogRow.isLoading) {
+                        item(
+                            key = "loading_more"
+                        ) {
+                            val cardShape = RoundedCornerShape(posterCardStyle.cornerRadius)
+                            val cardDepthStyle = LocalCardDepthStyle.current
+                            val globalLandscape = LocalLandscapePosterMode.current
+                            val loadingCardHeight = if (globalLandscape) {
+                                posterCardStyle.width / com.nuvio.tv.domain.model.PosterShape.LANDSCAPE.aspectRatio()
+                            } else {
+                                posterCardStyle.width * 1.5f
+                            }
+                            Column(
+                                modifier = Modifier.width(posterCardStyle.width)
+                            ) {
+                                Card(
+                                    onClick = {},
+                                    modifier = Modifier
+                                        .width(posterCardStyle.width)
+                                        .height(loadingCardHeight)
+                                        .clearAndSetSemantics {}
+                                        .focusProperties { canFocus = false },
+                                    shape = CardDefaults.shape(shape = cardShape),
+                                    colors = CardDefaults.colors(
+                                        containerColor = NuvioTheme.colors.BackgroundCard,
+                                        focusedContainerColor = NuvioTheme.colors.BackgroundCard
                                     )
-                            )
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(cardShape)
+                                            .nuvioCardDepth(
+                                                shape = cardShape,
+                                                surface = CardDepthSurface.POSTERS,
+                                                style = cardDepthStyle
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        LoadingIndicator()
+                                    }
+                                }
+                                // Reserve space for title + release date to match ContentCard height
+                                Spacer(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = NuvioTheme.spacing.sm)
+                                        .height(
+                                            MaterialTheme.typography.titleMedium.lineHeight.value.dp +
+                                                MaterialTheme.typography.labelMedium.lineHeight.value.dp
+                                        )
+                                )
+                            }
                         }
                     }
                 }
@@ -606,16 +655,17 @@ private fun RowsContent(
     focusedPosterBackdropTrailerEnabled: Boolean = false,
     focusedPosterBackdropTrailerMuted: Boolean = true,
     trailerPreviewUrls: Map<String, String> = emptyMap(),
-    trailerPreviewAudioUrls: Map<String, String> = emptyMap()
+    trailerPreviewAudioUrls: Map<String, String> = emptyMap(),
+    leadingContent: (@Composable () -> Unit)? = null
 ) {
-    val sourceTabs = uiState.tabs.filter { tab ->
+    val sourceTabs = remember(uiState.tabs) { uiState.tabs.filter { tab ->
         if (tab.isAllTab) return@filter false
         // Hide sources that returned zero results after loading completed
         if (!tab.isLoading && tab.error == null &&
             tab.catalogRow != null && tab.catalogRow.items.isEmpty()
         ) return@filter false
         true
-    }
+    } }
     
     // Nested prefetch: pre-compose cards in nested LazyRows to prevent frame spikes
     val nestedPrefetchStrategy = remember { LazyListPrefetchStrategy(nestedPrefetchItemCount = 2) }
@@ -774,6 +824,7 @@ private fun RowsContent(
         contentPadding = PaddingValues(top = NuvioTheme.spacing.lg, bottom = NuvioTheme.spacing.xxxl),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxl)
     ) {
+        if (leadingContent != null) item(key = "folder_showcase") { leadingContent() }
         sourceTabs.forEachIndexed { index, tab ->
             // Compute rowKey early so we can use it as item key for focus restoration
             val catalogRow = tab.catalogRow

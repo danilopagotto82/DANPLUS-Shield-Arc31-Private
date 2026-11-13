@@ -275,6 +275,7 @@ fun HeroContentSection(
     val context = LocalContext.current
     val recommendationViewModel =
         if (ProfileRecommendationRules.isSupportedType(meta.apiType)) hiltViewModel<DanexusProfilesViewModel>() else null
+    LaunchedEffect(recommendationViewModel) { recommendationViewModel?.loadIndicationsOnce() }
     var showDanPlusIndications by remember(meta.id, meta.apiType) { mutableStateOf(false) }
     if (showDanPlusIndications && recommendationViewModel != null) {
         DanexusRecommendDialog(meta, onDismiss = { showDanPlusIndications = false }, viewModel = recommendationViewModel)
@@ -513,9 +514,11 @@ fun HeroContentSection(
                         }
 
                         if (recommendationViewModel != null) {
-                            val activeProfile by recommendationViewModel.profileManager.activeProfileId.collectAsStateWithLifecycle()
+                            val activeProfile by recommendationViewModel.viewer.collectAsStateWithLifecycle()
                             val recommendations by recommendationViewModel.items.collectAsStateWithLifecycle()
-                            val recommended = ProfileRecommendationRules.hasOutgoing(recommendations, activeProfile, meta)
+                            val recommended = activeProfile?.let {
+                                ProfileRecommendationRules.hasOutgoing(recommendations, it.index, meta)
+                            } == true
                             ActionIconButton(
                                 icon = if (recommended) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = stringResource(

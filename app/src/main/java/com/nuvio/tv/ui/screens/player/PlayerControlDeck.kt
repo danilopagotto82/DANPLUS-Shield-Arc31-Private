@@ -4,7 +4,6 @@ package com.nuvio.tv.ui.screens.player
 import android.view.KeyEvent
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -173,7 +172,6 @@ private fun PlayerStyledControlButton(action: PlayerControlAction, style: Player
         V2StyledUtilityButton(icon, label, true, onClick, {}, modifier)
     } else {
         val legacyIcon = when (action) {
-            PlayerControlAction.STATS -> Icons.Default.Info
             PlayerControlAction.SUBTITLES -> Icons.Default.Chat
             PlayerControlAction.MORE -> Icons.Default.MoreHoriz
             else -> playerControlIcon(action, playing)

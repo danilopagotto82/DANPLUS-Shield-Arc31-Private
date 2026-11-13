@@ -186,7 +186,7 @@ fun CollectionRowSection(
                 state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .collectionHighlight(highlight, highlightRgb, NuvioTheme.spacing.xxxl + firstCardWidth)
+                    .collectionHighlight(highlight, highlightRgb, NuvioTheme.spacing.xxxl + firstCardWidth, topInset = 1.dp)
                     .focusRequester(rowFocusRequester)
                     .focusRestorer {
                         val visibleIndices = listState.layoutInfo.visibleItemsInfo.map { it.index }

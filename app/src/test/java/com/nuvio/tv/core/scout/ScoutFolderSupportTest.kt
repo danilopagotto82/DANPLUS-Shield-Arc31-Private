@@ -36,17 +36,23 @@ class ScoutFolderSupportTest {
         profile: ScoutProfile = ScoutProfile(),
         tabs: List<LibraryListTab> = emptyList(),
         entries: List<LibraryEntry> = emptyList(),
+        showWatched: Boolean = false,
+        localFilms: List<WatchedItem> = emptyList(),
         active: MutableStateFlow<Int> = MutableStateFlow(1),
         onRead: () -> Unit = {},
         onHistory: () -> Unit = {}
     ): ScoutFolderSupport {
-        val store = mockk<ScoutStore> { coEvery { current() } returns profile }
+        val store = mockk<ScoutStore> {
+            coEvery { current() } returns profile
+            every { observeShowWatched(any()) } returns flowOf(showWatched)
+        }
         val progress = mockk<WatchProgressRepository> {
             every { tasteHistory } answers {
                 onHistory()
                 flowOf(watched)
             }
             every { allProgress } returns flowOf(emptyList())
+            every { observeWatchedMovieIds() } returns flowOf(emptySet())
         }
         val library = mockk<LibraryRepository> {
             every { listTabs } answers {
@@ -56,7 +62,11 @@ class ScoutFolderSupportTest {
             every { libraryItems } returns flowOf(entries)
         }
         val profiles = mockk<com.nuvio.tv.core.profile.ProfileManager> { every { activeProfileId } returns active }
-        return ScoutFolderSupport(store, profiles, dagger.Lazy { progress }, dagger.Lazy { library })
+        val localWatched = mockk<com.nuvio.tv.data.local.WatchedItemsPreferences> {
+            every { observeAllItems(any()) } returns flowOf(localFilms)
+        }
+        return ScoutFolderSupport(store, profiles, dagger.Lazy { progress }, dagger.Lazy { library },
+            com.nuvio.tv.core.tmdb.TmdbIdStore(null), localWatched)
     }
 
     private fun visible(s: ScoutFolderSupport, vararg items: MetaPreview) =
@@ -66,6 +76,25 @@ class ScoutFolderSupportTest {
     fun `watched title leaves but a remake of the name stays`() {
         val s = support(watched = listOf(WatchedItem("tt1", "movie", "Dune", watchedAt = 1, releaseInfo = "1984")))
         assertEquals(listOf("tmdb:2"), visible(s, item("tmdb:1", "Dune", "1984"), item("tmdb:2", "Dune", "2021")))
+    }
+
+    @Test
+    fun `local watched films match IMDb and respect the switch`() {
+        val film = WatchedItem("imdb:tt1234567", "movie", "Filme", watchedAt = 1)
+        val candidate = item("tmdb:12", "Filme").copy(imdbId = "tt1234567")
+        assertEquals(emptyList<String>(), visible(support(localFilms = listOf(film)), candidate))
+        assertEquals(listOf(candidate.id), visible(support(localFilms = listOf(film), showWatched = true), candidate))
+    }
+
+    @Test
+    fun `IMDb history matches a TMDB-only pick through the ID cache`() {
+        val watched = scoutWatchedMovies(
+            history = listOf(WatchedItem("imdb:tt1234567", "movie", "Filme", watchedAt = 1)),
+            marked = emptySet(),
+            imdbByTmdb = mapOf("12:movie" to "tt1234567", "20:tv" to "tt1234567")
+        )
+        assertEquals(true, watched.contains("tmdb:0012", "Filme", "2020"))
+        assertEquals(false, watched.contains("tmdb:20", "Filme", "2020"))
     }
 
     @Test
@@ -99,7 +128,7 @@ class ScoutFolderSupportTest {
             (1..8).map { async(kotlinx.coroutines.Dispatchers.Default) { s.withoutSeen(listOf(item("tmdb:1", "Moon"))) } }.awaitAll()
         }
         assertEquals(1, lists.get())
-        assertEquals(1, history.get())
+        assertEquals(8, history.get())
     }
 
     @Test

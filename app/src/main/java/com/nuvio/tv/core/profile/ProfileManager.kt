@@ -168,7 +168,7 @@ class ProfileManager @Inject constructor(
     private suspend fun removeLocalProfileData(id: Int) {
         if (id == 1) return
         withContext(Dispatchers.IO) {
-            com.nuvio.tv.core.danexus.DanexusRecommendations(context).removeProfile(id)
+            com.nuvio.tv.core.danexus.RecommendationSync.forgetBinding(context, id)
         }
         credentialStores.forEach { store -> store.removeProfile(id) }
         runCatching { com.nuvio.tv.core.ratinglimit.ratingLimitGate(context).forgetProfile(id) }

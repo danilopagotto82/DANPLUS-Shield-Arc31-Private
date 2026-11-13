@@ -1,6 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
-/** The pause overlay opened by a remote button: it stays up while paused and may play the video again when closed. */
+/** Tracks a manually opened pause overlay and whether closing it should resume playback. */
 internal class PauseDetailsRequest {
     var isOpen = false
         private set

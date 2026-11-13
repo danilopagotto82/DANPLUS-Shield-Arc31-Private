@@ -1582,7 +1582,17 @@ private fun PlaybackNavHost(
                     val heroBackdrop = HeroBackdropState.consumeAndClear()
                     navController.navigate(Screen.Detail.createRoute(itemId, itemType, addonBaseUrl, heroBackdropUrl = heroBackdrop))
                 },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onWatch = { item, addon ->
+                    navController.navigate(Screen.Detail.createRoute(
+                        itemId = item.id,
+                        itemType = item.apiType,
+                        addonBaseUrl = addon,
+                        heroBackdropUrl = item.backdropUrl,
+                        heroLogoUrl = item.logo,
+                        playOnLoad = true
+                    ))
+                }
             )
         }
 

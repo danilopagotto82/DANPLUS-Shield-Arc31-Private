@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -58,12 +59,15 @@ internal fun UiDiagnosticsSettingsRow() {
             restoreFocus = false
         }
     }
-    SettingsActionRow(
-        title = stringResource(R.string.v2_ui_diagnostics_title),
-        subtitle = stringResource(R.string.v2_ui_diagnostics_subtitle),
-        onClick = ::capture,
-        modifier = Modifier.focusRequester(launchFocus)
-    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        SettingsActionRow(
+            title = stringResource(R.string.v2_ui_diagnostics_title),
+            subtitle = stringResource(R.string.v2_ui_diagnostics_subtitle),
+            onClick = ::capture,
+            modifier = Modifier.weight(1f).focusRequester(launchFocus)
+        )
+        SettingsHelpButton(R.string.v2_ui_diagnostics_title, R.string.dan_help_ui_diagnostics)
+    }
     report?.let { text ->
         NuvioDialog(
             title = stringResource(R.string.v2_ui_diagnostics_title),

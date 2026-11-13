@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
+import com.nuvio.tv.data.local.PlayerControlAction
 import com.nuvio.tv.domain.model.PlayerChromeStyle
 import com.nuvio.tv.domain.model.VisualStyle
 import com.nuvio.tv.ui.screens.player.PlayerBadge
@@ -43,7 +44,7 @@ import com.nuvio.tv.ui.screens.player.*
 import com.nuvio.tv.ui.v2.appearance.LocalV2Appearance
 import com.nuvio.tv.ui.v2.components.*
 
-enum class V2PlayerControl { INFO, STATS, AUDIO, SUBTITLES, SOURCES, EPISODES, CHAPTERS, RESTART, MORE, SPEED, ASPECT, EXTERNAL, ENGINE, REPORT }
+enum class V2PlayerControl { INFO, STATS, AUDIO, SUBTITLES, SOURCES, EPISODES, CHAPTERS, RESTART, MORE, SPEED, ASPECT, EXTERNAL, ENGINE, REPORT, DETAILS }
 
 /** Owned by PlayerScreen, so requesters survive a utility panel replacing the control deck. */
 @Stable
@@ -62,7 +63,8 @@ data class V2PlayerActions(
     val more: () -> Unit, val external: () -> Unit, val info: () -> Unit,
     val stats: () -> Unit, val interaction: () -> Unit, val hide: () -> Unit,
     val party: () -> Unit = {},
-    val chapters: () -> Unit = {}
+    val chapters: () -> Unit = {},
+    val details: () -> Unit = {}
 )
 
 private data class Utility(val id: V2PlayerControl, val icon: ImageVector, val label: String, val action: () -> Unit, val panel: Boolean = false, val enabled: Boolean = true)
@@ -86,7 +88,8 @@ fun V2PlayerControls(
     val density = LocalDensity.current
     val view = LocalView.current
     val utilities = buildList {
-        // INFO remains in the shared action model for Original; dormant in V2.
+        add(Utility(V2PlayerControl.DETAILS, playerControlIcon(PlayerControlAction.DETAILS, false),
+            stringResource(R.string.pause_you_are_watching), actions.details, panel = true))
         add(Utility(V2PlayerControl.STATS, Icons.Default.Equalizer, stringResource(R.string.cd_playback_stats), {
             actions.stats()
         }))

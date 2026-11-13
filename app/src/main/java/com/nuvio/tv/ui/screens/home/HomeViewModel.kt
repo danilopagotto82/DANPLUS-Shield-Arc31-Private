@@ -100,7 +100,8 @@ class HomeViewModel @Inject constructor(
     internal val homeRefreshSignal: com.nuvio.tv.core.util.HomeRefreshSignal,
     internal val serverCatalog: ServerCatalog,
     internal val calendarComingUp: CalendarComingUpSource? = null,
-    internal val builtInCatalogs: com.nuvio.tv.core.catalog.BuiltInCatalogs = com.nuvio.tv.core.catalog.BuiltInCatalogs.None
+    internal val builtInCatalogs: com.nuvio.tv.core.catalog.BuiltInCatalogs = com.nuvio.tv.core.catalog.BuiltInCatalogs.None,
+    internal val scoutFolders: com.nuvio.tv.core.scout.ScoutFolderSupport? = null
 ) : ViewModel() {
     companion object {
         internal const val TAG = "HomeViewModel"
@@ -500,6 +501,7 @@ class HomeViewModel @Inject constructor(
     internal val movieWatchedObserverJobs = mutableMapOf<String, Job>()
     internal var movieWatchedBatchJob: Job? = null
     internal var lastMovieWatchedItemKeys: Set<String> = emptySet()
+    internal var lastScoutWatchedItems: Map<String, com.nuvio.tv.domain.model.MetaPreview> = emptyMap()
     internal var seriesWatchedObserverJob: Job? = null
     internal var libraryTabsObserverJob: Job? = null
     internal var activePosterListPickerInput: LibraryEntryInput? = null

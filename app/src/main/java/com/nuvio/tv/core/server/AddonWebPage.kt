@@ -1154,6 +1154,8 @@ var i18n = {
   tabs: '${context.getString(R.string.collections_editor_view_mode_tabs).replace("'", "\\'")}',
   rows: '${context.getString(R.string.collections_editor_view_mode_rows).replace("'", "\\'")}',
   followHome: '${context.getString(R.string.collections_editor_view_mode_follow).replace("'", "\\'")}',
+  previewGrid: '${context.getString(R.string.dan_folder_preview_grid).replace("'", "\\'")}',
+  showcase: '${context.getString(R.string.dan_folder_showcase).replace("'", "\\'")}',
   showAllTab: '${context.getString(R.string.collections_editor_show_all_tab).replace("'", "\\'")}',
   cover: '${context.getString(R.string.collections_editor_cover).replace("'", "\\'")}',
   coverNone: '${context.getString(R.string.collections_editor_cover_none).replace("'", "\\'")}',
@@ -2984,9 +2986,11 @@ function renderCollections() {
             '<button class="cover-mode-btn' + ((col.viewMode === 'TABBED_GRID' || !col.viewMode) ? ' active' : '') + '" onclick="updateCollectionViewMode(' + ci + ',\'TABBED_GRID\')">' + i18n.tabs + '</button>' +
             '<button class="cover-mode-btn' + (col.viewMode === 'ROWS' ? ' active' : '') + '" onclick="updateCollectionViewMode(' + ci + ',\'ROWS\')">' + i18n.rows + '</button>' +
             '<button class="cover-mode-btn' + (col.viewMode === 'FOLLOW_LAYOUT' ? ' active' : '') + '" onclick="updateCollectionViewMode(' + ci + ',\'FOLLOW_LAYOUT\')">' + i18n.followHome + '</button>' +
+            '<button class="cover-mode-btn' + (col.viewMode === 'PREVIEW_GRID' ? ' active' : '') + '" onclick="updateCollectionViewMode(' + ci + ',\'PREVIEW_GRID\')">' + i18n.previewGrid + '</button>' +
+            '<button class="cover-mode-btn' + (col.viewMode === 'SHOWCASE' ? ' active' : '') + '" onclick="updateCollectionViewMode(' + ci + ',\'SHOWCASE\')">' + i18n.showcase + '</button>' +
           '</div>' +
         '</div>' +
-        ((col.viewMode === 'TABBED_GRID' || !col.viewMode) ?
+        ((col.viewMode === 'TABBED_GRID' || col.viewMode === 'PREVIEW_GRID' || !col.viewMode) ?
         '<div class="col-setting-row">' +
           '<span class="toggle-label">' + i18n.showAllTab + '</span>' +
           '<label class="toggle-switch" onclick="event.stopPropagation()">' +

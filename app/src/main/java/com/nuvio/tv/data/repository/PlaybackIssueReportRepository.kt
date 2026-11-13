@@ -96,15 +96,17 @@ internal fun gzippedSize(bytes: ByteArray): Int {
 internal fun fitToRelay(
     body: PlaybackIssueReportRequestDto,
     maxGzipBytes: Int = RELAY_MAX_GZIP_BYTES,
+    maxJsonBytes: Int = Int.MAX_VALUE,
     serialize: (PlaybackIssueReportRequestDto) -> ByteArray
 ): ByteArray {
     val full = serialize(body)
     val recorder = body.recorder ?: return full
-    if (gzippedSize(full) <= maxGzipBytes) return full
+    fun fits(bytes: ByteArray) = bytes.size <= maxJsonBytes && gzippedSize(bytes) <= maxGzipBytes
+    if (fits(full)) return full
     var last = full
     fitRecorderToBudget(recorder) { candidate ->
         last = serialize(body.copy(recorder = candidate))
-        gzippedSize(last) <= maxGzipBytes
+        fits(last)
     }
     return last
 }
@@ -297,7 +299,8 @@ class PlaybackIssueReportRepository @Inject constructor(
             val adapter = moshi.adapter(PlaybackIssueReportRequestDto::class.java)
             val built = input.toDto(extra)
             val body = built.copy(recorder = built.recorder?.copy(logLines = logLines)).applyViewerChoices(input.viewer)
-            fitToRelay(body) { adapter.toJson(it).toByteArray(Charsets.UTF_8) }
+            val maxJsonBytes = if (IssueReports.danplusBaseUrl != null) IssueReports.DANPLUS_MAX_JSON_BYTES else Int.MAX_VALUE
+            fitToRelay(body, maxJsonBytes = maxJsonBytes) { adapter.toJson(it).toByteArray(Charsets.UTF_8) }
         }
         outbox.deliver(ReportRoute.Playback, "playback", json)
     }

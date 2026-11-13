@@ -1,11 +1,12 @@
 package com.nuvio.tv.core.danexus
 
-import com.nuvio.tv.BuildConfig
-import com.nuvio.tv.core.auth.AuthManager
-import com.nuvio.tv.domain.model.UserProfile
-import io.github.jan.supabase.postgrest.Postgrest
-import kotlinx.coroutines.CancellationException
 import android.os.SystemClock
+import android.content.Context
+import com.nuvio.tv.domain.model.UserProfile
+import com.nuvio.tv.core.profile.ProfileManager
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -37,44 +38,62 @@ internal data class RecommendationUnlock(val unlocked: Boolean, val proof: Strin
 
 @Singleton
 class RecommendationSync @Inject constructor(
-    private val postgrest: Postgrest,
-    private val authManager: AuthManager
+    internal val account: RecommendationAccount,
+    private val profiles: ProfileManager,
+    @ApplicationContext context: Context
 ) {
-    private data class Unlock(val owner: String, val profileId: String, val proof: String, val expiresAt: Long)
+    private data class Unlock(
+        val owner: String,
+        val profileId: String,
+        val profileRevision: Long,
+        val proof: String,
+        val expiresAt: Long
+    )
 
+    private val bindings = context.getSharedPreferences(BINDING_PREFS, Context.MODE_PRIVATE)
     @Volatile private var unlock: Unlock? = null
-    internal val enabled: Boolean get() = BuildConfig.DANPLUS_D12_SYNC_ENABLED
+    internal val changes = MutableStateFlow(0L)
+    internal val operationLock = Mutex()
+    internal val enabled: Boolean get() = account.configured
 
-    internal suspend fun authorize(profile: UserProfile, pin: String) {
-        if (!enabled) return
-        val owner = authManager.currentUserId ?: return
-        val profileId = profile.serverProfileId ?: return
-        unlock = null
-        // This is optional for native profile selection. The remote list remains locked if it fails.
-        try {
-            val result = rpc(owner, profileId, "unlock", buildJsonObject { put("pin", pin) })
-                .decodeAs<RecommendationUnlock>()
-            if (result.unlocked && result.proof != null && owner == authManager.currentUserId) {
-                unlock = Unlock(owner, profileId, result.proof, SystemClock.elapsedRealtime() + 590_000L)
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            // Native profile selection remains available.
+    internal fun profileId(owner: String, local: UserProfile): String? =
+        bindings.getString(bindingKey(owner, local), null)
+
+    internal fun bind(owner: String, local: UserProfile, profileId: String) {
+        check(owner == account.owner)
+        check(bindings.edit().putString(bindingKey(owner, local), profileId).commit())
+        changes.value++
+    }
+
+    internal suspend fun authorize(
+        owner: String,
+        profileId: String,
+        pin: String,
+        revision: Long = profiles.profileSelectionRevision.value
+    ): Boolean {
+        val result = rpc(owner, profileId, "unlock", buildJsonObject { put("pin", pin) })
+            .decodeAs<RecommendationUnlock>()
+        if (result.unlocked && result.proof != null && owner == account.owner && revision == profiles.profileSelectionRevision.value) {
+            unlock = Unlock(owner, profileId, revision, result.proof, SystemClock.elapsedRealtime() + 590_000L)
+            changes.value++
+            return true
         }
+        return false
     }
 
     internal fun clearUnlock() {
+        if (unlock == null) return
         unlock = null
+        changes.value++
     }
 
-    internal fun retainUnlock(profileId: String?) {
-        if (unlock?.profileId != profileId) clearUnlock()
-    }
+    internal fun hasUnlock(owner: String, profileId: String): Boolean = proofFor(owner, profileId) != null
 
-    internal fun hasUnlock(owner: String, profileId: String?): Boolean = unlock?.let {
-        it.owner == owner && it.profileId == profileId && it.expiresAt > SystemClock.elapsedRealtime()
-    } == true
+    private fun proofFor(owner: String, profileId: String): String? = unlock?.takeIf {
+        it.owner == owner && it.profileId == profileId &&
+            it.profileRevision == profiles.profileSelectionRevision.value &&
+            it.expiresAt > SystemClock.elapsedRealtime()
+    }?.proof
 
     internal suspend fun send(owner: String, profileId: String, row: ProfileRecommendation) {
         val recipient = checkNotNull(row.toServerId)
@@ -114,20 +133,33 @@ class RecommendationSync @Inject constructor(
     }
 
     private suspend fun rpc(owner: String, profileId: String, operation: String, payload: JsonObject) =
-        postgrest.rpc("recommendations_v1", buildJsonObject {
-            check(enabled && authManager.currentUserId == owner && authManager.hasLiveSession())
+        account.postgrest.rpc("recommendations_v1", buildJsonObject {
+            check(enabled && account.owner == owner)
             put("p_operation", operation)
             put("p_profile_id", profileId)
             put("p_payload", payload)
-            unlock?.takeIf {
-                it.owner == owner && it.profileId == profileId && it.expiresAt > SystemClock.elapsedRealtime()
-            }?.let { put("p_proof", it.proof) }
+            proofFor(owner, profileId)?.let { put("p_proof", it) }
         })
 
     private fun tmdbPosterPath(url: String): String? =
         TMDB_POSTER.matchEntire(url)?.groupValues?.get(1)
 
-    private companion object {
-        val TMDB_POSTER = Regex("https://image\\.tmdb\\.org/t/p/[a-zA-Z0-9]+(/[a-zA-Z0-9_.-]{1,159})")
+    companion object {
+        private const val BINDING_PREFS = "danplus_indications_bindings"
+        private val TMDB_POSTER = Regex("https://image\\.tmdb\\.org/t/p/[a-zA-Z0-9]+(/[a-zA-Z0-9_.-]{1,159})")
+
+        private fun bindingKey(owner: String, local: UserProfile): String =
+            "${local.id}:$owner:${local.serverProfileId.orEmpty()}"
+
+        internal fun forgetBinding(context: Context, profileId: Int) {
+            val preferences = context.getSharedPreferences(BINDING_PREFS, Context.MODE_PRIVATE)
+            val editor = preferences.edit()
+            preferences.all.keys.filter { it.startsWith("$profileId:") }.forEach(editor::remove)
+            check(editor.commit())
+        }
+
+        internal fun forgetBindings(context: Context) {
+            check(context.getSharedPreferences(BINDING_PREFS, Context.MODE_PRIVATE).edit().clear().commit())
+        }
     }
 }

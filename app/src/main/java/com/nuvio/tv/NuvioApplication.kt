@@ -138,6 +138,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         com.nuvio.tv.core.network.ArcDns.init(this)
         super.onCreate()
         com.nuvio.tv.core.tmdb.TmdbApiKey.load(this)
+        com.nuvio.tv.core.player.thumbnail.SeekrPreviews.load(this)
         com.nuvio.tv.core.util.StartupLatencyTrace.coldOnce("app_injected")
         com.nuvio.tv.data.repository.ArcCrashFile.install(this) { screensaverController.playbackActive.value }
         com.nuvio.tv.data.repository.ArcBuildLog.start(this)

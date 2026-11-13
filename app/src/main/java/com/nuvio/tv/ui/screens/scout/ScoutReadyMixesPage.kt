@@ -204,7 +204,8 @@ internal fun scoutDistinctArt(tiles: List<ScoutReadyTileState>): List<ScoutReady
 internal fun scoutDistinctNames(names: List<String>): List<String> = names.distinctBy { it.trim().lowercase() }
 
 @Composable
-internal fun readyMixName(mix: ScoutReadyMix): String = stringResource(mix.nameRes)
+internal fun readyMixName(mix: ScoutReadyMix, listEmojis: Boolean): String =
+    com.nuvio.tv.core.scout.scoutListTitle(stringResource(mix.nameRes), com.nuvio.tv.core.scout.scoutMixEmoji(mix.id), listEmojis)
 
 @Composable
 private fun readyWhy(mix: ScoutReadyMix): String {
@@ -240,7 +241,8 @@ internal fun ScoutReadyHero(
     focus: (String) -> Modifier,
     onPlay: (String) -> Unit,
     onSave: (String) -> Unit,
-    onAdjust: (String) -> Unit
+    onAdjust: (String) -> Unit,
+    listEmojis: Boolean
 ) {
     val tile = state.focusedTile ?: return
     val mix = tile.mix
@@ -251,7 +253,7 @@ internal fun ScoutReadyHero(
             Text(stringResource(R.string.scout_premix_kind), style = MaterialTheme.typography.titleSmall, color = NuvioTheme.colors.TextSecondary, maxLines = 1)
         }
         Text(
-            text = readyMixName(mix),
+            text = readyMixName(mix, listEmojis),
             style = MaterialTheme.typography.headlineLarge,
             color = NuvioTheme.colors.TextPrimary,
             maxLines = 1,
@@ -321,7 +323,8 @@ internal fun ColumnScope.ScoutReadyRows(
     onTab: (ScoutReadyTab) -> Unit,
     onFocusMix: (String) -> Unit,
     onOpen: (String) -> Unit,
-    onOwn: () -> Unit
+    onOwn: () -> Unit,
+    listEmojis: Boolean
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().height(44.dp).padding(horizontal = ScoutFocusRoom),
@@ -353,7 +356,7 @@ internal fun ColumnScope.ScoutReadyRows(
             items(state.tiles, key = { it.mix.id }) { tile ->
                 ScoutWideTile(
                     picture = tile.art,
-                    title = readyMixName(tile.mix),
+                    title = readyMixName(tile.mix, listEmojis),
                     line = readyTileLine(tile),
                     height = tileHeight,
                     onClick = { onOpen(tile.mix.id) },

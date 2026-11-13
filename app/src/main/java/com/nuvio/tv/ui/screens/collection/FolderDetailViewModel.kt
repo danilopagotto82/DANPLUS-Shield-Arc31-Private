@@ -109,7 +109,8 @@ data class FolderTab(
     val catalogRow: CatalogRow? = null,
     val isLoading: Boolean = true,
     val error: String? = null,
-    val isAllTab: Boolean = false
+    val isAllTab: Boolean = false,
+    val scoutUnfilteredItems: List<MetaPreview>? = null
 )
 
 data class FolderDetailGridFocusState(
@@ -153,6 +154,8 @@ class FolderDetailViewModel @Inject constructor(
     val uiState: StateFlow<FolderDetailUiState> = _uiState.asStateFlow()
 
     private var movieWatchedJob: Job? = null
+    private var scoutWatchFilter = false
+    private var scoutMovieHistory = com.nuvio.tv.core.scout.ScoutWatchedMovies()
     private var enrichFocusJob: Job? = null
     private val enrichedItemIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     private val backgroundMetaPrefetchedIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
@@ -204,6 +207,7 @@ class FolderDetailViewModel @Inject constructor(
         posterOptions.bind(viewModelScope)
         loadFolder()
         observeWatchedStatusCombined()
+        if (scoutSliceId != null) observeScoutVisibility()
         observeTrailerPlaybackFailures()
         viewModelScope.launch {
             mdbListSettingsDataStore.settings.distinctUntilChanged().collect { currentMdbListSettings = it }
@@ -212,19 +216,26 @@ class FolderDetailViewModel @Inject constructor(
 
     private fun observeWatchedStatusCombined() {
         movieWatchedJob = viewModelScope.launch {
-            combine(
+            val scoutHistory = if (scoutSliceId != null) scoutFolders?.watchedMovies else null
+            val movies = combine(
                 watchProgressRepository.observeWatchedMovieIds(),
+                scoutHistory ?: kotlinx.coroutines.flow.flowOf(com.nuvio.tv.core.scout.ScoutWatchedMovies())
+            ) { ids, history -> ids to history }
+            combine(
+                movies,
                 watchedSeriesStateHolder.fullyWatchedSeriesIds,
                 _uiState.map { state -> state.tabs.flatMap { it.catalogRow?.items.orEmpty() } }
                     .distinctUntilChanged()
-            ) { movieWatchedIds, seriesWatchedIds, allItems ->
-                Triple(movieWatchedIds, seriesWatchedIds, allItems)
-            }.collectLatest { (movieWatchedIds, seriesWatchedIds, allItems) ->
+            ) { movieHistory, seriesWatchedIds, allItems ->
+                Triple(movieHistory, seriesWatchedIds, allItems)
+            }.collectLatest { (movieHistory, seriesWatchedIds, allItems) ->
+                val (movieWatchedIds, scoutWatched) = movieHistory
                 val newStatus = mutableMapOf<String, Boolean>()
                 allItems.forEach { item ->
                     val key = com.nuvio.tv.ui.screens.home.homeItemStatusKey(item.id, item.apiType)
                     val isWatched = when (item.apiType) {
-                        "movie" -> item.id in movieWatchedIds
+                        "movie" -> item.id in movieWatchedIds ||
+                            scoutWatched.contains(item.id, item.name, item.releaseInfo, item.imdbId)
                         "series", "tv" -> item.id in seriesWatchedIds
                         else -> false
                     }
@@ -247,8 +258,37 @@ class FolderDetailViewModel @Inject constructor(
         viewModelScope.launch { scoutFolders?.toggleSaved(id) }
     }
 
-    private suspend fun scoutVisible(items: List<MetaPreview>): List<MetaPreview> =
-        if (scoutSliceId != null) scoutFolders?.withoutSeen(items) ?: items else items
+    internal val scoutShowWatched: kotlinx.coroutines.flow.Flow<Boolean>?
+        get() = scoutFolders?.showWatched?.takeIf { scoutSliceId != null }
+
+    internal fun toggleScoutShowWatched() {
+        if (scoutSliceId != null) viewModelScope.launch { scoutFolders?.toggleShowWatched() }
+    }
+
+    private fun observeScoutVisibility() {
+        val scout = scoutFolders ?: return
+        viewModelScope.launch {
+            combine(scout.showWatched, scout.watchedMovies) { show, history -> show to history }
+                .collect { (show, history) ->
+                    scoutWatchFilter = !show
+                    scoutMovieHistory = history
+                    _uiState.update { state ->
+                        state.copy(tabs = state.tabs.map { tab ->
+                            val raw = tab.scoutUnfilteredItems
+                            val row = tab.catalogRow
+                            if (raw == null || row == null) tab else tab.copy(catalogRow = row.copy(items = scoutVisible(raw)))
+                        })
+                    }
+                    rebuildAllTab()
+                    rebuildFollowLayoutState()
+                }
+        }
+    }
+
+    private fun scoutVisible(items: List<MetaPreview>): List<MetaPreview> =
+        if (!scoutWatchFilter) items else items.filterNot { item ->
+            item.apiType == "movie" && scoutMovieHistory.contains(item.id, item.name, item.releaseInfo, item.imdbId)
+        }
 
     private val hasAllTab: Boolean
         get() {
@@ -262,7 +302,12 @@ class FolderDetailViewModel @Inject constructor(
             val collections = collectionsDataStore.collections.first()
             val collection = collections.find { it.id == collectionId }
                 ?: builtInCatalogs.collectionForFolders(collectionId)
-            val folder = collection?.folders?.find { it.id == folderId }
+            val folder = collection?.folders?.find { it.id == folderId }?.let { found ->
+                val scout = scoutFolders
+                if (scout?.sliceId(collectionId, folderId) != null) {
+                    found.copy(title = scout.displayTitle(folderId, found.title))
+                } else found
+            }
 
             if (folder == null || folder.sources.isEmpty()) {
                 _uiState.update {
@@ -297,9 +342,9 @@ class FolderDetailViewModel @Inject constructor(
             val posterCardWidthDp = layoutPreferenceDataStore.posterCardWidthDp.first()
             val posterCardHeightDp = layoutPreferenceDataStore.posterCardHeightDp.first()
             val posterCardCornerRadiusDp = layoutPreferenceDataStore.posterCardCornerRadiusDp.first()
-            val showAll = (collection?.showAllTab ?: true) && folder.sources.size >= 2
-
             val viewMode = collection?.viewMode ?: FolderViewMode.TABBED_GRID
+            val showAll = viewMode != FolderViewMode.SHOWCASE &&
+                (collection?.showAllTab ?: true) && folder.sources.size >= 2
             val useShimmerPlaceholders = viewMode == FolderViewMode.FOLLOW_LAYOUT &&
                 (homeLayout == HomeLayout.MODERN || homeLayout == HomeLayout.CLASSIC)
 
@@ -423,14 +468,14 @@ class FolderDetailViewModel @Inject constructor(
         }
         // Only include real loaded rows (exclude placeholder shimmer rows)
         val loadedRows = sourceTabs.mapNotNull { tab ->
-            tab.catalogRow?.takeIf { !it.isLoading }
+            tab.catalogRow?.takeIf { scoutSliceId != null || !it.isLoading }
         }
 
         if (loadedRows.isEmpty()) return
 
         val currentAllRow = state.tabs.getOrNull(0)?.catalogRow
 
-        if (anyLoading && currentAllRow != null && currentAllRow.items.isNotEmpty()) {
+        if (scoutSliceId == null && anyLoading && currentAllRow != null && currentAllRow.items.isNotEmpty()) {
             _uiState.update { s ->
                 val tabs = s.tabs.toMutableList()
                 tabs[0] = tabs[0].copy(
@@ -448,7 +493,7 @@ class FolderDetailViewModel @Inject constructor(
         val existingItems = currentAllRow?.items.orEmpty()
         val existingIds = existingItems.mapTo(mutableSetOf()) { it.id }
         val newItems = mergedItems.filter { it.id !in existingIds }
-        val finalItems = existingItems + newItems
+        val finalItems = if (scoutSliceId != null) mergedItems else existingItems + newItems
 
         val templateRow = loadedRows.first()
         val hasMore = sourceTabs.any { tab -> tab.catalogRow?.hasMore == true }
@@ -1069,6 +1114,17 @@ class FolderDetailViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         val posterPattern = layoutPreferenceDataStore.customPosterUrlPattern.first()
                         val enabledScreens = layoutPreferenceDataStore.customPosterEnabledScreens.first()
+                        val isScout = scoutSliceId != null
+                        val pageItems = if (isScout) {
+                            val visible = result.data.filteredForRelease(
+                                hideUnreleased = _uiState.value.hideUnreleasedContent,
+                                treatMissingDateAsUnreleased = true
+                            )
+                            scoutFolders?.withoutSeen(visible.items, applyWatchFilter = false) ?: visible.items
+                        } else null
+                        val pattern = com.nuvio.tv.core.poster.patternForScreen(
+                            posterPattern, com.nuvio.tv.core.poster.CustomPosterScreen.COLLECTIONS, enabledScreens
+                        )
                         _uiState.update { s ->
                             val tabs = s.tabs.toMutableList()
                             val currentRow = tabs.getOrNull(tabIndex)?.catalogRow
@@ -1076,18 +1132,27 @@ class FolderDetailViewModel @Inject constructor(
                                 hideUnreleased = s.hideUnreleasedContent,
                                 treatMissingDateAsUnreleased = true
                             )
+                            val incoming = pageItems ?: filteredData.items
                             val row = if (append && currentRow != null) {
-                                val existingIds = currentRow.items.map { "${it.apiType}:${it.id}" }.toHashSet()
-                                val newItems = filteredData.items.filter { "${it.apiType}:${it.id}" !in existingIds }
+                                val existing = tabs[tabIndex].scoutUnfilteredItems ?: currentRow.items
+                                val existingIds = existing.map { "${it.apiType}:${it.id}" }.toHashSet()
+                                val newItems = incoming.filter { "${it.apiType}:${it.id}" !in existingIds }
                                 filteredData.copy(
-                                    items = currentRow.items + newItems,
-                                    hasMore = filteredData.hasMore && newItems.isNotEmpty(),
+                                    items = existing + newItems,
+                                    hasMore = filteredData.hasMore && (isScout || newItems.isNotEmpty()),
                                     isLoading = false
                                 )
                             } else {
-                                filteredData
+                                filteredData.copy(items = incoming)
                             }
-                            if (tabIndex < tabs.size) tabs[tabIndex] = tabs[tabIndex].copy(catalogRow = row.copy(items = scoutVisible(row.items).withCustomPosterUrls(com.nuvio.tv.core.poster.patternForScreen(posterPattern, com.nuvio.tv.core.poster.CustomPosterScreen.COLLECTIONS, enabledScreens))), isLoading = false)
+                            if (tabIndex < tabs.size) {
+                                val withArt = row.items.withCustomPosterUrls(pattern)
+                                tabs[tabIndex] = tabs[tabIndex].copy(
+                                    catalogRow = row.copy(items = if (isScout) scoutVisible(withArt) else withArt),
+                                    isLoading = false,
+                                    scoutUnfilteredItems = withArt.takeIf { isScout }
+                                )
+                            }
                             s.copy(tabs = tabs)
                         }
                         rebuildAllTab()
@@ -1253,6 +1318,7 @@ class FolderDetailViewModel @Inject constructor(
     }
 
     fun onItemFocused(item: MetaPreview) {
+        enrichFocusJob?.cancel()
         // Clear enriching for previous item immediately.
         if (_enrichingItemId.value != null && _enrichingItemId.value != item.id) {
             _enrichingItemId.value = null
@@ -1268,14 +1334,12 @@ class FolderDetailViewModel @Inject constructor(
             }
             return
         }
-
-
-        enrichFocusJob?.cancel()
         enrichFocusJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             kotlinx.coroutines.delay(350)
 
             // Background-prefetch meta from addons so detail screen opens instantly.
-            if (backgroundMetaPrefetchedIds.add(item.id)) {
+            val previewOnly = _uiState.value.viewMode == FolderViewMode.PREVIEW_GRID
+            if (!previewOnly && backgroundMetaPrefetchedIds.add(item.id)) {
                 viewModelScope.launch {
                     metaRepository.getMetaFromAllAddons(
                         type = item.apiType,
@@ -1287,7 +1351,7 @@ class FolderDetailViewModel @Inject constructor(
             val tmdbSettings = tmdbSettingsDataStore.settings.first()
             val homeLayout = _uiState.value.homeLayout
             val tmdbEnabled = tmdbSettings.enabled &&
-                (homeLayout != HomeLayout.MODERN || tmdbSettings.modernHomeEnabled)
+                (previewOnly || homeLayout != HomeLayout.MODERN || tmdbSettings.modernHomeEnabled)
             val externalMetaEnabled = layoutPreferenceDataStore.preferExternalMetaAddonDetail.first()
 
             // Only signal enriching if at least one source is active and we're
@@ -1375,7 +1439,7 @@ class FolderDetailViewModel @Inject constructor(
             // If the trailer pipeline already ran for this item without a hit and
             // enrichment just brought localized YT ids, retry now using them as
             // fallback. Mirrors the behaviour in HomeViewModelPresentationPipeline.
-            if (enrichment != null) {
+            if (!previewOnly && enrichment != null) {
                 val ytFallback = enrichment.trailers.mapNotNull { it.ytId }.firstOrNull()
                 if (ytFallback != null && !_trailerPreviewUrls.value.containsKey(item.id)) {
                     trailerPreviewNegativeCache.remove(item.id)
@@ -1593,7 +1657,12 @@ class FolderDetailViewModel @Inject constructor(
                 val row = tab.catalogRow ?: return@map tab
                 val items = replaceEveryCopy(row.items, itemId, transform) ?: return@map tab
                 changed = true
-                tab.copy(catalogRow = row.copy(items = items))
+                tab.copy(
+                    catalogRow = row.copy(items = items),
+                    scoutUnfilteredItems = tab.scoutUnfilteredItems?.let { raw ->
+                        replaceEveryCopy(raw, itemId, transform) ?: raw
+                    }
+                )
             }
             if (changed) state.copy(tabs = updatedTabs) else state
         }

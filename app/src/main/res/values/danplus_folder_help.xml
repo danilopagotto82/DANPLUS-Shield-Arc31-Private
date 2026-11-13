@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dan_folder_preview_grid">Grid with preview</string>
+    <string name="dan_folder_showcase">Collection showcase</string>
+    <string name="dan_folder_watch">Watch</string>
+    <string name="dan_folder_previous">Previous featured title</string>
+    <string name="dan_folder_next">Next featured title</string>
+    <string name="dan_folder_slide">%1$d / %2$d</string>
+    <string name="dan_folder_minutes">%1$d min</string>
+    <string name="dan_settings_help">Help with %1$s</string>
+    <string name="dan_help_sources_title">Source selection and recovery</string>
+    <string name="dan_help_sources">Source selection decides how the first stream is picked. Choose Manual to pick it yourself. During playback, DAN+ can try a compatible source if the current one fails or cannot start. If several sources stall, test the network and try a lighter version of the title.</string>
+    <string name="dan_help_seek_thumbnails">These images show where you will land as you seek. DAN+ uses Seekr when configured and a matching image is available, then falls back to built-in previews. If playback starts slowly on your device, leave thumbnail preparation off or disable thumbnails.</string>
+    <string name="dan_help_ui_diagnostics">Use this report if menus are slow or look clipped. It shows the interface size, scale and how long frames take to draw. For pauses during playback, use Device assessment in Advanced settings.</string>
+    <string name="dan_help_custom_buffer">Buffer is video loaded ahead of time. Increase it only if playback pauses to load and the device has memory to spare. For a starting point, use Device assessment in Advanced settings. If the app freezes or closes during playback, try a smaller buffer or a lighter source.</string>
+    <string name="dan_help_buffer_profiles">Fast start: choose this if your connection is steady and the title plays smoothly.\n\nBalanced: start here for everyday viewing or when the test has too little data.\n\nStall resistant: try this if the network varies and playback often pauses to load. It prepares more video and may take longer to start. DAN+ caps the buffer for your device. If pauses continue, try a lower-bitrate source.\n\nChoose a profile, then use Apply. You can undo the change on this screen.</string>
+    <string name="dan_buffer_variable">Suggested for this test: Stall resistant. The connection varied during the test.</string>
+    <string name="dan_buffer_stable">Suggested for this test: Balanced. The connection stayed steady during the test.</string>
+    <string name="dan_buffer_no_measurement">The test collected too little data to recommend a profile. If you want to try one, start with Balanced. To keep your current settings, leave without applying.</string>
+</resources>

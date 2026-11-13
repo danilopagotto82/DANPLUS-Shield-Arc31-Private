@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dan_folder_preview_grid">Grade com prévia lateral</string>
+    <string name="dan_folder_showcase">Vitrine da coleção</string>
+    <string name="dan_folder_watch">Assistir</string>
+    <string name="dan_folder_previous">Destaque anterior</string>
+    <string name="dan_folder_next">Próximo destaque</string>
+    <string name="dan_folder_slide">%1$d / %2$d</string>
+    <string name="dan_folder_minutes">%1$d min</string>
+    <string name="dan_settings_help">Ajuda sobre %1$s</string>
+    <string name="dan_help_sources_title">Seleção e troca de fontes</string>
+    <string name="dan_help_sources">A seleção de fontes decide como escolher a primeira. Use Manual para escolher por conta própria. Durante a reprodução, o DAN+ pode tentar outra fonte compatível se a atual falhar ou não iniciar. Se várias fontes travarem, teste a rede e experimente uma versão mais leve do título.</string>
+    <string name="dan_help_seek_thumbnails">As imagens mostram em que cena você vai cair ao avançar ou voltar. O DAN+ usa o Seekr quando está configurado e tem uma imagem para aquele ponto. Nos demais casos, usa a prévia do próprio player. Se o vídeo demorar a começar em um aparelho mais simples, desative a preparação de miniaturas ou as próprias miniaturas.</string>
+    <string name="dan_help_ui_diagnostics">Use este relatório quando os menus estiverem lentos ou cortados. Ele mostra o tamanho da interface, a escala e o tempo de desenho dos quadros. Para pausas durante o filme, use a Avaliação do dispositivo em Avançado.</string>
+    <string name="dan_help_custom_buffer">Buffer é o trecho do vídeo carregado de antemão. Aumente só se o vídeo parar para carregar e o aparelho tiver memória livre. Para ter um ponto de partida, use a Avaliação do dispositivo em Avançado. Se o aplicativo congelar ou fechar durante a reprodução, experimente um buffer menor ou uma fonte mais leve.</string>
+    <string name="dan_help_buffer_profiles">Início rápido: escolha se a rede é estável e o vídeo já roda bem.\n\nEquilibrado: comece aqui para uso normal ou quando o teste tiver poucos dados.\n\nResistente a travamentos: experimente se a rede oscila e o filme para para carregar. Ele prepara mais vídeo e pode demorar mais para começar. O DAN+ respeita o limite de memória do aparelho. Se continuar parando, experimente uma fonte mais leve.\n\nEscolha um perfil e selecione Aplicar. Você pode desfazer a mudança nesta tela.</string>
+    <string name="dan_buffer_variable">Sugestão para este teste: Resistente a travamentos. A conexão oscilou durante a avaliação.</string>
+    <string name="dan_buffer_stable">Sugestão para este teste: Equilibrado. A conexão ficou estável durante a avaliação.</string>
+    <string name="dan_buffer_no_measurement">O teste coletou poucos dados para recomendar um perfil. Se quiser experimentar, comece por Equilibrado. Para manter seus ajustes atuais, saia sem aplicar.</string>
+</resources>
