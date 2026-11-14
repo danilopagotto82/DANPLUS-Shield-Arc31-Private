@@ -85,7 +85,7 @@ fun DanexusRecommendDialog(
         if (!viewModel.remoteEnabled) {
             Text(stringResource(R.string.d12_sync_unavailable), color = colors.TextSecondary)
         } else if (active == null || locked) {
-            Text(stringResource(if (locked) R.string.d12_unlock_hint else R.string.d12_setup_hint), color = colors.TextSecondary)
+            Text(stringResource(if (locked) R.string.d12_unlock_hint else if (email == null) R.string.d12_setup_hint else R.string.d12_profile_sync_hint), color = colors.TextSecondary)
         }
         if (active != null && !locked && recipients.isEmpty()) {
             Text(stringResource(R.string.d12_no_profiles), color = colors.TextSecondary)
@@ -179,6 +179,7 @@ fun DanexusRecommendationsScreen(
     val active by viewModel.viewer.collectAsStateWithLifecycle()
     val profiles by viewModel.recommendationProfiles.collectAsStateWithLifecycle()
     val locked by viewModel.locked.collectAsStateWithLifecycle()
+    val email by viewModel.accountEmail.collectAsStateWithLifecycle()
     val records by viewModel.items.collectAsState()
     val syncFailed by viewModel.syncFailed.collectAsStateWithLifecycle()
     val pictures by viewModel.profilePictures.collectAsStateWithLifecycle()
@@ -218,7 +219,7 @@ fun DanexusRecommendationsScreen(
                 if (!viewModel.remoteEnabled) {
                     Text(stringResource(R.string.d12_sync_unavailable), color = colors.TextSecondary)
                 } else if (active == null || locked) {
-                    Text(stringResource(if (locked) R.string.d12_unlock_hint else R.string.d12_setup_hint), color = colors.TextSecondary)
+                    Text(stringResource(if (locked) R.string.d12_unlock_hint else if (email == null) R.string.d12_setup_hint else R.string.d12_profile_sync_hint), color = colors.TextSecondary)
                 }
                 if (syncFailed && !locked) {
                     Text(stringResource(R.string.d12_sync_retry), color = colors.TextSecondary)
@@ -236,7 +237,7 @@ fun DanexusRecommendationsScreen(
                     Spacer(Modifier.width(7.dp))
                     Text(stringResource(R.string.d12_find_to_send))
                 }
-                if (viewModel.remoteEnabled) Button(onClick = { accountOpen = true }, colors = indicationButtonColors()) {
+                if (viewModel.remoteEnabled && (email == null || active == null || locked)) Button(onClick = { accountOpen = true }, colors = indicationButtonColors()) {
                     Text(stringResource(if (locked) R.string.d12_unlock_action else R.string.d12_account_action))
                 }
             }

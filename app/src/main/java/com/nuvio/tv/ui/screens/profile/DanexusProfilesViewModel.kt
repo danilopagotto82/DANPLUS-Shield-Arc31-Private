@@ -12,6 +12,7 @@ import com.nuvio.tv.core.danexus.RemoteRecommendation
 import com.nuvio.tv.core.party.PartyAvatars
 import com.nuvio.tv.core.profile.LocalProfileAvatars
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sync.ProfileSyncService
 import com.nuvio.tv.data.local.WatchedItemsPreferences
 import com.nuvio.tv.data.remote.supabase.AvatarRepository
 import com.nuvio.tv.data.repository.MemberAccessRepository
@@ -51,6 +52,7 @@ class DanexusProfilesViewModel @Inject constructor(
     val profileManager: ProfileManager,
     private val watched: WatchedItemsPreferences,
     private val sync: RecommendationSync,
+    private val profileSync: ProfileSyncService,
     localAvatars: LocalProfileAvatars,
     avatarRepository: AvatarRepository,
     memberAccess: MemberAccessRepository,
@@ -98,7 +100,8 @@ class DanexusProfilesViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
     private var syncJob: Job? = null
     private val syncRequests = Channel<Unit>(Channel.CONFLATED)
-    private var loadedOwner: String? = null
+    private var loadedUser: String? = null
+    private var syncOwner: String? = null
     private val _syncFailed = MutableStateFlow(false)
     internal val syncFailed = _syncFailed.asStateFlow()
 
@@ -106,8 +109,9 @@ class DanexusProfilesViewModel @Inject constructor(
         viewModelScope.launch {
             combine(account.changes, profileManager.profileSelectionRevision) { owner, _ -> owner }
                 .collect { owner ->
-                    if (loadedOwner != owner) {
-                        loadedOwner = owner
+                    if (loadedUser != owner) {
+                        loadedUser = owner
+                        syncOwner = null
                         remoteProfiles.value = emptyList()
                         _syncFailed.value = false
                     }
@@ -124,52 +128,6 @@ class DanexusProfilesViewModel @Inject constructor(
     }
 
     internal fun clearMessage() { _message.value = null }
-
-    internal fun login(email: String, password: String, create: Boolean) = accountAction {
-        if (!account.signIn(email.trim(), password, create)) {
-            _message.value = R.string.d12_confirm_email
-        } else {
-            refreshProfiles(checkNotNull(account.owner))
-        }
-    }
-
-    internal fun signOut() = accountAction {
-        account.signOut()
-        sync.clearUnlock()
-    }
-
-    internal fun loadProfiles() = accountAction {
-        account.owner?.let { refreshProfiles(it) }
-    }
-
-    internal fun bindProfile(local: UserProfile, remote: RecommendationProfile, pin: String) = accountAction {
-        val owner = checkNotNull(account.owner)
-        val revision = profileManager.profileSelectionRevision.value
-        check(local == profileManager.activeProfile)
-        refreshProfiles(owner)
-        val selected = checkNotNull(remoteProfiles.value.firstOrNull { it.id == remote.id })
-        if (selected.pinEnabled && !sync.authorize(owner, selected.id, pin, revision)) {
-            _message.value = R.string.d12_wrong_pin
-        } else {
-            check(local == profileManager.activeProfile && selected in remoteProfiles.value &&
-                revision == profileManager.profileSelectionRevision.value && localProfileFor(selected)?.id.let { it == null || it == local.id })
-            withContext(Dispatchers.IO) { sync.bind(owner, local, selected.id) }
-            syncRequests.trySend(Unit)
-        }
-    }
-
-    internal fun createProfile(local: UserProfile, pin: String) = accountAction {
-        val owner = checkNotNull(account.owner)
-        val revision = profileManager.profileSelectionRevision.value
-        check(local == profileManager.activeProfile)
-        val color = local.avatarColorHex.takeIf { it.matches(Regex("#[a-fA-F0-9]{6}")) } ?: "#1E88E5"
-        val id = account.createProfile(owner, local.name, color, pin.ifBlank { null })
-        refreshProfiles(owner)
-        check(local == profileManager.activeProfile && revision == profileManager.profileSelectionRevision.value)
-        if (pin.isNotBlank()) check(sync.authorize(owner, id, pin, revision))
-        withContext(Dispatchers.IO) { sync.bind(owner, local, id) }
-        syncRequests.trySend(Unit)
-    }
 
     internal fun unlockProfile(pin: String) = accountAction {
         val owner = checkNotNull(account.owner)
@@ -201,9 +159,16 @@ class DanexusProfilesViewModel @Inject constructor(
     }
 
     private suspend fun refreshProfiles(owner: String) {
+        val effectiveOwner = account.resolveOwner(owner)
         val profiles = account.profiles(owner)
         if (owner != account.owner) return
-        loadedOwner = owner
+        val local = profileManager.activeProfile
+        if (local != null && profiles.any { it.index == local.id } && profiles.none { it.id == local.serverProfileId }) {
+            profileSync.pullFromRemote(force = true).getOrThrow()
+            if (owner != account.owner) return
+        }
+        loadedUser = owner
+        syncOwner = effectiveOwner
         remoteProfiles.value = profiles
         refresh()
     }
@@ -343,9 +308,9 @@ class DanexusProfilesViewModel @Inject constructor(
         canUseProfile(owner, profile) && row in items.value && (row.fromServerId == profile.id || row.toServerId == profile.id)
 
     private fun currentViewer(owner: String): RecommendationProfile? {
-        if (owner != loadedOwner) return null
+        if (owner != loadedUser || syncOwner == null) return null
         val local = profileManager.activeProfile ?: return null
-        val id = sync.profileId(owner, local) ?: return null
+        val id = local.serverProfileId ?: return null
         return remoteProfiles.value.firstOrNull { it.id == id }
     }
 
@@ -356,8 +321,8 @@ class DanexusProfilesViewModel @Inject constructor(
         profiles[row.from]?.id == row.fromServerId && profiles[row.to]?.id == row.toServerId
 
     internal fun localProfileFor(profile: RecommendationProfile): UserProfile? {
-        val owner = account.owner ?: return null
-        return profileManager.profiles.value.firstOrNull { sync.profileId(owner, it) == profile.id }
+        if (account.owner == null) return null
+        return profileManager.profiles.value.firstOrNull { it.serverProfileId == profile.id }
     }
 
     private fun RemoteRecommendation.toLocal(viewerId: String, profiles: Map<String, RecommendationProfile>): ProfileRecommendation? {
@@ -372,5 +337,5 @@ class DanexusProfilesViewModel @Inject constructor(
         )
     }
 
-    private fun cacheOwner(owner: String) = "d12:$owner"
+    private fun cacheOwner(owner: String) = "nuvio-indications:${checkNotNull(syncOwner.takeIf { loadedUser == owner })}"
 }

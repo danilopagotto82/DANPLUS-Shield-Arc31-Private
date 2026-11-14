@@ -26,16 +26,22 @@ internal fun pauseDirectors(
     credited: List<MetaCastMember>,
     cast: List<MetaCastMember>
 ): List<MetaCastMember> {
-    val photos = cast.associateBy { creditName(it.name) } + credited.associateBy { creditName(it.name) }
+    val details = (cast + credited).associateBy { creditName(it.name) }
     return (names + credited.map { it.name })
         .filter(String::isNotBlank)
         .distinctBy(::creditName)
-        .take(3)
         .map { name ->
-            val credit = photos[creditName(name)]
+            val credit = details[creditName(name)]
             MetaCastMember(name.trim(), photo = credit?.photo, tmdbId = credit?.tmdbId)
         }
+        .distinctBy { it.tmdbId ?: creditName(it.name) }
+        .take(3)
 }
 
-internal fun pauseActors(cast: List<MetaCastMember>): List<MetaCastMember> =
-    cast.filter { it.name.isNotBlank() }.distinctBy { creditName(it.name) }.take(8)
+internal fun pauseActors(cast: List<MetaCastMember>, directors: List<MetaCastMember>): List<MetaCastMember> {
+    val directorIds = directors.mapNotNull { it.tmdbId }.toSet()
+    val directorNames = directors.map { creditName(it.name) }.toSet()
+    return cast.filter { member ->
+        member.name.isNotBlank() && member.tmdbId !in directorIds && creditName(member.name) !in directorNames
+    }.distinctBy { it.tmdbId ?: creditName(it.name) }.take(8)
+}

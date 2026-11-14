@@ -1,10 +1,9 @@
 package com.nuvio.tv.core.danexus
 
-import android.os.SystemClock
 import android.content.Context
-import com.nuvio.tv.domain.model.UserProfile
+import android.os.SystemClock
 import com.nuvio.tv.core.profile.ProfileManager
-import dagger.hilt.android.qualifiers.ApplicationContext
+
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.SerialName
@@ -39,8 +38,7 @@ internal data class RecommendationUnlock(val unlocked: Boolean, val proof: Strin
 @Singleton
 class RecommendationSync @Inject constructor(
     internal val account: RecommendationAccount,
-    private val profiles: ProfileManager,
-    @ApplicationContext context: Context
+    private val profiles: ProfileManager
 ) {
     private data class Unlock(
         val owner: String,
@@ -50,20 +48,10 @@ class RecommendationSync @Inject constructor(
         val expiresAt: Long
     )
 
-    private val bindings = context.getSharedPreferences(BINDING_PREFS, Context.MODE_PRIVATE)
     @Volatile private var unlock: Unlock? = null
     internal val changes = MutableStateFlow(0L)
     internal val operationLock = Mutex()
     internal val enabled: Boolean get() = account.configured
-
-    internal fun profileId(owner: String, local: UserProfile): String? =
-        bindings.getString(bindingKey(owner, local), null)
-
-    internal fun bind(owner: String, local: UserProfile, profileId: String) {
-        check(owner == account.owner)
-        check(bindings.edit().putString(bindingKey(owner, local), profileId).commit())
-        changes.value++
-    }
 
     internal suspend fun authorize(
         owner: String,
@@ -71,8 +59,7 @@ class RecommendationSync @Inject constructor(
         pin: String,
         revision: Long = profiles.profileSelectionRevision.value
     ): Boolean {
-        val result = rpc(owner, profileId, "unlock", buildJsonObject { put("pin", pin) })
-            .decodeAs<RecommendationUnlock>()
+        val result = account.decode<RecommendationUnlock>(rpc(owner, profileId, "unlock", buildJsonObject { put("pin", pin) }))
         if (result.unlocked && result.proof != null && owner == account.owner && revision == profiles.profileSelectionRevision.value) {
             unlock = Unlock(owner, profileId, revision, result.proof, SystemClock.elapsedRealtime() + 590_000L)
             changes.value++
@@ -114,13 +101,13 @@ class RecommendationSync @Inject constructor(
         val rows = mutableListOf<RemoteRecommendation>()
         var cursor: RemoteRecommendation? = null
         repeat(12) {
-            val page = rpc(owner, profileId, "list", buildJsonObject {
+            val page = account.decode<List<RemoteRecommendation>>(rpc(owner, profileId, "list", buildJsonObject {
                 put("box", if (sent) "sent" else "received")
                 cursor?.let {
                     put("cursor_id", it.id)
                     put("cursor_time", it.createdAt)
                 }
-            }).decodeList<RemoteRecommendation>()
+            }))
             rows.addAll(page)
             if (page.size < 50) return rows
             cursor = page.last()
@@ -133,33 +120,24 @@ class RecommendationSync @Inject constructor(
     }
 
     private suspend fun rpc(owner: String, profileId: String, operation: String, payload: JsonObject) =
-        account.postgrest.rpc("recommendations_v1", buildJsonObject {
-            check(enabled && account.owner == owner)
-            put("p_operation", operation)
-            put("p_profile_id", profileId)
-            put("p_payload", payload)
-            proofFor(owner, profileId)?.let { put("p_proof", it) }
-        })
+        account.request(owner, operation, profileId, payload, proofFor(owner, profileId))
 
     private fun tmdbPosterPath(url: String): String? =
         TMDB_POSTER.matchEntire(url)?.groupValues?.get(1)
 
     companion object {
-        private const val BINDING_PREFS = "danplus_indications_bindings"
+        private const val LEGACY_BINDING_PREFS = "danplus_indications_bindings"
         private val TMDB_POSTER = Regex("https://image\\.tmdb\\.org/t/p/[a-zA-Z0-9]+(/[a-zA-Z0-9_.-]{1,159})")
 
-        private fun bindingKey(owner: String, local: UserProfile): String =
-            "${local.id}:$owner:${local.serverProfileId.orEmpty()}"
-
         internal fun forgetBinding(context: Context, profileId: Int) {
-            val preferences = context.getSharedPreferences(BINDING_PREFS, Context.MODE_PRIVATE)
+            val preferences = context.getSharedPreferences(LEGACY_BINDING_PREFS, Context.MODE_PRIVATE)
             val editor = preferences.edit()
             preferences.all.keys.filter { it.startsWith("$profileId:") }.forEach(editor::remove)
             check(editor.commit())
         }
 
         internal fun forgetBindings(context: Context) {
-            check(context.getSharedPreferences(BINDING_PREFS, Context.MODE_PRIVATE).edit().clear().commit())
+            check(context.getSharedPreferences(LEGACY_BINDING_PREFS, Context.MODE_PRIVATE).edit().clear().commit())
         }
     }
 }

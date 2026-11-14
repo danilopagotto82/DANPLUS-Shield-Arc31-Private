@@ -20,4 +20,16 @@ class PauseCreditsTest {
 
         assertEquals(listOf(actor.copy(character = "Personagem")), mergePauseCast(listOf(actor), listOf(enriched)))
     }
+
+    @Test
+    fun directorListedInCastAppearsOnceAndOtherActorsRemain() {
+        val director = MetaCastMember("Director Name", tmdbId = 10)
+        val alternateCredit = director.copy(name = "Alternate Credit", character = "Cameo")
+        val actor = MetaCastMember("Actor Name", tmdbId = 20)
+        val cast = listOf(alternateCredit, actor, actor.copy(name = "Actor Alias"))
+
+        val direction = pauseDirectors(listOf(director.name), listOf(director, alternateCredit), cast)
+        assertEquals(listOf(director), direction)
+        assertEquals(listOf(actor), pauseActors(cast, direction))
+    }
 }

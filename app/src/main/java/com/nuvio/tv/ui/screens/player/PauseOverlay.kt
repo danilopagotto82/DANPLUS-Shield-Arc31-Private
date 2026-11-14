@@ -1,6 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
-import android.view.KeyEvent
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,7 +17,6 @@ import com.nuvio.tv.ui.util.localizedGenreLabel
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,9 +42,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -59,7 +54,6 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import coil3.request.crossfade
 import androidx.compose.ui.platform.LocalContext
 import com.nuvio.tv.domain.model.MetaCastMember
 import android.text.format.DateFormat
@@ -69,12 +63,6 @@ import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.util.contentTextDirection
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
-
-internal val pausePeopleKeys = setOf(
-    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT,
-    KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
-    KeyEvent.KEYCODE_NUMPAD_ENTER
-)
 
 @Composable
 fun PauseOverlay(
@@ -95,15 +83,12 @@ fun PauseOverlay(
     directors: List<String>,
     directorMembers: List<MetaCastMember>,
     peopleFocusRequester: FocusRequester,
-    selectedPerson: MetaCastMember?,
-    onPersonSelected: (MetaCastMember?) -> Unit,
     onPeopleFocus: (Boolean) -> Unit,
+    onOpenPerson: (Int, String, Boolean) -> Unit,
     remainingMinutes: Long?,
     modifier: Modifier = Modifier,
     showClock: Boolean = true
 ) {
-    var returnToPeople by remember { mutableStateOf(false) }
-
     PlayerOverlayScaffold(
         visible = visible,
         onDismiss = onClose,
@@ -135,40 +120,26 @@ fun PauseOverlay(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.Bottom
             ) {
-                if (selectedPerson != null) {
-                    CastDetailView(
-                        member = selectedPerson,
-                        onFocus = onPeopleFocus,
-                        onBack = { onPersonSelected(null) }
-                    )
-                } else {
-                    PauseMetadataView(
-                        title = title,
-                        logo = logo,
-                        poster = poster,
-                        episodeTitle = episodeTitle,
-                        season = season,
-                        episode = episode,
-                        year = year,
-                        type = type,
-                        genres = genres,
-                        imdbRating = imdbRating,
-                        description = description,
-                        cast = cast,
-                        directors = directors,
-                        directorMembers = directorMembers,
-                        remainingMinutes = remainingMinutes,
-                        peopleFocusRequester = peopleFocusRequester,
-                        onPeopleFocus = onPeopleFocus,
-                        onCastSelected = { returnToPeople = true; onPersonSelected(it) }
-                    )
-                    LaunchedEffect(returnToPeople) {
-                        if (returnToPeople) {
-                            runCatching { peopleFocusRequester.requestFocus() }
-                            returnToPeople = false
-                        }
-                    }
-                }
+                PauseMetadataView(
+                    title = title,
+                    logo = logo,
+                    poster = poster,
+                    episodeTitle = episodeTitle,
+                    season = season,
+                    episode = episode,
+                    year = year,
+                    type = type,
+                    genres = genres,
+                    imdbRating = imdbRating,
+                    description = description,
+                    cast = cast,
+                    directors = directors,
+                    directorMembers = directorMembers,
+                    remainingMinutes = remainingMinutes,
+                    peopleFocusRequester = peopleFocusRequester,
+                    onPeopleFocus = onPeopleFocus,
+                    onOpenPerson = onOpenPerson
+                )
             }
         }
     }
@@ -225,10 +196,10 @@ private fun PauseMetadataView(
     remainingMinutes: Long?,
     peopleFocusRequester: FocusRequester,
     onPeopleFocus: (Boolean) -> Unit,
-    onCastSelected: (MetaCastMember) -> Unit
+    onOpenPerson: (Int, String, Boolean) -> Unit
 ) {
     val direction = remember(directors, directorMembers, cast) { pauseDirectors(directors, directorMembers, cast) }
-    val actors = remember(cast) { pauseActors(cast) }
+    val actors = remember(cast, direction) { pauseActors(cast, direction) }
     val context = LocalContext.current
     val genreLine = remember(context, genres) {
         genres.filter(String::isNotBlank).take(2).joinToString(" • ") { localizedGenreLabel(context, it) }
@@ -301,7 +272,7 @@ private fun PauseMetadataView(
             }
             if (direction.isNotEmpty() || actors.isNotEmpty()) {
                 LazyRow(
-                    modifier = Modifier.fillMaxWidth().onFocusChanged { onPeopleFocus(it.hasFocus) },
+                    modifier = Modifier.fillMaxWidth().onFocusChanged { onPeopleFocus(it.hasFocus) }.focusGroup(),
                     contentPadding = PaddingValues(horizontal = 3.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -311,10 +282,10 @@ private fun PauseMetadataView(
                             PauseCreditCard(
                                 member = person,
                                 group = stringResource(R.string.pause_direction_label),
-                                subtitle = stringResource(R.string.cast_role_director),
+                                subtitle = null,
                                 compact = compact,
                                 modifier = if (index == 0) Modifier.focusRequester(peopleFocusRequester) else Modifier,
-                                onClick = { onCastSelected(person) }
+                                onClick = { person.tmdbId?.let { onOpenPerson(it, person.name, true) } }
                             )
                         }
                     }
@@ -326,7 +297,7 @@ private fun PauseMetadataView(
                             subtitle = person.character?.takeIf(String::isNotBlank),
                             compact = compact,
                             modifier = if (index == 0 && direction.isEmpty()) Modifier.focusRequester(peopleFocusRequester) else Modifier,
-                            onClick = { onCastSelected(person) }
+                            onClick = { person.tmdbId?.let { onOpenPerson(it, person.name, false) } }
                         )
                     }
                 }
@@ -428,86 +399,6 @@ private fun PauseArtwork(url: String?, modifier: Modifier, portrait: Boolean) {
                 contentScale = ContentScale.Crop,
                 alignment = if (portrait) Alignment.TopCenter else Alignment.Center
             )
-        }
-    }
-}
-
-@Composable
-private fun CastDetailView(
-    member: MetaCastMember,
-    onFocus: (Boolean) -> Unit,
-    onBack: () -> Unit
-) {
-    val backFocus = remember { FocusRequester() }
-    LaunchedEffect(member) { runCatching { backFocus.requestFocus() } }
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(backFocus)
-                .onFocusChanged { onFocus(it.hasFocus) }
-                .clickable(onClick = onBack)
-                .semantics { role = Role.Button }
-                .padding(bottom = 28.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = null,
-                tint = NuvioTheme.colors.TextSecondary,
-                modifier = Modifier.size(NuvioTheme.spacing.xl)
-            )
-            Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
-            Text(
-                text = stringResource(R.string.pause_back_to_details),
-                style = MaterialTheme.typography.bodyMedium,
-                color = NuvioTheme.colors.TextSecondary
-            )
-        }
-
-        Row(
-            verticalAlignment = Alignment.Top
-        ) {
-            if (!member.photo.isNullOrBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(member.photo)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = member.name,
-                    modifier = Modifier
-                        .size(width = 160.dp, height = 240.dp)
-                        .clip(RoundedCornerShape(NuvioTheme.radii.xl)),
-                    contentScale = ContentScale.Crop
-                )
-
-                Spacer(modifier = Modifier.width(28.dp))
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = member.name,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                if (!member.character.isNullOrBlank()) {
-                    Text(
-                        text = stringResource(R.string.pause_as_character, member.character ?: ""),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = NuvioTheme.colors.TextSecondary,
-                        modifier = Modifier.padding(top = NuvioTheme.spacing.sm),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
         }
     }
 }

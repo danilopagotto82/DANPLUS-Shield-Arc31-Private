@@ -1,30 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="d12_account_action">DAN+ account</string>
+    <string name="d12_account_action">Nuvio account</string>
     <string name="d12_unlock_action">Unlock Indications</string>
-    <string name="d12_unlock_hint">Enter your DAN+ profile PIN to open Indications.</string>
-    <string name="d12_setup_hint">Sign in to DAN+ and link the current profile to use Indications.</string>
-    <string name="d12_local_profile">Current profile %1$s · %2$s</string>
-    <string name="d12_confirm_email">Confirm your email, then come back and sign in.</string>
+    <string name="d12_unlock_hint">Enter your Nuvio profile PIN to open Recommendations.</string>
+    <string name="d12_setup_hint">Sign in to your Nuvio account in Settings › Account to use Recommendations.</string>
     <string name="d12_account_error">Could not complete the request. Check your credentials and connection, then try again.</string>
     <string name="d12_wrong_pin">Could not unlock this profile. Check the PIN or wait before trying again.</string>
-    <string name="d12_working">Connecting to DAN+…</string>
-    <string name="d12_login_hint">Use the same DAN+ account on both TVs to share Indications.</string>
-    <string name="d12_email">Email</string>
-    <string name="d12_password">Password</string>
-    <string name="d12_login">Sign in</string>
-    <string name="d12_register">Create account</string>
-    <string name="d12_signout_confirm">Sign out of the DAN+ account on this TV?</string>
-    <string name="d12_signout">Sign out</string>
-    <string name="d12_create_named_profile">Create a DAN+ profile for %1$s.</string>
-    <string name="d12_pin_for_profile">Enter the DAN+ PIN for %1$s.</string>
-    <string name="d12_pin_optional">4-digit PIN (optional)</string>
+    <string name="d12_working">Checking your PIN…</string>
+    <string name="d12_pin_for_profile">Enter the Nuvio PIN for %1$s.</string>
     <string name="d12_pin">4-digit PIN</string>
-    <string name="d12_create_profile">Create DAN+ profile</string>
-    <string name="d12_bind_profile">Link profile</string>
-    <string name="d12_confirm_link">Link the current profile to %1$s?</string>
-    <string name="d12_link_hint">Select an existing DAN+ profile or create one here.</string>
     <string name="d12_linked_profile">Linked DAN+ profile · %1$s</string>
     <string name="d12_change_link">Change linked profile</string>
     <string name="d12_sync_retry">Could not sync. The app will retry while this screen is open.</string>
+    <string name="d12_profile_sync_hint">Sync the current profile with your Nuvio account.</string>
 </resources>

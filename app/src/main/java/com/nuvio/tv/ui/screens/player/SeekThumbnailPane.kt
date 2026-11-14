@@ -64,8 +64,6 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.player.thumbnail.SeekThumbnails
-import com.nuvio.tv.core.player.thumbnail.SeekrPreviews
-import com.nuvio.tv.core.player.thumbnail.SeekThumbnailPreferences
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.v2.appearance.LocalV2Appearance
 import com.nuvio.tv.ui.v2.components.GlassRole
@@ -81,6 +79,7 @@ internal object SeekBarAnchor {
 }
 
 private val BarGap = 12.dp
+private val ThumbnailFrameClearance = 12.dp
 private val StripCentreHeight = 127.dp
 
 /** True while thumbnails are drawn over the seek bar; the title block above the bar steps aside meanwhile. */
@@ -194,6 +193,7 @@ private fun croppedPainter(shown: SeekThumbnails.Shown?): BitmapPainter? {
 fun SeekThumbnailOverlayHost(
     uiState: PlayerUiState,
     viewModel: PlayerViewModel,
+    track: SeekrTrack?,
     modifier: Modifier = Modifier
 ) {
     val durationFlow = remember(viewModel) {
@@ -208,21 +208,6 @@ fun SeekThumbnailOverlayHost(
         playing = uiState.isPlaying,
         barShown = uiState.showControls || uiState.showSeekOverlay
     )
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val thumbnailsEnabled by remember(context) { SeekThumbnailPreferences.enabledFlow(context) }.collectAsState(initial = false)
-    val seekrConfigured by SeekrPreviews.configured.collectAsState()
-    val contentId = viewModel.scoutContentId
-    val content = remember(contentId, uiState.contentType, uiState.currentSeason, uiState.currentEpisode) {
-        SeekrPreviews.content(contentId, uiState.contentType, uiState.currentSeason, uiState.currentEpisode)
-    }
-    val seekrEligible = thumbnailsEnabled && seekrConfigured && !uiState.isLive && content != null
-    var requestedTrack by remember(content, durationMs, seekrEligible) { mutableStateOf(false) }
-    SideEffect { if (seekrEligible && seekPositionMs != null) requestedTrack = true }
-    val track by key(content, durationMs, seekrEligible) {
-        produceState<SeekrTrack?>(null, requestedTrack) {
-            if (requestedTrack && content != null) value = SeekrPreviews.track(content, durationMs)
-        }
-    }
     DisposableEffect(Unit) { onDispose { SeekThumbnailOverlay.visible = false } }
     val stripPlace = remember { booleanArrayOf(false) }
     if (seekPositionMs == null || durationMs <= 0L) {
@@ -288,7 +273,7 @@ fun SeekThumbnailOverlayHost(
     val height = if (centred) StripCentreHeight else 108.dp
     val shape = RoundedCornerShape(if (LocalV2Appearance.current != null) 12.dp else NuvioTheme.radii.sm)
     val bias = if (centred) 0f else fraction * 2f - 1f
-    AboveSeekBar(modifier, extraBottom = 8.dp, contentAlignment = BiasAlignment(horizontalBias = bias, verticalBias = 1f)) {
+    AboveSeekBar(modifier, extraBottom = ThumbnailFrameClearance, contentAlignment = BiasAlignment(horizontalBias = bias, verticalBias = 1f)) {
         androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
             SeekThumbnailLabel(uiState.chapters, matchingRemote?.cueStartMs ?: seekPositionMs,
                 Modifier.padding(bottom = NuvioTheme.spacing.sm))
@@ -343,7 +328,7 @@ private fun SeekThumbnailStrip(
     // Resolved before the tiles so their disk loads cannot starve it.
     val centre = remember(exactPosMs, tick) { croppedPainter(SeekThumbnails.shownFor(exactPosMs)) }
     val posMs = exactPosMs.toFloat()
-    AboveSeekBar(modifier, extraBottom = 8.dp) { width ->
+    AboveSeekBar(modifier, extraBottom = ThumbnailFrameClearance) { width ->
         val widthPx = with(density) { width.toPx() }
         val centreX = widthPx / 2f
         val reachMs = (centreX / pxPerMs) + spacingMs

@@ -24,6 +24,8 @@ import androidx.compose.runtime.withFrameNanos
 import android.graphics.RectF
 import com.nuvio.tv.ui.theme.NuvioMotion
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 import com.nuvio.tv.ui.components.NuvioNoticePill
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -113,11 +115,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.AbsoluteAlignment
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.painter.Painter
@@ -143,15 +148,12 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.progressBarRangeInfo
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -195,6 +197,9 @@ import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.core.player.thumbnail.SeekThumbnailPreferences
 import com.nuvio.tv.core.player.thumbnail.NextEpisodeThumbs
 import com.nuvio.tv.core.player.thumbnail.SeekThumbnails
+import com.nuvio.tv.core.player.thumbnail.SeekrPreviews
+import com.nuvio.tv.core.player.thumbnail.CopyPrePick
+import tv.seekr.previews.android.SeekrTrack
 import com.nuvio.tv.core.player.thumbnail.ThumbSource
 import com.nuvio.tv.data.local.LibassRenderMode
 import com.nuvio.tv.data.local.SubtitleStyleSettings
@@ -250,7 +255,8 @@ fun PlayerScreen(
     onPlaybackErrorBack: () -> Unit = { onBackPress(null, null, null, false, false) },
     onPlaybackEnded: ((nextVideoId: String?, nextSeason: Int?, nextEpisode: Int?, exitReason: PlayerExitReason?) -> Unit)? = null,
     onPlayRecommendation: (PostPlayRecommendation, manualSelection: Boolean) -> Unit = { _, _ -> },
-    onOpenRecommendationDetails: (PostPlayRecommendation) -> Unit = {}
+    onOpenRecommendationDetails: (PostPlayRecommendation) -> Unit = {},
+    onOpenPerson: (Int, String, Boolean) -> Unit = { _, _, _ -> }
 ) {
     val savedUiState by viewModel.uiState.collectAsState()
     val isV2 = LocalV2Appearance.current != null
@@ -285,7 +291,6 @@ fun PlayerScreen(
     val containerFocusRequester = remember { FocusRequester() }
     val pausePeopleFocusRequester = remember { FocusRequester() }
     var pausePeopleFocused by remember(uiState.showPauseOverlay) { mutableStateOf(false) }
-    var pausePerson by remember(uiState.showPauseOverlay, uiState.currentVideoId) { mutableStateOf<com.nuvio.tv.domain.model.MetaCastMember?>(null) }
     val playPauseFocusRequester = remember { FocusRequester() }
     val progressBarFocusRequester = remember { FocusRequester() }
     val episodesFocusRequester = remember { FocusRequester() }
@@ -453,8 +458,7 @@ fun PlayerScreen(
         } else if (uiState.showPartyPanel) {
             viewModel.onEvent(PlayerEvent.OnDismissPartyPanel)
         } else if (uiState.showPauseOverlay) {
-            if (pausePerson != null) pausePerson = null
-            else viewModel.onEvent(PlayerEvent.OnCloseDetails)
+            viewModel.onEvent(PlayerEvent.OnCloseDetails)
         } else if (uiState.showMoreDialog) {
             focusPlayAfterMoreBack = true
             viewModel.onEvent(PlayerEvent.OnDismissMoreDialog)
@@ -637,68 +641,100 @@ fun PlayerScreen(
         }
     }
 
-    // Seek thumbnails follow the stream and the engine; ExoPlayer only (with MPV the provider returns null).
+    // Seek thumbnails follow the current stream and engine.
     LaunchedEffect(uiState.error) {
         uiState.error?.let { com.nuvio.tv.core.formatcheck.FormatCheckSession.onError(it) }
     }
     val seekThumbsEnabled = SeekThumbnailPreferences.enabledFlow(context).collectAsState(initial = false)
     val thumbsOnMpv = uiState.internalPlayerEngine == InternalPlayerEngine.MVP_PLAYER
     val lastThumbRun = remember { mutableStateOf<Pair<String?, Boolean>?>(null) }
-    LaunchedEffect(seekThumbsEnabled.value, uiState.currentStreamUrl, uiState.isTorrentStream, thumbsOnMpv) {
+    val seekrConfigured by SeekrPreviews.configured.collectAsState()
+    val seekrContent = SeekrPreviews.content(
+        viewModel.scoutContentId, uiState.contentType, uiState.currentSeason, uiState.currentEpisode
+    ).takeIf { seekrConfigured && !uiState.isLive }
+    var seekrTrack by remember(uiState.currentStreamUrl, seekrContent, seekThumbsEnabled.value, thumbsOnMpv) {
+        mutableStateOf<SeekrTrack?>(null)
+    }
+    LaunchedEffect(seekThumbsEnabled.value, uiState.currentStreamUrl, uiState.isTorrentStream, thumbsOnMpv, seekrContent) {
         val thumbSourceUrl = uiState.currentStreamUrl
         val previousRun = lastThumbRun.value
         SeekThumbnails.stopSession(handBackPlayer = handsPlayerBackOnRestart(previousRun, thumbSourceUrl, thumbsOnMpv))
         val engineChanged = previousRun != null && previousRun.first == thumbSourceUrl && previousRun.second != thumbsOnMpv
         lastThumbRun.value = thumbSourceUrl to thumbsOnMpv
-        if (!seekThumbsEnabled.value || thumbSourceUrl.isNullOrBlank() || thumbsOnMpv ||
+        if (!seekThumbsEnabled.value || thumbSourceUrl.isNullOrBlank() ||
             com.nuvio.tv.core.formatcheck.FormatCheckSession.active
         ) {
             SeekThumbnails.dropServerMemory()
             return@LaunchedEffect
         }
-        // A media server's own thumbnails first (also for its HLS transcodes); without them our own engine runs.
-        val serverCheckStart = SystemClock.elapsedRealtime()
-        val serverThumbs = viewModel.serverThumbnails(thumbSourceUrl)
-        if (serverThumbs != null && SeekThumbnails.startServerWhenEligible(
+        suspend fun startNativeThumbnails(allowHold: Boolean) {
+            if (thumbsOnMpv) return
+            // A media server's own thumbnails first (also for its HLS transcodes); without them our own engine runs.
+            val serverCheckStart = SystemClock.elapsedRealtime()
+            val serverThumbs = viewModel.serverThumbnails(thumbSourceUrl)
+            if (serverThumbs != null && SeekThumbnails.startServerWhenEligible(
+                    context = context.applicationContext,
+                    source = serverThumbs,
+                    playerProvider = { viewModel.exoPlayer }
+                )
+            ) return
+            // A long server check means the film is already playing: our own engine must not hold it now.
+            val serverCheckLong = SystemClock.elapsedRealtime() - serverCheckStart > SERVER_CHECK_HOLD_LIMIT_MS
+            if (!isThumbnailSource(thumbSourceUrl, viewModel.currentStreamMimeType())) {
+                SeekThumbnails.dropServerMemory()
+                return
+            }
+            val copySources = viewModel.thumbnailCopySources()
+            // A torrent's own pieces stay with playback: its thumbnails come from an HTTP or Debrid copy of the title.
+            val torrent = uiState.isTorrentStream
+            val usenet = !torrent && copySources.playingIsUsenet(thumbSourceUrl)
+            SeekThumbnails.startWhenEligible(
                 context = context.applicationContext,
-                source = serverThumbs,
-                playerProvider = { viewModel.exoPlayer }
+                source = ThumbSource(
+                    url = thumbSourceUrl,
+                    headers = viewModel.getCurrentHeaders(),
+                    identity = viewModel.seekThumbnailIdentity() ?: uiState.title,
+                    fileSizeHint = viewModel.getCurrentFileSizeBytes(),
+                    holdBeforePlay = allowHold && !engineChanged && !serverCheckLong && !viewModel.isAutoPlayedEpisode(),
+                    playbackConnections = viewModel.playbackConnectionCount(),
+                    identityExact = viewModel.seekThumbnailIdentityExact(),
+                    copySources = copySources,
+                    usenet = usenet,
+                    mediaServer = viewModel.isServerStream(thumbSourceUrl),
+                    torrent = torrent,
+                    kindNote = { viewModel.seekThumbnailKindNote(thumbSourceUrl, usenet) },
+                    settingsNote = { viewModel.seekThumbnailSettingsNote() },
+                ),
+                playerProvider = { viewModel.exoPlayer },
+                reserveProvider = { viewModel.seekThumbnailBufferReserve() },
+                pauseForPrepare = { viewModel.pauseForSeekThumbnails() },
+                letGoForPrepare = { viewModel.letGoForSeekThumbnails() },
+                loadAgainAfterPrepare = { play -> viewModel.loadAgainAfterSeekThumbnails(play) },
+                skipReason = { viewModel.seekThumbnailSkipReason() }
             )
-        ) return@LaunchedEffect
-        // A long server check means the film is already playing: our own engine must not hold it now.
-        val serverCheckLong = SystemClock.elapsedRealtime() - serverCheckStart > SERVER_CHECK_HOLD_LIMIT_MS
-        if (!isThumbnailSource(thumbSourceUrl, viewModel.currentStreamMimeType())) {
-            SeekThumbnails.dropServerMemory()
+        }
+        val content = seekrContent
+        if (content == null) {
+            startNativeThumbnails(allowHold = true)
             return@LaunchedEffect
         }
-        val copySources = viewModel.thumbnailCopySources()
-        // A torrent's own pieces stay with playback: its thumbnails come from an HTTP or Debrid copy of the title.
-        val torrent = uiState.isTorrentStream
-        val usenet = !torrent && copySources.playingIsUsenet(thumbSourceUrl)
-        SeekThumbnails.startWhenEligible(
-            context = context.applicationContext,
-            source = ThumbSource(
-                url = thumbSourceUrl,
-                headers = viewModel.getCurrentHeaders(),
-                identity = viewModel.seekThumbnailIdentity() ?: uiState.title,
-                fileSizeHint = viewModel.getCurrentFileSizeBytes(),
-                holdBeforePlay = !engineChanged && !serverCheckLong && !viewModel.isAutoPlayedEpisode(),
-                playbackConnections = viewModel.playbackConnectionCount(),
-                identityExact = viewModel.seekThumbnailIdentityExact(),
-                copySources = copySources,
-                usenet = usenet,
-                mediaServer = viewModel.isServerStream(thumbSourceUrl),
-                torrent = torrent,
-                kindNote = { viewModel.seekThumbnailKindNote(thumbSourceUrl, usenet) },
-                settingsNote = { viewModel.seekThumbnailSettingsNote() },
-            ),
-            playerProvider = { viewModel.exoPlayer },
-            reserveProvider = { viewModel.seekThumbnailBufferReserve() },
-            pauseForPrepare = { viewModel.pauseForSeekThumbnails() },
-            letGoForPrepare = { viewModel.letGoForSeekThumbnails() },
-            loadAgainAfterPrepare = { play -> viewModel.loadAgainAfterSeekThumbnails(play) },
-            skipReason = { viewModel.seekThumbnailSkipReason() }
-        )
+
+        // The player opens normally so the lookup uses the actual duration of this release.
+        val track = withTimeoutOrNull(30_000) {
+            val duration = viewModel.playbackTimeline.first { it.duration > 0 }.duration
+            SeekrPreviews.track(content, duration)
+        }
+        if (track == null) {
+            startNativeThumbnails(allowHold = false)
+        } else {
+            SeekThumbnails.stopSession()
+            SeekThumbnails.dropServerMemory()
+            seekrTrack = track
+            viewModel.seekThumbnailIdentity()?.let { identity ->
+                CopyPrePick.drop(identity)
+                NextEpisodeThumbs.stopAndJoinFor(identity)
+            }
+        }
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -1427,6 +1463,7 @@ fun PlayerScreen(
                         postPlayRecommendationState.isVisible ||
                         uiState.error != null
                 if (panelOrDialogOpen) return@onKeyEvent false
+                if (uiState.showPauseOverlay && keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_UP) return@onKeyEvent false
 
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
                     when (keyEvent.nativeKeyEvent.keyCode) {
@@ -1453,20 +1490,25 @@ fun PlayerScreen(
                         keyEvent.nativeKeyEvent.action, keyEvent.nativeKeyEvent.repeatCount
                     )
                     if (uiState.showPauseOverlay) {
-                        if (pausePeopleFocused && keyEvent.nativeKeyEvent.keyCode in pausePeopleKeys) {
-                            return@onKeyEvent false
-                        }
                         when (keyEvent.nativeKeyEvent.keyCode) {
-                            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                if (firstPress && (uiState.castMembers.isNotEmpty() || uiState.directors.isNotEmpty() || uiState.pauseDirectorMembers.isNotEmpty())) {
+                            KeyEvent.KEYCODE_DPAD_DOWN,
+                            KeyEvent.KEYCODE_DPAD_LEFT,
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                if (firstPress && !pausePeopleFocused) {
                                     runCatching { pausePeopleFocusRequester.requestFocus() }
+                                    return@onKeyEvent true
                                 }
+                                return@onKeyEvent false
                             }
+                            KeyEvent.KEYCODE_DPAD_UP -> return@onKeyEvent false
                             KeyEvent.KEYCODE_DPAD_CENTER,
                             KeyEvent.KEYCODE_ENTER,
                             KeyEvent.KEYCODE_NUMPAD_ENTER,
                             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
                             KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                                if (pausePeopleFocused && PauseOnTimeline.isConfirmKey(keyEvent.nativeKeyEvent.keyCode)) {
+                                    return@onKeyEvent false
+                                }
                                 // Resume directly from pause overlay in one click.
                                 if (firstPress) {
                                     val code = keyEvent.nativeKeyEvent.keyCode
@@ -1996,8 +2038,7 @@ fun PlayerScreen(
                 directors = uiState.directors,
                 directorMembers = uiState.pauseDirectorMembers,
                 peopleFocusRequester = pausePeopleFocusRequester,
-                selectedPerson = pausePerson,
-                onPersonSelected = { pausePerson = it },
+                onOpenPerson = onOpenPerson,
                 onPeopleFocus = { pausePeopleFocused = it },
                 remainingMinutes = viewModel.playbackTimeline.value.let { timeline ->
                     (timeline.duration - timeline.currentPosition).takeIf {
@@ -2144,7 +2185,7 @@ fun PlayerScreen(
                     )
                 })
             }
-            SeekThumbnailOverlayHost(uiState = uiState, viewModel = viewModel, modifier = Modifier.zIndex(2.65f))
+            SeekThumbnailOverlayHost(uiState = uiState, viewModel = viewModel, track = seekrTrack, modifier = Modifier.zIndex(2.65f))
             if (!prepareVisible) {
                 SeekThumbnailProgressHint(
                     uiState = uiState,

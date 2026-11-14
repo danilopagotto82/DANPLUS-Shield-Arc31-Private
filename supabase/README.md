@@ -17,7 +17,7 @@ Os campos pendentes já existem em `local.example.properties`:
 | `PREMIUMIZE_CLIENT_ID` | Registro OAuth para login por código. A API também aceita a chave pessoal pelo app. [API Premiumize](https://www.premiumize.me/api) |
 | `TVDB_API_KEY` | Chave v4 do projeto no painel TheTVDB. [TheTVDB](https://support.thetvdb.com/kb/faq.php?id=81) |
 
-A staging DAN+ contém o backend D12 e foi validada separadamente. O Android usa uma conta DAN+ para Indicações, com sessão própria e armazenamento no Android Keystore. O QR e a sessão nativa do Nuvio continuam atendendo às funções do Arc.
+Indicações usa a sessão do Nuvio e os UUIDs dos perfis dessa conta. O projeto DAN+ guarda as indicações e as provas temporárias de PIN.
 
 ## Configuração do Android
 
@@ -29,7 +29,7 @@ Use `local.example.properties` como modelo e preencha `local.properties` na raiz
 | Rotas do QR | `start_device_login_session` ou fallback `start_tv_login_session`, `poll_tv_login_session`, `tv-logins-exchange` e portal capaz de aprovar o código. Valide de TV e celular e confirme que o QR é de uso único. |
 | Conta e perfis | `/auth/v1`, RPCs nativas de owner, registro de dispositivo, perfis, PIN, biblioteca e histórico conforme o pacote Nuvio. Valide se as sessões de aparelhos vinculados resolvem o owner esperado no servidor. |
 | Fila e cache D12 | A fila e o cache usam o armazenamento do aparelho. A fila é visível ao remetente e é reconciliada com o servidor depois do envio. |
-| D12 entre aparelhos | `DANPLUS_D12_SUPABASE_URL` e `DANPLUS_D12_SUPABASE_KEY` apontam para o projeto DAN+ com os RPCs `recommendations_v1`, `d12_create_profile` e `sync_pull_profiles`. A chave é do tipo `sb_publishable_`. |
+| Indicações entre aparelhos | `DANPLUS_D12_SUPABASE_URL` e `DANPLUS_D12_SUPABASE_KEY` apontam para o projeto DAN+ com a função `nuvio-indications` e o RPC `nuvio_indications_v1`. A chave do app é do tipo `sb_publishable_`. |
 | Trakt | `TRAKT_CLIENT_ID` do registro autorizado, com `TRAKT_API_URL` e `TRAKT_REDIRECT_URI` conforme o ambiente. O fluxo de código da TV usa o Client ID público. |
 | Simkl, MDBList e WeTrakr | `SIMKL_CLIENT_ID`, `MDBLIST_CLIENT_ID` e `WETRAKR_CLIENT_ID`. Floppy usa servidor/token configurados no app. |
 | Metadados | `TMDB_API_KEY`, `TVDB_API_KEY` conforme os recursos habilitados. URLs opcionais de trailers, guias parentais, IntroDB e fontes IMDb estão no exemplo. |
@@ -49,13 +49,10 @@ O app só pode enviar. A tabela fica bloqueada ao público e às contas do app. 
 
 ## Indicações entre aparelhos
 
-- Em **Indicações › Conta DAN+**, entre com a mesma conta nos dois aparelhos. No perfil que estiver usando na TV, escolha explicitamente um perfil DAN+ existente ou crie um. O vínculo desta TV usa o UUID DAN+. Crie um perfil DAN+ para cada pessoa que deve poder enviar ou receber. Perfis existentes aparecem como destinatários mesmo se ainda não estiverem vinculados neste aparelho.
-- A criação de conta exige confirmação do e-mail se o Auth estiver configurado para isso. Para cadastro público, configure o SMTP do projeto e confirme a entrega a um endereço externo. [SMTP do Supabase](https://supabase.com/docs/guides/auth/auth-smtp).
-- O servidor deriva o owner do JWT e confere a sessão ativa. O remetente e os destinatários são UUIDs de perfis daquele owner. O app nunca envia owner como autorização.
-- Um perfil DAN+ com PIN exige prova curta emitida pelo servidor ao digitar o PIN em Indicações. A prova é vinculada à sessão, ao UUID do perfil e à versão do PIN. Uma troca de conta ou de perfil invalida o acesso à prova anterior no cliente. Volte a Indicações para renovar a prova após expiração.
-- O Android guarda envios pendentes no aparelho e usa o UUID de cada envio para retry. A sincronização roda na tela Indicações e no fluxo de envio. A leitura e a exclusão de indicação usam operações próprias. O ✓ vem do histórico do destinatário e não da leitura. Na caixa Enviadas, a projeção de assistido fica oculta para destinatário com PIN.
-- O banco impede acesso direto às tabelas por clientes. O RPC público é invoker e delega a execução à função privada, que verifica sessão, perfil, owner e PIN. Exclusão de perfil remove suas indicações por FK, e o mesmo número de perfil pode voltar com outro UUID.
-- A lista usa páginas de 50 e o cliente recupera até 600 por caixa. O cache local tem retenção de até 600 registros e é limpo no logout. O cache remoto depende da sessão e do estado de desbloqueio local. Homologue troca de perfil/PIN e operação offline no aparelho.
+- Vincule os aparelhos à mesma conta Nuvio pelo QR de cada TV. Sincronize os perfis do Nuvio. Ao indicar um filme ou série, a lista mostra os outros perfis dessa conta. O destinatário abre **Indicações › Recebidas** no próprio perfil em qualquer aparelho.
+- A função `nuvio-indications` valida o token de acesso no Nuvio oficial, resolve a conta proprietária e consulta os perfis por sessão. Publique com a verificação de JWT do gateway desligada para essa função, pois o token pertence ao Nuvio e a função o valida no emissor. O RPC privado de acesso aos dados exige a função de serviço do Supabase DAN+.
+- A função usa o verificador nativo do Nuvio quando o perfil tem PIN. A prova é vinculada à sessão, ao perfil e à versão retornada pelo Nuvio. A fila local conserva os envios durante falhas de conexão. As indicações do fluxo antigo ficam nas tabelas originais.
+- Rode `node supabase/tests/nuvio-indications.mjs <caminho para @electric-sql/pglite/dist/index.js>` para conferir envio e recebimento em sessões diferentes, isolamento de conta e perfil, PIN e rollback.
 
 ## Teste local e implantação
 

@@ -59,6 +59,8 @@ scripts/*
 !/supabase/tests/
 /supabase/migrations/*
 /supabase/functions/*
+!/supabase/functions/nuvio-indications/
+!/supabase/functions/nuvio-indications/index.ts
 !/supabase/functions/tv-logins-exchange/
 /supabase/functions/tv-logins-exchange/*
 !/supabase/functions/tv-logins-exchange/index.ts
@@ -71,6 +73,7 @@ scripts/*
 !/supabase/rollback/*.sql
 !/supabase/tests/*.sql
 !/supabase/tests/*.mjs
+!/supabase/tests/nuvio-indications-edge.test.ts
 /SUPPORTER_COSMETICS.md
 tv-samples
 HOME_UI_OPTIMIZATION_NOTES.local.md

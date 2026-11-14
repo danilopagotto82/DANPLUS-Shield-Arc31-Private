@@ -1,29 +1,27 @@
 package com.nuvio.tv.core.danexus
 
-import android.content.Context
 import com.nuvio.tv.BuildConfig
-import com.nuvio.tv.core.profile.ProtectedProfilePreferences
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.nuvio.tv.core.auth.AuthManager
+import com.nuvio.tv.domain.model.AuthState
+import com.nuvio.tv.domain.model.ServerConfiguration
 import io.github.jan.supabase.auth.Auth
-import io.github.jan.supabase.auth.SessionManager
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.providers.builtin.Email
-import io.github.jan.supabase.auth.status.SessionStatus
-import io.github.jan.supabase.auth.user.UserSession
-import io.github.jan.supabase.createSupabaseClient
-import io.github.jan.supabase.postgrest.Postgrest
-import io.github.jan.supabase.postgrest.postgrest
-import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,67 +35,70 @@ internal data class RecommendationProfile(
 )
 
 @Singleton
-class RecommendationAccount @Inject constructor(@ApplicationContext context: Context) {
-    internal val configured = BuildConfig.DANPLUS_D12_SUPABASE_URL.matches(
-        Regex("https://[a-z0-9-]+\\.supabase\\.co/?")
-    ) && BuildConfig.DANPLUS_D12_SUPABASE_KEY.startsWith("sb_publishable_")
+class RecommendationAccount @Inject constructor(
+    private val authManager: AuthManager,
+    private val auth: Auth,
+    private val server: ServerConfiguration
+) {
+    internal val configured = !server.isCustom && server.backendUrl.trimEnd('/') == "https://api.nuvio.tv" &&
+        BuildConfig.DANPLUS_D12_SUPABASE_URL.matches(Regex("https://[a-z0-9-]+\\.supabase\\.co/?")) &&
+        BuildConfig.DANPLUS_D12_SUPABASE_KEY.startsWith("sb_publishable_")
 
-    private val settings = ProtectedProfilePreferences(context, "danplus_indications_session", "danplus.indications.session.v1")
-    private val client by lazy {
-        check(configured)
-        createSupabaseClient(BuildConfig.DANPLUS_D12_SUPABASE_URL, BuildConfig.DANPLUS_D12_SUPABASE_KEY) {
-            httpEngine = OkHttp.create {
-                config {
-                    followRedirects(false)
-                    followSslRedirects(false)
-                }
+    private val client = OkHttpClient.Builder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .callTimeout(20, TimeUnit.SECONDS)
+        .build()
+    internal val json = Json { ignoreUnknownKeys = true }
+    internal val owner: String?
+        get() = if (configured) authManager.currentUserId else null
+    internal val email: String?
+        get() = if (configured) (authManager.authState.value as? AuthState.FullAccount)?.email else null
+    internal val changes = authManager.authState.map { if (configured) (it as? AuthState.FullAccount)?.userId else null }
+        .distinctUntilChanged()
+
+    internal suspend fun resolveOwner(user: String): String {
+        check(owner == user)
+        return checkNotNull(authManager.getEffectiveUserId(fallbackToOwnIdOnFailure = false))
+    }
+
+    internal suspend fun request(
+        user: String,
+        operation: String,
+        profileId: String? = null,
+        payload: JsonObject = buildJsonObject {},
+        proof: String? = null
+    ): JsonElement = withContext(Dispatchers.IO) {
+        check(configured && owner == user)
+        val session = checkNotNull(auth.currentSessionOrNull())
+        check(session.user?.id == user)
+        val body = buildJsonObject {
+            put("operation", operation)
+            profileId?.let { put("profile_id", it) }
+            put("payload", payload)
+            proof?.let { put("proof", it) }
+        }
+        val request = Request.Builder()
+            .url(BuildConfig.DANPLUS_D12_SUPABASE_URL.trimEnd('/') + "/functions/v1/nuvio-indications")
+            .header("apikey", BuildConfig.DANPLUS_D12_SUPABASE_KEY)
+            .header("X-Nuvio-Publishable-Key", server.publishableKey)
+            .header("Authorization", "Bearer ${session.accessToken}")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        client.newCall(request).execute().use { response ->
+            check(owner == user)
+            val data = json.parseToJsonElement(checkNotNull(response.body).string())
+            if (!response.isSuccessful) {
+                val code = (data as? JsonObject)?.get("code")?.jsonPrimitive?.content
+                error(code ?: "D12_HTTP_${response.code}")
             }
-            install(Auth) {
-                enableLifecycleCallbacks = false
-                sessionManager = object : SessionManager {
-                    override suspend fun saveSession(session: UserSession) = withContext(Dispatchers.IO) {
-                        settings.write(0, Json.encodeToString(UserSession.serializer(), session))
-                    }
-
-                    override suspend fun loadSession(): UserSession? = withContext(Dispatchers.IO) {
-                        settings.read(0)?.let { Json.decodeFromString(UserSession.serializer(), it) }
-                    }
-
-                    override suspend fun deleteSession() = withContext(Dispatchers.IO) { settings.write(0, null) }
-                }
-            }
-            install(Postgrest)
+            data
         }
     }
-    private val auth: Auth get() = client.auth
-    internal val postgrest: Postgrest get() = client.postgrest
-    internal val owner: String? get() = if (configured) auth.currentUserOrNull()?.id else null
-    internal val email: String? get() = if (configured) auth.currentUserOrNull()?.email else null
-    internal val sessionStatus = if (configured) auth.sessionStatus else MutableStateFlow(SessionStatus.NotAuthenticated())
-    internal val changes = sessionStatus.map { owner }.distinctUntilChanged()
 
-    internal suspend fun signIn(address: String, secret: String, create: Boolean): Boolean {
-        if (create) {
-            auth.signUpWith(Email) { email = address; password = secret }
-        } else {
-            auth.signInWith(Email) { email = address; password = secret }
-        }
-        return owner != null
-    }
+    internal inline fun <reified T> decode(data: JsonElement): T =
+        json.decodeFromJsonElement(kotlinx.serialization.serializer<T>(), data)
 
-    internal suspend fun signOut() = auth.signOut()
-
-    internal suspend fun profiles(owner: String): List<RecommendationProfile> {
-        check(this.owner == owner)
-        return postgrest.rpc("sync_pull_profiles").decodeList()
-    }
-
-    internal suspend fun createProfile(owner: String, name: String, color: String, pin: String?): String {
-        check(this.owner == owner)
-        return postgrest.rpc("d12_create_profile", buildJsonObject {
-            put("p_name", name.take(60))
-            put("p_avatar_color", color)
-            pin?.let { put("p_pin", it) }
-        }).decodeAs()
-    }
+    internal suspend fun profiles(user: String): List<RecommendationProfile> =
+        decode(request(user, "profiles"))
 }

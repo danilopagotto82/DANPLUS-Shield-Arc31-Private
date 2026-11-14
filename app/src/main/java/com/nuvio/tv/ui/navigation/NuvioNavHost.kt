@@ -1199,6 +1199,7 @@ private fun PlaybackNavHost(
                         manualSelection = manualSelection
                     )
                 },
+                onOpenPerson = { id, name, crew -> navController.navigate(Screen.CastDetail.createRoute(id, name, crew)) },
                 onOpenRecommendationDetails = { recommendation ->
                     navigateFromPostPlay(
                         recommendation = recommendation,
