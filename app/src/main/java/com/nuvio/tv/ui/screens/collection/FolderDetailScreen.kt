@@ -141,6 +141,7 @@ fun FolderDetailScreen(
     val enrichingItemId = viewModel.enrichingItemId.collectAsStateWithLifecycle()
     val enrichedPreviews = viewModel.enrichedPreviews.collectAsStateWithLifecycle()
     val failedEnrichmentIds = viewModel.failedEnrichmentIds.collectAsStateWithLifecycle()
+    val previewCredits = viewModel.previewCredits.collectAsStateWithLifecycle()
     val trailerPreviewUrls by viewModel.trailerPreviewUrls.collectAsStateWithLifecycle()
     val trailerPreviewAudioUrls by viewModel.trailerPreviewAudioUrls.collectAsStateWithLifecycle()
     val scrollToTopTrigger by viewModel.scrollToTopTrigger.collectAsStateWithLifecycle()
@@ -158,6 +159,7 @@ fun FolderDetailScreen(
                     enrichingItemId = enrichingItemId,
                     enrichedPreviews = enrichedPreviews,
                     failedEnrichmentIds = failedEnrichmentIds,
+                    previewCredits = previewCredits,
                     onNavigateToDetail = onNavigateToDetail,
                     onLoadMoreCatalog = viewModel::loadMoreForCatalog,
                     onSelectTab = viewModel::selectTab,
@@ -208,7 +210,7 @@ fun FolderDetailScreen(
                     onSelectTab = viewModel::selectTab,
                     onNavigateToDetail = onNavigateToDetail,
                     onPreviewFocus = viewModel::onItemFocused,
-                    previewCredits = viewModel.previewCredits.collectAsStateWithLifecycle(),
+                    previewCredits = previewCredits,
                     isItemWatched = isItemWatched,
                     onLoadMore = { viewModel.loadMoreItems(uiState.selectedTabIndex) },
                     onSaveFocusState = { verticalIndex, verticalOffset, focusedItemKey ->
@@ -970,6 +972,7 @@ private fun FollowLayoutContent(
     enrichingItemId: State<String?>,
     enrichedPreviews: State<Map<String, MetaPreview>>,
     failedEnrichmentIds: State<Set<String>>,
+    previewCredits: State<Map<Pair<String, String>, FolderPreviewCredits>>,
     onNavigateToDetail: (String, String, String) -> Unit,
     onLoadMoreCatalog: (String, String, String) -> Unit = { _, _, _ -> },
     onSelectTab: (Int) -> Unit = {},
@@ -1061,6 +1064,8 @@ private fun FollowLayoutContent(
                     uiState = uiState,
                     folder = uiState.folder ?: return,
                     tabFocusState = FolderDetailGridFocusState(),
+                    previewCredits = previewCredits,
+                    onPreviewFocus = onItemFocus,
                     onSelectTab = onSelectTab,
                     onNavigateToDetail = onNavigateToDetail,
                     isItemWatched = isItemWatched,
