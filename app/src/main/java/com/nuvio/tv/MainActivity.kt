@@ -2528,6 +2528,12 @@ private fun ModernSidebarScaffold(
             }
         }
 
+        if (showSidebar && !detailPageLeaving) {
+            com.nuvio.tv.ui.components.DeviceSystemClock(
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 18.dp, end = 36.dp)
+            )
+        }
+
         if (showSidebar && !detailPageLeaving && (sidebarVisible || sidebarShowExpandedPanel)) {
             val panelShape = RoundedCornerShape(if (isV2Sidebar) 0.dp else sidebarTokens.panelRadius)
             val showExpandedPanel = isSidebarExpanded || sidebarShowExpandedPanel

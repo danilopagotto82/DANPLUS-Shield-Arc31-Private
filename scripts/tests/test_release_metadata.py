@@ -50,3 +50,35 @@ class ReleaseMetadataTests(unittest.TestCase):
             git("add", ".")
             git("commit", "-qm", "Unversioned application edit")
             self.assertIn("app/unexpected.kt", git("diff", "--name-only", rebuilt + "..HEAD"))
+
+    def test_elvis_fallback_in_configurable_gradle_version(self):
+        script = pathlib.Path(__file__).resolve().parents[1] / "release-metadata.sh"
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+
+            def git(*args):
+                return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+
+            git("init", "-q")
+            git("config", "user.name", "Release test")
+            git("config", "user.email", "test@example.invalid")
+            app = root / "app"
+            app.mkdir()
+
+            def commit(version, code):
+                (app / "build.gradle.kts").write_text(
+                    'versionCode = providers.gradleProperty("arcVersionCode").orNull?.toIntOrNull() ?: ' + str(code) + '\n'
+                    + 'versionName = providers.gradleProperty("arcVersionName").orNull ?: "' + version + '"\n'
+                )
+                git("add", ".")
+                git("commit", "-qm", version)
+                return git("rev-parse", "HEAD")
+
+            previous = commit("1.1.0-arc.5", 1640)
+            current = commit("1.1.0-arc.6", 1641)
+            output = subprocess.check_output(["bash", str(script), "HEAD"], cwd=root, text=True)
+            values = dict(line.split("=", 1) for line in output.splitlines())
+            self.assertEqual("1.1.0-arc.6", values["version"])
+            self.assertEqual("1641", values["version_code"])
+            self.assertEqual(previous, values["previous_bump"])
+            self.assertEqual(current, values["current_build_bump"])

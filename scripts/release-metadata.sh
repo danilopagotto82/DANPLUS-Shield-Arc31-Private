@@ -13,14 +13,18 @@ fi
 read_version() {
     local commit="$1"
     git show "${commit}:${version_file}" \
-        | sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' \
+        | sed -nE \
+            -e 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' \
+            -e 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]].*\?:[[:space:]]*"([^"]+)".*$/\1/p' \
         | head -n 1
 }
 
 read_version_code() {
     local commit="$1"
     git show "${commit}:${version_file}" \
-        | sed -nE 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*([0-9]+).*$/\1/p' \
+        | sed -nE \
+            -e 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*([0-9]+).*$/\1/p' \
+            -e 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]].*\?:[[:space:]]*([0-9]+).*$/\1/p' \
         | head -n 1
 }
 

@@ -70,6 +70,12 @@ import com.nuvio.tv.R
 import com.nuvio.tv.data.remote.supabase.AvatarCatalogItem
 
 private val PinnedAvatarCategories = listOf("anime", "animation", "tv", "movie", "gaming")
+// Hide tabs only. Every avatar remains available through the "all" tab and keeps its ID.
+private val HiddenProfileAvatarTabs = setOf("animals", "linear", "originals", "portraits", "sketches", "seketches")
+
+/** Affects avatar-picker tabs only; the complete catalogue stays available under "all". */
+internal fun isHiddenProfileAvatarTab(category: String): Boolean =
+    category.trim().lowercase(java.util.Locale.ROOT) in HiddenProfileAvatarTabs
 
 @Composable
 fun AvatarPickerGrid(
@@ -98,6 +104,7 @@ fun AvatarPickerGrid(
             normalizedCategories
                 .filterNot { category ->
                     PinnedAvatarCategories.any { it.equals(category, ignoreCase = true) } ||
+                        isHiddenProfileAvatarTab(category) ||
                         category == LocalProfileAvatars.CATEGORY
                 }
                 .sortedBy { it.lowercase() }

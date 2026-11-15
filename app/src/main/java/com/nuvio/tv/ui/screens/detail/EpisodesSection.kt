@@ -922,12 +922,59 @@ private fun EpisodeCard(
                     }
                 }
             }
-            Text(listOfNotNull(episode.episode?.toString(), episode.title.localizeEpisodeTitle(context)).joinToString(". "),
-                style = typography.bodyMedium, color = textPrimary, minLines = 2, maxLines = 2,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp, start = 3.dp, end = 3.dp))
-            Text(listOfNotNull(runtimeLabel, ratingLabel?.let { "★ $it" }, formattedDate.takeIf(String::isNotBlank)).joinToString(" · "),
-                style = typography.labelSmall, color = textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 3.dp, end = 3.dp, bottom = 6.dp))
+            // Two compact metadata lines belong below the thumbnail in the V2 renderer only.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 3.dp, end = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (episode.episode != null) {
+                    Text(
+                        text = episodeCode,
+                        style = typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = Color(0xFFBCE4EC),
+                        modifier = Modifier
+                            .background(Color(0x33276575), RoundedCornerShape(6.dp))
+                            .border(1.dp, Color(0x557CC6D6), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 7.dp, vertical = 3.dp),
+                        maxLines = 1
+                    )
+                }
+                Text(
+                    text = episode.title.localizeEpisodeTitle(context),
+                    style = typography.bodyMedium,
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            val timeAndDate = episodeTimeAndDateBadge(runtimeLabel, formattedDate)
+            if (timeAndDate.isNotBlank() || ratingLabel != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(top = 4.dp, start = 3.dp, end = 3.dp, bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (timeAndDate.isNotBlank()) {
+                        Text(
+                            text = timeAndDate,
+                            style = typography.labelSmall,
+                            color = textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                                .background(Color(0x221C5B6E), RoundedCornerShape(6.dp))
+                                .border(1.dp, Color(0x335AB2CC), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 7.dp, vertical = 3.dp)
+                        )
+                    }
+                    ratingLabel?.let { rating ->
+                        Text("★ $rating", style = typography.labelSmall, color = textSecondary, maxLines = 1)
+                    }
+                }
+            }
         }
         return
     }
@@ -1361,6 +1408,13 @@ private fun rememberEpisodeCardMetrics(posterCardCornerRadiusDp: Int = 12): Epis
 
 /** The V2 look takes the Original look's width steps and keeps its own 16:9 picture. */
 internal fun v2EpisodeCardHeight(cardWidth: Dp): Dp = cardWidth * 9f / 16f
+
+/** Only show populated episode metadata, without dangling separators or fabricated values. */
+internal fun episodeTimeAndDateBadge(runtimeLabel: String?, formattedDate: String): String =
+    listOfNotNull(
+        runtimeLabel?.trim()?.takeIf(String::isNotEmpty),
+        formattedDate.trim().takeIf(String::isNotEmpty)
+    ).joinToString(" · ")
 
 private fun formatEpisodeRuntime(runtimeMinutes: Int): String {
     if (runtimeMinutes <= 0) return ""

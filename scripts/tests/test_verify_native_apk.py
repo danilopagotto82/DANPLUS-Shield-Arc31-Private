@@ -27,7 +27,7 @@ class NativeApkTest(unittest.TestCase):
     def test_complete_native_feature_set(self):
         with tempfile.TemporaryDirectory() as root:
             result = module.verify(self.archive(root), "arm64-v8a")
-            self.assertEqual(4, len(result["nativeLibraries"]))
+            self.assertEqual(len(module.REQUIRED), len(result["nativeLibraries"]))
 
     def test_missing_bridge_and_stub_are_rejected(self):
         with tempfile.TemporaryDirectory() as root:
