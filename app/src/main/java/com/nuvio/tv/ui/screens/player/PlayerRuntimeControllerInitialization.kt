@@ -248,7 +248,7 @@ internal fun PlayerRuntimeController.applyMediaSourceFactorySettings(playerSetti
 
     if (playerSettings.parallelNetworkEnabled) {
         mediaSourceFactory.useParallelConnections = playerSettings.useParallelConnections
-        mediaSourceFactory.parallelConnectionCount = playerSettings.parallelConnectionCount
+        mediaSourceFactory.parallelConnectionCount = BufferSizing.effectiveConnectionCount(playerSettings.parallelConnectionCount)
         mediaSourceFactory.parallelChunkSizeKb = MemoryBudget.customChunkKb(context, playerSettings)
     } else {
         // Reset each playback so the factory doesn't keep last stream's state.
@@ -482,6 +482,7 @@ internal fun PlayerRuntimeController.initializePlayer(
             // stream - a leaked value would commit the *new* episode to the old
             // preview position on the next gesture.
             pendingPreviewSeekExpiryJob?.cancel()
+            clearRecentSeekThumbnail()
             dropSeekSettle()
             stopScrubGlide()
             pendingPreviewSeekPosition = null
@@ -912,7 +913,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                 currentBitrateAwareLoadControl = null
                 val chunkWindowMb = if (parallelForSizing) {
                     MemoryBudget.displayParallelOverheadMb(
-                        playerSettings.parallelConnectionCount,
+                        mediaSourceFactory.parallelConnectionCount,
                         chunkMbForSizing,
                         safeNativeLimitMb = NuvioExoPlayerPerformanceHelper.targetBufferSizeMb,
                         reserveBufferMb = NuvioExoPlayerPerformanceHelper.targetBufferSizeMb,
@@ -951,7 +952,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                 currentParallelChunkOverheadMb =
                     if (playerSettings.parallelNetworkEnabled && playerSettings.useParallelConnections) {
                         val chunkMb = Math.ceil(MemoryBudget.customChunkKb(context, playerSettings) / 1024.0).toInt()
-                        MemoryBudget.parallelOverheadMb(playerSettings.parallelConnectionCount, chunkMb)
+                        MemoryBudget.parallelOverheadMb(mediaSourceFactory.parallelConnectionCount, chunkMb)
                     } else {
                         0
                     }
@@ -968,7 +969,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                     unsizedBudgetMb = (boxMb - currentParallelChunkOverheadMb).coerceAtLeast(MemoryBudget.MIN_BUFFER_MB)
                     (currentManagedBudgetMb - currentParallelChunkOverheadMb).coerceAtLeast(MemoryBudget.MIN_BUFFER_MB)
                 } else {
-                    MemoryBudget.effectiveBufferMb(bufferSettings.targetBufferSizeMb)
+                    BufferSizing.playbackBufferLimitMb(MemoryBudget.effectiveBufferMb(bufferSettings.targetBufferSizeMb))
                         .coerceAtLeast(MemoryBudget.MIN_BUFFER_MB)
                 }
                 customBufferBudgetBytes = budgetMbEffective.toLong() * 1024L * 1024L
@@ -2589,7 +2590,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                         // both same-URL retries on a doomed link. Checked before the
                         // engine failover: a dead URL is dead on either engine.
                         if (tryFreshLinkForReusedLink(error, detailedError)) return
-                        if (tryFreshLinkForRefusedLink(error, detailedError)) return
+                        if (tryFreshLinkForRefusedLink(error.findInvalidResponseCodeException()?.responseCode, detailedError)) return
 
                         if (isDeadSourceHttpError(error) && attemptDeadSourceFailover(error, detailedError)) {
                             return

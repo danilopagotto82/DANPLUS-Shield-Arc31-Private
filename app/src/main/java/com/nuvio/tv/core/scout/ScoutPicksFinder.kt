@@ -1,6 +1,10 @@
 package com.nuvio.tv.core.scout
 
 import android.content.Context
+import com.nuvio.tv.core.ratinglimit.RatingLimit
+import com.nuvio.tv.core.ratinglimit.ratingLimitGateOrNull
+import com.nuvio.tv.core.ratinglimit.ratingRank
+import com.nuvio.tv.domain.model.isAnimeRecap
 import android.util.Log
 import com.nuvio.tv.data.local.ScoutStore
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
@@ -245,7 +249,7 @@ class ScoutPicksFinder @Inject constructor(
         val kept = keptRows[fullKey]?.takeIf { looked - it.at < DAY_MS } ?: return null
         val exclusions = exclusions()
         val excluded = System.currentTimeMillis()
-        return withContext(Dispatchers.Default) { kept.picks.filterNot(exclusions::blocks) }.also {
+        return eligibleForActiveProfile(kept.picks.filterNot(exclusions::blocks)).also {
             Log.i("ScoutSpeed", "kept key=${looked - started} exclusions=${excluded - looked} filter=${System.currentTimeMillis() - excluded} ms")
         }
     }
@@ -309,10 +313,15 @@ class ScoutPicksFinder @Inject constructor(
     suspend fun moreLike(pick: ScoutPick): List<ScoutPick> {
         val language = tmdbSettings.settings.first().language
         val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
+        if (ratingLimitGateOrNull(context)?.activeLimit() != null) {
+            val genres = pick.genres.distinct().takeIf { it.isNotEmpty() } ?: return emptyList()
+            return discover(TmdbCollectionFilters(withGenres = genres.joinToString("|")), pick.tv, null, 1, language)
+                .filterNot { it.key == pick.key }
+        }
         val body = runCatching {
             if (pick.tv) tmdbApi.getTvRecommendations(pick.tmdbId, key, language) else tmdbApi.getMovieRecommendations(pick.tmdbId, key, language)
         }.getOrNull()?.body()
-        return body?.results.orEmpty().mapNotNull { it.toPick(pick.tv) }
+        return eligibleForActiveProfile(body?.results.orEmpty().mapNotNull { it.toPick(pick.tv) })
     }
 
     /** Only worth offering where the list would not come up nearly empty. Asked once per country. */
@@ -407,7 +416,25 @@ class ScoutPicksFinder @Inject constructor(
     suspend fun discoverSeries(f: TmdbCollectionFilters, page: Int, sortBy: String): List<ScoutPick> =
         discover(f, true, sortBy, page, tmdbSettings.settings.first().language)
 
-    private suspend fun discover(f: TmdbCollectionFilters, tv: Boolean, sortBy: String?, page: Int, language: String): List<ScoutPick> {
+    private suspend fun eligibleForActiveProfile(picks: List<ScoutPick>): List<ScoutPick> {
+        val profile = engine.activeProfile()
+        val candidates = picks.filterNot(ScoutPick::isAnimeRecap)
+        val gate = ratingLimitGateOrNull(context) ?: return candidates
+        val limit = gate.activeLimit() ?: return candidates
+        val kept = gate.keepFitting(limit, candidates) { "tmdb:${it.tmdbId}" to if (it.tv) "series" else "movie" }
+        return kept.takeIf { engine.activeProfile() == profile && gate.activeLimit() == limit }.orEmpty()
+    }
+
+    private suspend fun discover(filters: TmdbCollectionFilters, tv: Boolean, sortBy: String?, page: Int, language: String): List<ScoutPick> {
+        val profile = engine.activeProfile()
+        val gate = ratingLimitGateOrNull(context)
+        val limit = gate?.activeLimit()
+        val f = if (limit != null) filters.copy(
+            certificationCountry = "US",
+            certificationLte = filters.certificationLte?.takeIf {
+                filters.certificationCountry == "US" && limit.allows(ratingRank(it))
+            } ?: scoutLimitCertification(limit, tv)
+        ) else filters
         val key = com.nuvio.tv.core.tmdb.TmdbApiKey.value
         val body = runCatching {
             if (tv) tmdbApi.discoverTv(
@@ -429,6 +456,15 @@ class ScoutPicksFinder @Inject constructor(
                 certificationCountry = f.certificationCountry, certificationLte = f.certificationLte
             )
         }.getOrNull()?.body()
-        return body?.results.orEmpty().mapNotNull { it.toPick(tv) }
+        if (engine.activeProfile() != profile || gate?.activeLimit() != limit) return emptyList()
+        return eligibleForActiveProfile(body?.results.orEmpty().mapNotNull { it.toPick(tv) })
     }
 }
+
+internal fun scoutLimitCertification(limit: RatingLimit, tv: Boolean): String =
+    if (tv) when (limit) {
+        RatingLimit.PRESCHOOL -> "TV-Y"
+        RatingLimit.YOUNG -> "TV-G"
+        RatingLimit.PG -> "TV-PG"
+        RatingLimit.TEEN -> "TV-14"
+    } else scoutCertificationAtMost(limit.scoutCeiling)

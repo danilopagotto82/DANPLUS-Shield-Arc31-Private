@@ -357,6 +357,8 @@ fun ScoutScreen(
                     onFocusMix = readyModel::focusMix,
                     onOpen = open,
                     onOwn = { onMixOwn(null) },
+                    onHide = readyModel::hideMix,
+                    onRestore = readyModel::restoreHidden,
                     listEmojis = listEmojis
                 )
                 ScoutReadyFirstFocus(readyState, entry)

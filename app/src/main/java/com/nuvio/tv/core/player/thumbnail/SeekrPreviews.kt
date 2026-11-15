@@ -8,10 +8,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import org.json.JSONObject
 import tv.seekr.previews.android.Seekr
 import tv.seekr.previews.android.SeekrTrack
 import tv.seekr.previews.core.SeekrContent
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 
 internal object SeekrPreviews {
@@ -19,7 +21,7 @@ internal object SeekrPreviews {
     private val imdbPattern = Regex("tt[0-9]+")
     private val _configured = MutableStateFlow(false)
     val configured = _configured.asStateFlow()
-    @Volatile private var client: Seekr? = null
+    @Volatile private var key: String? = null
 
     private val http by lazy {
         OkHttpClient.Builder()
@@ -33,9 +35,34 @@ internal object SeekrPreviews {
     fun hasValidFormat(value: String): Boolean = keyPattern.matches(value.trim())
 
     fun load(context: Context) {
-        val key = store(context).read(0)?.takeIf(::hasValidFormat)
-        client = key?.let(::create)
-        _configured.value = client != null
+        key = store(context).read(0)?.takeIf(::hasValidFormat)
+        _configured.value = key != null
+    }
+
+    enum class KeyCheck { Valid, Invalid, Unavailable, RateLimited }
+
+    suspend fun checkKey(value: String): KeyCheck = withContext(Dispatchers.IO) {
+        if (!hasValidFormat(value)) return@withContext KeyCheck.Invalid
+        var result = KeyCheck.Unavailable
+        val checkHttp = http.newBuilder().addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            result = when (response.code) {
+                401, 403 -> KeyCheck.Invalid
+                429 -> KeyCheck.RateLimited
+                else -> if (response.isSuccessful && runCatching {
+                    JSONObject(response.peekBody(8_192).string()).opt("valid") == false
+                }.getOrDefault(false)) KeyCheck.Invalid else KeyCheck.Unavailable
+            }
+            response
+        }.build()
+        try {
+            val testClient = Seekr.create(apiKey = value.trim(), httpClient = checkHttp, maxCachedSheets = 2)
+            if (testClient.validateKey()) KeyCheck.Valid else result
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            KeyCheck.Unavailable
+        }
     }
 
     suspend fun save(context: Context, value: String?): Boolean = withContext(Dispatchers.IO) {
@@ -45,8 +72,8 @@ internal object SeekrPreviews {
         try {
             if (next != null && !next.validateKey()) return@withContext false
             store(context).write(0, key)
-            client = next
-            _configured.value = next != null
+            this@SeekrPreviews.key = key
+            _configured.value = key != null
             true
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -55,16 +82,47 @@ internal object SeekrPreviews {
         }
     }
 
-    suspend fun track(content: SeekrContent, durationMs: Long): SeekrTrack? {
-        if (durationMs <= 0L) return null
-        return try {
-            client?.loadTrack(content, durationMs)?.takeIf {
-                abs(it.sourceDurationMs - durationMs) <= MAX_DURATION_DIFFERENCE_MS
+    enum class LookupStatus { Off, Checking, Ready, NotFound, InvalidKey, RateLimited, Unavailable }
+
+    data class Lookup(val status: LookupStatus, val track: SeekrTrack? = null)
+
+    suspend fun lookup(content: SeekrContent, durationMs: Long, positionMs: Long): Lookup = withContext(Dispatchers.IO) {
+        val credentials = key ?: return@withContext Lookup(LookupStatus.Off)
+        if (durationMs <= 0L) return@withContext Lookup(LookupStatus.Unavailable)
+        val problem = AtomicReference<LookupStatus?>(null)
+        val lookupHttp = http.newBuilder().addInterceptor { chain ->
+            val response = chain.proceed(chain.request())
+            val host = response.request.url.host
+            val failure = when {
+                response.code == 401 && host == "api.seekr.tv" -> LookupStatus.InvalidKey
+                response.code == 404 && host == "api.seekr.tv" -> LookupStatus.NotFound
+                response.code == 429 -> LookupStatus.RateLimited
+                !response.isSuccessful -> LookupStatus.Unavailable
+                else -> null
+            }
+            if (failure != null) problem.set(failure)
+            response
+        }.build()
+        try {
+            val deviceClient = Seekr.create(apiKey = credentials, httpClient = lookupHttp, maxCachedSheets = 2)
+            val track = deviceClient.loadTrack(content, durationMs)
+                ?: return@withContext Lookup(problem.get() ?: LookupStatus.Unavailable)
+            if (track.sourceDurationMs > 0 && abs(track.sourceDurationMs - durationMs) > MAX_DURATION_DIFFERENCE_MS) {
+                return@withContext Lookup(LookupStatus.NotFound)
+            }
+            val position = positionMs.coerceIn(0, durationMs - 1)
+            val firstThumb = track.thumbnailFor(position)
+                ?: if (problem.get() == null && position != durationMs / 2) track.thumbnailFor(durationMs / 2) else null
+            val bitmap = firstThumb?.bitmap
+            if (bitmap != null && !bitmap.isRecycled && bitmap.width > 0 && bitmap.height > 0) {
+                Lookup(LookupStatus.Ready, track)
+            } else {
+                Lookup(problem.get() ?: LookupStatus.Unavailable, track)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            null
+            Lookup(problem.get() ?: LookupStatus.Unavailable)
         }
     }
 
@@ -89,5 +147,6 @@ internal object SeekrPreviews {
     private fun store(context: Context) =
         ProtectedProfilePreferences(context, "danplus_seekr_key", "danplus_seekr_key_v1")
 
-    private const val MAX_DURATION_DIFFERENCE_MS = 15_000L
+    // The service selects the closest version within its documented duration window.
+    private const val MAX_DURATION_DIFFERENCE_MS = 240_000L
 }

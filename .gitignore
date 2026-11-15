@@ -61,6 +61,9 @@ scripts/*
 /supabase/functions/*
 !/supabase/functions/nuvio-indications/
 !/supabase/functions/nuvio-indications/index.ts
+!/supabase/functions/danplus-report-account/
+/supabase/functions/danplus-report-account/*
+!/supabase/functions/danplus-report-account/index.ts
 !/supabase/functions/tv-logins-exchange/
 /supabase/functions/tv-logins-exchange/*
 !/supabase/functions/tv-logins-exchange/index.ts
@@ -69,6 +72,7 @@ scripts/*
 /supabase/tests/*
 !/supabase/migrations/*.sql
 !/supabase/portal/*.mjs
+!/supabase/portal/support.css
 !/supabase/portal/*.html
 !/supabase/rollback/*.sql
 !/supabase/tests/*.sql

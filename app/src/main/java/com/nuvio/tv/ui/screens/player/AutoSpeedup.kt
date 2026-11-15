@@ -195,7 +195,7 @@ internal object AutoSpeedup {
      * A 2 GB box may hold 64 MB in pieces: six 8 MB downloads, four 12 MB or three 16 MB. Larger boxes as many
      * downloads of the bigger piece as the read-ahead may hold.
      */
-    fun limitsFor(totalRamBytes: Long): Limits = when {
+    fun limitsFor(totalRamBytes: Long, is64Bit: Boolean = true): Limits = when {
         totalRamBytes in 1 until 2_560L * MB ->
             Limits(maxDownloads = 6, holdBytes = 16L * MB, quickHoldBytes = 8L * MB, smallBox = true,
                 pieceBudgetBytes = 64L * MB)
@@ -206,6 +206,13 @@ internal object AutoSpeedup {
             Limits(maxDownloads = 10, holdBytes = 24L * MB, quickHoldBytes = 8L * MB, readAheadMaxBytes = 256L * MB,
                 pieceBudgetBytes = 256L * MB)
         else -> Limits(maxDownloads = 1, holdBytes = 16L * MB)
+    }.let { limits ->
+        if (is64Bit) limits else limits.copy(
+            maxDownloads = minOf(limits.maxDownloads, com.nuvio.tv.core.player.BufferSizing.MAX_32_BIT_CONNECTIONS),
+            holdBytes = minOf(limits.holdBytes, 16L * MB),
+            readAheadMaxBytes = minOf(limits.readAheadMaxBytes, 64L * MB),
+            pieceBudgetBytes = minOf(limits.pieceBudgetBytes, 64L * MB)
+        )
     }
 
     /** A slow first byte costs a share of every piece, so smaller pieces only pay off on a quick server. */
@@ -402,11 +409,11 @@ internal object AutoSpeedup {
      * A new stream starts on one download; the same stream again (a subtitle reload) keeps what it learnt. What the
      * same server delivered before ([HostSpeeds]) picks the piece size at once and the downloads a heavy film starts on.
      */
-    fun begin(streamUrl: String, totalRamBytes: Long) {
+    fun begin(streamUrl: String, totalRamBytes: Long, is64Bit: Boolean = true) {
         if (policy != null && streamUrl == url) return
         end()
         blockTrial.reset()
-        limits = limitsFor(totalRamBytes)
+        limits = limitsFor(totalRamBytes, is64Bit)
         url = streamUrl
         hostKey = HostSpeeds.keyOf(streamUrl)
         serverKey = null

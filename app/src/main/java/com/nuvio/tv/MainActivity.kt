@@ -2530,7 +2530,8 @@ private fun ModernSidebarScaffold(
 
         if (showSidebar && !detailPageLeaving) {
             com.nuvio.tv.ui.components.DeviceSystemClock(
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 18.dp, end = 36.dp)
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 18.dp, end = 36.dp),
+                fontSize = 16.sp
             )
         }
 

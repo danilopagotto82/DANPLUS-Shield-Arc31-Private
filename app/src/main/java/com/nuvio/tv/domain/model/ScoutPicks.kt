@@ -125,6 +125,16 @@ fun scoutNormalizedName(name: String): String =
         .replace(SCOUT_NOT_LETTER_OR_DIGIT, " ")
         .trim()
 
+private val scoutRecapTitle = Regex("""\b(recap|recapitulation|recapitulacao|resumo|soushuuhen|soshuhen)\b""")
+
+/** A labelled anime recap belongs outside automated recommendations. */
+fun ScoutPick.isAnimeRecap(): Boolean {
+    if (tv || 16 !in genres || (language != "ja" && "JP" !in origin)) return false
+    val title = scoutNormalizedName(name)
+    if ("mugen train" in title || "gundam" in title) return false
+    return scoutRecapTitle.containsMatchIn(title)
+}
+
 /** What must never be offered: anything watched, started or rated, and any left-out genre or language. */
 data class ScoutExclusions(
     val names: Set<String> = emptySet(),
@@ -133,7 +143,7 @@ data class ScoutExclusions(
     val languages: Set<String> = emptySet()
 ) {
     fun blocks(pick: ScoutPick): Boolean {
-        if (pick.key in tmdbKeys || pick.genres.any { it in genres }) return true
+        if (pick.isAnimeRecap() || pick.key in tmdbKeys || pick.genres.any { it in genres }) return true
         if (pick.language != null && pick.language in languages) return true
         val name = scoutNormalizedName(pick.name)
         if (name in names) return true

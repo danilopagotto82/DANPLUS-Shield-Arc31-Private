@@ -102,4 +102,5 @@
     <string name="scout_premix_no_link_skipped">Sem fontes para %1$s, então o Scout escolheu outro episódio.</string>
     <string name="scout_premix_no_link_stopped">Sem fontes para os últimos 3 episódios. Aperte Assistir para tentar este, ou Misturar de novo.</string>
     <string name="scout_premix_none">Nada combina com essas escolhas. Tente outra década ou outro tipo.</string>
+    <string name="scout_premix_restore_hidden">Restaurar mixes ocultos</string>
 </resources>

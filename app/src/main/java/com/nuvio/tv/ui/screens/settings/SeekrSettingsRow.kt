@@ -34,6 +34,8 @@ internal fun SeekrSettingsRow(enabled: Boolean) {
         var key by remember { mutableStateOf("") }
         var saving by remember { mutableStateOf(false) }
         var failed by remember { mutableStateOf(false) }
+        var checking by remember { mutableStateOf(false) }
+        var keyCheck by remember { mutableStateOf<SeekrPreviews.KeyCheck?>(null) }
         fun save(value: String?) {
             saving = true
             failed = false
@@ -46,26 +48,50 @@ internal fun SeekrSettingsRow(enabled: Boolean) {
         NuvioDialog(
             title = stringResource(R.string.seekr_key_title),
             subtitle = stringResource(R.string.seekr_key_description),
-            onDismiss = { if (!saving) open = false }
+            onDismiss = { if (!saving && !checking) open = false }
         ) {
             InputField(
                 value = key,
-                onValueChange = { key = it },
+                onValueChange = { if (!checking && !saving) { key = it; keyCheck = null; failed = false } },
                 placeholder = stringResource(R.string.seekr_key_title),
                 keyboardType = KeyboardType.Password,
                 isPassword = true
             )
             if (failed) Text(stringResource(R.string.seekr_key_error))
+            if (checking) {
+                Text(stringResource(R.string.seekr_key_checking))
+            } else {
+                keyCheck?.let { result ->
+                    Text(stringResource(when (result) {
+                        SeekrPreviews.KeyCheck.Valid -> R.string.seekr_key_valid
+                        SeekrPreviews.KeyCheck.Invalid -> R.string.seekr_key_invalid
+                        SeekrPreviews.KeyCheck.Unavailable -> R.string.seekr_key_unavailable
+                        SeekrPreviews.KeyCheck.RateLimited -> R.string.seekr_key_rate_limit
+                    }))
+                }
+            }
+            SettingsDialogActionButton(
+                text = stringResource(R.string.seekr_key_test),
+                onClick = {
+                    checking = true
+                    failed = false
+                    scope.launch {
+                        keyCheck = SeekrPreviews.checkKey(key)
+                        checking = false
+                    }
+                },
+                enabled = !saving && !checking && key.isNotBlank()
+            )
             SettingsDialogActionButton(
                 text = stringResource(R.string.action_save),
                 onClick = { save(key) },
-                enabled = !saving && SeekrPreviews.hasValidFormat(key)
+                enabled = !saving && !checking && SeekrPreviews.hasValidFormat(key)
             )
             if (configured) {
                 SettingsDialogActionButton(
                     text = stringResource(R.string.seekr_key_remove),
                     onClick = { save(null) },
-                    enabled = !saving
+                    enabled = !saving && !checking
                 )
             }
         }

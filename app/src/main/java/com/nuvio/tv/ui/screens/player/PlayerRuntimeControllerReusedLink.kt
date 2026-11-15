@@ -30,41 +30,60 @@ internal object ReusedLinkRefresh {
         headers: Map<String, String>,
         filename: String?,
         videoSize: Long?,
-        bingeGroup: String?
+        bingeGroup: String?,
+        infoHash: String? = null,
+        fileIdx: Int? = null,
+        videoHash: String? = null,
+        addonName: String? = null
     ): CachedStreamLink = CachedStreamLink(
         url = url, streamName = streamName, headers = headers, cachedAtMs = 0L, filename = filename,
-        videoSize = videoSize, bingeGroup = bingeGroup
+        videoSize = videoSize, bingeGroup = bingeGroup, infoHash = infoHash, fileIdx = fileIdx,
+        videoHash = videoHash, addonName = addonName
     )
 
-    /**
-     * The same release from the same source: same file name first, then the same entry name, each in the same binge
-     * group when both have one; then the same binge group and size. Never the failed link itself.
-     */
+    /** Refresh only an unambiguous match for the file that was playing. */
     fun sameSource(
         streams: List<Stream>,
         saved: CachedStreamLink,
         deadKeys: Set<String>,
         season: Int?,
         episode: Int?
-    ): Stream? {
-        val playable = streams.filter { stream ->
-            SourceFailoverSelection.isAutoFailoverPlayable(stream, season, episode) &&
-                SourceFailoverSelection.failoverKey(stream)?.let { it !in deadKeys && it != saved.url } == true
+    ): Stream? = streams.asSequence()
+        .filter { SourceFailoverSelection.isAutoFailoverPlayable(it, season, episode) }
+        .mapNotNull { stream ->
+            val key = SourceFailoverSelection.failoverKey(stream) ?: return@mapNotNull null
+            stream.takeIf { key != saved.url && key !in deadKeys && matchesFile(it, saved) }?.let { key to it }
         }
-        fun groupOk(stream: Stream): Boolean {
-            val group = stream.behaviorHints?.bingeGroup
-            return saved.bingeGroup == null || group == null || group == saved.bingeGroup
+        .distinctBy { it.first }
+        .singleOrNull()?.second
+
+    private fun matchesFile(stream: Stream, saved: CachedStreamLink): Boolean {
+        val hints = stream.behaviorHints
+        val sameAddon = !saved.addonName.isNullOrBlank() && saved.addonName == stream.addonName
+        if (!saved.addonName.isNullOrBlank() && !sameAddon) return false
+        val group = saved.bingeGroup?.takeIf(String::isNotBlank)
+        val sameGroup = group != null && group == hints?.bingeGroup
+        if (group != null && hints?.bingeGroup != null && !sameGroup) return false
+        val size = saved.videoSize?.takeIf { it > 0 }
+        if (size != null && hints?.videoSize != null && size != hints.videoSize) return false
+
+        val filename = saved.filename?.takeIf(String::isNotBlank)
+        val sameFilename = filename != null && filename.equals(hints?.filename, ignoreCase = true)
+        val hash = saved.infoHash?.takeIf(String::isNotBlank)
+        val index = stream.getEffectiveFileIdx()
+        if (hash != null) {
+            if (!hash.equals(stream.getEffectiveInfoHash(), ignoreCase = true)) return false
+            return saved.fileIdx?.let { it == index } ?: sameFilename
         }
-        saved.filename?.takeIf(String::isNotBlank)?.let { file ->
-            playable.firstOrNull { it.behaviorHints?.filename.equals(file, ignoreCase = true) && groupOk(it) }?.let { return it }
+        if (saved.videoHash?.isNotBlank() == true) {
+            return saved.videoHash.equals(hints?.videoHash, ignoreCase = true) &&
+                (saved.fileIdx == null || saved.fileIdx == index)
         }
-        playable.firstOrNull { stream ->
-            val name = stream.name?.takeIf(String::isNotBlank) ?: stream.addonName
-            name == saved.streamName && groupOk(stream)
-        }?.let { return it }
-        val group = saved.bingeGroup ?: return null
-        val size = saved.videoSize ?: return null
-        return playable.firstOrNull { it.behaviorHints?.bingeGroup == group && it.behaviorHints?.videoSize == size }
+        val sameName = saved.streamName == (stream.name?.takeIf(String::isNotBlank) ?: stream.addonName)
+        if (filename != null) return sameFilename &&
+            (sameGroup || (sameAddon && sameName)) &&
+            (saved.fileIdx == null || saved.fileIdx == index)
+        return sameGroup && size != null && size == hints?.videoSize && sameName
     }
 
     /** The reloaded list hands out the refused address again, so waiting for a fresh one is pointless. */
@@ -102,9 +121,10 @@ internal fun PlayerRuntimeController.tryFreshLinkAfterStartupExhausted(detailedE
  * A link picked from the list (not a saved one) refused with 400 or 410 before the first picture: the source list is
  * loaded again once and the same entry plays with its new link. Only the entry already started is opened again.
  */
-internal fun PlayerRuntimeController.tryFreshLinkForRefusedLink(error: PlaybackException, detailedError: String): Boolean {
-    if (hasRenderedFirstFrame || freshLinkForReusedLinkTried) return false
-    if (!ReusedLinkRefresh.isRefusedAtFirstRequest(error.findInvalidResponseCodeException()?.responseCode)) return false
+internal fun PlayerRuntimeController.tryFreshLinkForRefusedLink(status: Int?, detailedError: String): Boolean {
+    if (freshLinkForReusedLinkTried) return false
+    val expired = status == 401 || status == 410
+    if (!expired && (hasRenderedFirstFrame || !ReusedLinkRefresh.isRefusedAtFirstRequest(status))) return false
     if (serverPlayback.session(currentStreamUrl) != null) return false
     val url = currentStreamUrl.takeIf(String::isNotBlank) ?: return false
     val entry = ReusedLinkRefresh.playingEntry(
@@ -113,11 +133,18 @@ internal fun PlayerRuntimeController.tryFreshLinkForRefusedLink(error: PlaybackE
         headers = currentHeaders,
         filename = currentFilename,
         videoSize = currentVideoSize,
-        bingeGroup = currentStreamBingeGroup
+        bingeGroup = currentStreamBingeGroup,
+        infoHash = _uiState.value.currentStreamInfoHash,
+        fileIdx = _uiState.value.currentStreamFileIdx,
+        videoHash = currentVideoHash,
+        addonName = currentAddonName
     )
     Log.w(PlayerRuntimeController.TAG, "Link refused at the first request (${detailedError.redactLinksForLog()}); " +
         "reloading the source list for the same entry")
-    return refreshLink(entry, savedKey = null, detailedError = detailedError)
+    val replayed = replayedLinkPlaying()
+    return refreshLink(
+        replayed ?: entry, savedKey = if (replayed != null) streamCacheKey else null, detailedError = detailedError
+    )
 }
 
 private fun PlayerRuntimeController.refreshReusedLink(detailedError: String): Boolean {
@@ -131,7 +158,8 @@ private fun PlayerRuntimeController.refreshReusedLink(detailedError: String): Bo
 private fun PlayerRuntimeController.refreshLink(saved: CachedStreamLink, savedKey: String?, detailedError: String): Boolean {
     val requestKey = currentSourceRequestKey() ?: return false
     freshLinkForReusedLinkTried = true
-    deadSourceStreamUrls.add(currentStreamUrl)
+    val failedUrl = currentStreamUrl
+    deadSourceStreamUrls.add(failedUrl)
     saved.url.takeIf(String::isNotBlank)?.let(deadSourceStreamUrls::add)
     _uiState.update { it.copy(deadSourceStreamUrls = deadSourceStreamUrls.toSet()) }
     val savedPosition = currentPlaybackPositionMs()?.takeIf { it > 0L } ?: 0L
@@ -151,7 +179,7 @@ private fun PlayerRuntimeController.refreshLink(saved: CachedStreamLink, savedKe
         val deadline = SystemClock.elapsedRealtime() + FRESH_LINK_LIST_WAIT_MS
         var fresh: Stream? = null
         while (true) {
-            if (currentSourceRequestKey() != requestKey) return@launch
+            if (currentSourceRequestKey() != requestKey || currentStreamUrl != failedUrl) return@launch
             if (sourceStreamsCacheRequestKey == requestKey) {
                 fresh = ReusedLinkRefresh.sameSource(
                     _uiState.value.sourceAllStreams, saved, deadSourceStreamUrls, request?.season, request?.episode
@@ -166,7 +194,7 @@ private fun PlayerRuntimeController.refreshLink(saved: CachedStreamLink, savedKe
         if (fresh != null) {
             Log.i(PlayerRuntimeController.TAG, "Fresh link from the same source: host=${fresh.getStreamUrl()?.safeHost()}")
             switchToSourceStream(fresh, automatic = true)
-        } else if (!advanceToNextLiveSource(detailedError)) {
+        } else {
             surfaceSourceFailoverError(detailedError)
         }
     }

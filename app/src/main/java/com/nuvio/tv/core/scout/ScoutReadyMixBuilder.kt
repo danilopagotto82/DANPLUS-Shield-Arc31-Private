@@ -2,6 +2,8 @@ package com.nuvio.tv.core.scout
 
 import android.content.Context
 import com.nuvio.tv.core.tmdb.TmdbService
+import com.nuvio.tv.core.ratinglimit.ratingLimitGateOrNull
+import com.nuvio.tv.core.ratinglimit.ratingRank
 import com.nuvio.tv.core.util.withAppLocale
 import com.nuvio.tv.data.local.ScoutMixStore
 import com.nuvio.tv.domain.model.ScoutMix
@@ -120,7 +122,9 @@ class ScoutReadyMixBuilder @Inject constructor(
     /** The shows a recipe finds, in the order the blend asks for, loosened step by step when too few are left. */
     suspend fun preview(recipe: ScoutMixRecipe, years: IntRange? = null, pages: Int = PREVIEW_PAGES): ScoutMixPreview {
         val today = LocalDate.now()
-        val cacheKey = recipe.encode() + years + pages
+        val profile = store.profileId()
+        val limitCode = ratingLimitGateOrNull(context)?.limitFor(profile)?.code.orEmpty()
+        val cacheKey = "$profile|$limitCode|${recipe.encode()}|$years|$pages"
         previewLock.withLock { previews[cacheKey]?.takeIf { it.first == today }?.let { return it.second } }
         val steps = listOf(
             ScoutWidened.NONE to recipe,
@@ -197,7 +201,12 @@ class ScoutReadyMixBuilder @Inject constructor(
     /** A ready-made mix as it should be this week: the kept one if it is still fresh, otherwise built again and kept. */
     suspend fun ensure(id: String, family: Boolean? = null, name: String? = null): ScoutMix? = building.withLock {
         val profileId = store.profileId()
-        val kept = store.readyMix(profileId, id)
+        val gate = ratingLimitGateOrNull(context)
+        val limit = gate?.limitFor(profileId)
+        val kept = store.readyMix(profileId, id)?.let { saved ->
+            if (limit == null || gate == null) saved
+            else saved.copy(shows = gate.keepFitting(limit, saved.shows) { (it.imdbId ?: it.id) to it.type })
+        }
         val wantFamily = family ?: kept?.let { readyFamily(it) } ?: false
         if (kept != null && scoutReadyFresh(kept.builtAt) && kept.rules >= SCOUT_READY_RULES && readyFamily(kept) == wantFamily && kept.shows.isNotEmpty()) return@withLock kept
         val ready = ScoutReadyMixes.byId(id)
@@ -209,6 +218,7 @@ class ScoutReadyMixBuilder @Inject constructor(
             }
         } ?: return@withLock kept
         val mix = kept?.let { built.copy(unwatchedOnly = it.unwatchedOnly, keepPlaying = it.keepPlaying) } ?: built
+        if (store.profileId() != profileId) return@withLock null
         store.putReady(mix)
         mix
     }
@@ -279,12 +289,12 @@ class ScoutReadyMixBuilder @Inject constructor(
 
     /** The bundled lists, read once. */
     suspend fun occasionEpisodes(occasion: ScoutOccasion): List<ScoutOccasionEpisode> {
-        occasions?.let { return it[occasion.code].orEmpty() }
-        val read = withContext(Dispatchers.IO) {
+        val limit = ratingLimitGateOrNull(context)?.activeLimit()
+        val read = occasions ?: withContext(Dispatchers.IO) {
             runCatching { parseScoutOccasions(context.assets.open(OCCASIONS_FILE).bufferedReader().use { it.readText() }) }.getOrDefault(emptyMap())
         }
         occasions = read
-        return read[occasion.code].orEmpty()
+        return read[occasion.code].orEmpty().filter { limit == null || limit.allows(ratingRank(it.ratings["US"])) }
     }
 
     companion object {

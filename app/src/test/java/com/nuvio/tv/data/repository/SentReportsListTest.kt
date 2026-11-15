@@ -32,6 +32,15 @@ class SentReportsListTest {
         assertEquals(emptyList<SentReport>(), SentReportsList.decode("nonsense\nARC-1\tbug\tnot-a-time"))
     }
 
+    @Test fun `full protocol is saved while legacy entries stay readable`() {
+        val protocol = "61708b5b-86b2-4d1f-b75f-a7ae2319d1df"
+        val legacy = SentReport(protocol.take(24), "bug", 7L)
+        val current = SentReport(protocol, "bug", 8L)
+        val updated = SentReportsList.added(listOf(legacy), current)
+
+        assertEquals(listOf(current, legacy), SentReportsList.decode(SentReportsList.encode(updated)))
+    }
+
     @Test fun `spaces and new lines cannot get into a saved row`() {
         val saved = SentReportsList.added(emptyList(), SentReport("ARC\t-1\n", "bu g", 7L))
         assertEquals(saved, SentReportsList.decode(SentReportsList.encode(saved)))

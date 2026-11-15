@@ -1106,6 +1106,10 @@ class PlayerViewModel @Inject constructor(
         controller.attachMpvView(view)
     }
 
+    fun onMpvSurfaceCreationFailed(error: Throwable) {
+        controller.onMpvSurfaceCreationFailed(error)
+    }
+
     fun pauseForLifecycle() {
         controller.pauseForLifecycle()
     }

@@ -109,6 +109,12 @@ object SeekThumbnailPreferences {
     /** True unless the mode is Off (the player starts a session only then). */
     fun enabledFlow(context: Context): Flow<Boolean> = modeFlow(context).map { it != SeekThumbMode.OFF }
 
+    /** The low-RAM default only disables on-device decoding. Honour an explicit Off for every preview. */
+    internal fun seekrAllowedFlow(context: Context): Flow<Boolean> =
+        context.applicationContext.seekThumbnailDataStore.data.readOr(false) { prefs ->
+            !hasChosenMode(prefs) || modeOf(prefs) != SeekThumbMode.OFF
+        }
+
     suspend fun mode(context: Context): SeekThumbMode = modeFlow(context).first()
 
     private val prepareKey = stringPreferencesKey("seek_thumbnails_prepare")

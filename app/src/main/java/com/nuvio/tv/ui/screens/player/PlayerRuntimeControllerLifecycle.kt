@@ -21,6 +21,7 @@ internal fun PlayerRuntimeController.releasePlayer(
         playbackRecoveryJob = null
         playbackRecoveryGate.cancel(resetIdentity = flushPlaybackState)
     }
+    clearRecentSeekThumbnail()
     logScrobbleDiagnostic("release_player", "flushPlaybackState=$flushPlaybackState")
 
     // Preserve current subtitle selection across any rebuild. When the user explicitly

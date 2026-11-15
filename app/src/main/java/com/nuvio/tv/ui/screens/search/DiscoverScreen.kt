@@ -147,7 +147,8 @@ fun DiscoverScreen(
                 onItemLongPress = { item, addonBaseUrl ->
                     viewModel.posterOptions.show(item, addonBaseUrl)
                 },
-                modifier = Modifier.sidebarPageContent().padding(top = NuvioTheme.spacing.lg)
+                modifier = Modifier.sidebarPageContent().padding(top = NuvioTheme.spacing.lg),
+                showFocusDock = true
             )
         }
 

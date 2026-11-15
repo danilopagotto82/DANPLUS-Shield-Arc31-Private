@@ -8,6 +8,7 @@ import java.io.IOException
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import javax.inject.Inject
@@ -51,7 +52,7 @@ class TvMazeCalendarClient internal constructor(
     suspend fun show(id: Int, now: Instant): CalendarShowDates {
         val show = call { api.getShow(id) }.foundOrNull() ?: return CalendarShowDates()
         val next = show.embedded?.nextEpisode
-        val nextAt = next?.let(::tvMazeEpisodeEntry)?.sortInstant()
+        val nextAt = next?.let { tvMazeEpisodeEntry(it, tvMazeNetworkZone(show)) }?.sortInstant()
         val seasonEpisodes = if (next?.season != null && nextAt != null && nextAt.isBefore(now.plus(SEASON_FETCH_AHEAD))) {
             val seasonId = show.embedded.seasons?.firstOrNull { it.number == next.season }?.id
                 ?: call { api.getSeasons(id) }.foundOrNull()?.firstOrNull { it.number == next.season }?.id
@@ -93,13 +94,14 @@ class TvMazeCalendarClient internal constructor(
 }
 
 fun tvMazeShowDates(show: TvMazeShowDto, seasonEpisodes: List<TvMazeEpisodeDto>): CalendarShowDates {
+    val zone = tvMazeNetworkZone(show)
     val episodes = listOfNotNull(show.embedded?.previousEpisode, show.embedded?.nextEpisode) + seasonEpisodes
     return CalendarShowDates(
         status = tvMazeStatus(show.status),
-        entries = episodes.mapNotNull(::tvMazeEpisodeEntry).distinctBy(CalendarEntry::slot),
+        entries = episodes.mapNotNull { tvMazeEpisodeEntry(it, zone) }.distinctBy(CalendarEntry::slot),
         name = show.name,
         network = show.network?.name ?: show.webChannel?.name,
-        networkZone = show.network?.country?.timezone?.takeIf { runCatching { ZoneId.of(it) }.isSuccess },
+        networkZone = zone?.id,
         ids = CalendarIds(imdb = show.externals?.imdb?.takeIf { it.startsWith("tt") }, tvdb = show.externals?.thetvdb),
         poster = show.image?.let { it.medium ?: it.original }?.takeIf(String::isNotBlank)?.replaceFirst("http://", "https://"),
         streaming = show.network == null && show.webChannel != null,
@@ -107,22 +109,30 @@ fun tvMazeShowDates(show: TvMazeShowDto, seasonEpisodes: List<TvMazeEpisodeDto>)
     )
 }
 
-/** An episode with an air time keeps its exact `airstamp`; without one only the plain date is kept. */
-fun tvMazeEpisodeEntry(episode: TvMazeEpisodeDto): CalendarEntry? {
+private fun tvMazeNetworkZone(show: TvMazeShowDto): ZoneId? =
+    (show.network?.country?.timezone ?: show.webChannel?.country?.timezone)?.let { runCatching { ZoneId.of(it) }.getOrNull() }
+
+/** Preserve a published instant or combine a published date, time and network zone. */
+fun tvMazeEpisodeEntry(episode: TvMazeEpisodeDto, zone: ZoneId? = null): CalendarEntry? {
     val season = episode.season ?: return null
     val number = episode.number ?: return null
     if (episode.type.equals("insignificant_special", ignoreCase = true)) return null
-    val instant = episode.airstamp
-        ?.takeIf { !episode.airtime.isNullOrBlank() }
-        ?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
-    val date = episode.airdate?.takeIf { runCatching { LocalDate.parse(it) }.isSuccess }
+    val date = episode.airdate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    val localTime = episode.airtime?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+    val instant = if (localTime == null) null else {
+        episode.airstamp?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
+            ?: if (zone != null && date != null) {
+                val local = date.atTime(localTime)
+                zone.rules.getValidOffsets(local).singleOrNull()?.let { local.toInstant(it).toEpochMilli() }
+            } else null
+    }
     if (instant == null && date == null) return null
     return CalendarEntry(
         season = season,
         episode = number,
         title = episode.name?.takeIf(String::isNotBlank),
         airInstantMs = instant,
-        airDate = if (instant == null) date else null,
+        airDate = if (instant == null) date?.toString() else null,
         label = deriveEpisodeLabel(season, number),
         source = CalendarSource.TVMAZE
     )

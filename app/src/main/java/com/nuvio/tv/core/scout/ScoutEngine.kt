@@ -225,9 +225,10 @@ class ScoutEngine @Inject constructor(
             Log.w(TAG, "No age read: ${error.javaClass.simpleName}")
             null
         }
-        val limit = runCatching { ratingLimits.get().limitFor(profileId)?.scoutCeiling }.getOrNull()
-        val ceiling = listOfNotNull(read, limit).minOrNull()
-        val resolved = coroutineScope {
+        val ratingGate = ratingLimits.get()
+        val limit = ratingGate.limitFor(profileId)
+        val ceiling = listOfNotNull(read, limit?.scoutCeiling).minOrNull()
+        val resolved = if (limit != null) emptyList() else coroutineScope {
             seeds.map { seed ->
                 async { gate.withPermit { seed to recommendations(seed, language) } }
             }.awaitAll()
@@ -257,7 +258,8 @@ class ScoutEngine @Inject constructor(
                         certification = scoutCertificationAtMost(ceiling), without = KIDS_MOVIE_LEFT_OUT, page = page)
                     rated += films.map { it.key }
                     val shows = discover(true, language, sortBy = "popularity.desc", votes = KIDS_TV_MIN_VOTES,
-                        genres = scoutKidsTvGenres(ceiling), without = KIDS_TV_LEFT_OUT, page = page)
+                        genres = scoutKidsTvGenres(ceiling), without = KIDS_TV_LEFT_OUT, page = page,
+                        certification = limit?.let { scoutLimitCertification(it, tv = true) })
                     if (films.isEmpty() && shows.isEmpty()) break
                     found += films + shows
                     (films + shows).filterNot(full::blocks).filter(::fits).forEach { suitable += it.key }
@@ -277,10 +279,12 @@ class ScoutEngine @Inject constructor(
         val gemSeries = if (ceiling == null) {
             discover(true, language, "vote_average.desc", GEM_MIN_VOTES / 2, SCOUT_GEM_MAX_VOTES_TV, GEM_MIN_AVERAGE, tasteGenres)
         } else {
-            discover(true, language, "vote_average.desc", GEM_MIN_VOTES / 2, SCOUT_GEM_MAX_VOTES_TV, GEM_MIN_AVERAGE, scoutKidsTvGenres(ceiling), without = KIDS_TV_LEFT_OUT)
+            discover(true, language, "vote_average.desc", GEM_MIN_VOTES / 2, SCOUT_GEM_MAX_VOTES_TV, GEM_MIN_AVERAGE,
+                scoutKidsTvGenres(ceiling), without = KIDS_TV_LEFT_OUT,
+                certification = limit?.let { scoutLimitCertification(it, tv = true) })
         }
 
-        val improved = if (known != null) null else try {
+        val improved = if (known != null || limit != null) null else try {
             picksBuilder.improve(signals, profile.ratings.values, results, full, now, language, ceiling)
         } catch (error: CancellationException) {
             throw error
@@ -298,8 +302,10 @@ class ScoutEngine @Inject constructor(
                 val picks = own.filterNot(full::blocks).filter(::fits).take(BECAUSE_ITEMS)
                 if (picks.isEmpty()) null else ScoutBecause(seed.name, picks)
             }
-        val gems = (gemFilms + gemSeries).filterNot(full::blocks).filter(::fits).take(GEM_ITEMS)
-        val suitable = (improved?.picked?.takeIf { it.isNotEmpty() } ?: picked).filter(::fits)
+        suspend fun ratedForProfile(list: List<ScoutPick>): List<ScoutPick> =
+            if (limit == null) list else ratingGate.keepFitting(limit, list) { "tmdb:${it.tmdbId}" to if (it.tv) "series" else "movie" }
+        val gems = ratedForProfile((gemFilms + gemSeries).filterNot(full::blocks).filter(::fits)).take(GEM_ITEMS)
+        val suitable = ratedForProfile((improved?.picked?.takeIf { it.isNotEmpty() } ?: picked).filter(::fits))
         val rows = improved?.rows.orEmpty().map { row ->
             val kept = row.picks.filter(::fits)
             row.copy(picks = if (ceiling == null) kept else scoutTopUpRow(kept, suitable, row.genre, TASTE_ROW_ITEMS))
@@ -383,7 +389,8 @@ class ScoutEngine @Inject constructor(
             if (tv) tmdbApi.discoverTv(
                 apiKey = com.nuvio.tv.core.tmdb.TmdbApiKey.value, language = language, page = page, sortBy = sortBy, voteCountGte = votes,
                 voteCountLte = votesMax, voteAverageGte = average, withGenres = genres?.ifBlank { null },
-                withoutGenres = without ?: TV_LEFT_OUT
+                withoutGenres = without ?: TV_LEFT_OUT, certificationCountry = certification?.let { CERTIFICATION_COUNTRY },
+                certificationLte = certification
             ) else tmdbApi.discoverMovies(
                 apiKey = com.nuvio.tv.core.tmdb.TmdbApiKey.value, language = language, page = page, sortBy = sortBy, voteCountGte = votes,
                 voteCountLte = votesMax, voteAverageGte = average, withGenres = genres?.ifBlank { null },

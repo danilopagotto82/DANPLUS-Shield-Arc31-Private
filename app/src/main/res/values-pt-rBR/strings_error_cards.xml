@@ -33,4 +33,7 @@
     <string name="report_check_try_source_notice">ou verifique o addon ou sua conta Debrid</string>
     <string name="report_check_send_anyway">Enviar mesmo assim</string>
     <string name="debrid_busy">O serviço Debrid está ocupado agora (erro %1$d). Isso vem do serviço, não do Arc. Tente de novo em instantes ou escolha outra fonte.</string>
+    <string name="player_error_card_slow_title">A fonte está lenta</string>
+    <string name="player_error_card_slow">A fonte está entregando dados abaixo da velocidade necessária para este vídeo.</string>
+    <string name="player_error_facts_slow">%1$.1f Mbps recebidos · %2$.1f Mbps estimados para o vídeo</string>
 </resources>

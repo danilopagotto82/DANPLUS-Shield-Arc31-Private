@@ -37,7 +37,10 @@ internal fun PlayerRuntimeController.watchdogErrorCard(reason: String, elapsedMs
             when (PlayerErrorCauses.forLoadFailure(classes, playbackAnalyticsDiagnostics.bytesLoadedSoFar)) {
                 PlayerErrorCause.ServerUnreachable -> unreachableServerCard(context, source, fromWatchdog = true)
                 PlayerErrorCause.ServerSilent -> silentServerCard(context, seconds, source, fromWatchdog = true)
-                else -> null
+                else -> if (reason == "no_data_buffered" && classes.isEmpty()) {
+                    slowSourceCard(context, source, playbackAnalyticsDiagnostics.bytesLoadedSoFar,
+                        elapsedMs, fileBitrateBeforeBuild(currentStreamUrl))
+                } else null
             }
         }
         else -> null

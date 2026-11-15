@@ -172,7 +172,9 @@ data class SubtitleStyleSettings(
     val hdrStyleEnabled: Boolean = false,
     val hdrTextColor: Int = Color.White.toArgb(),
     val hdrBrightness: Int = HDR_BRIGHTNESS_DEFAULT, // 0-100, see hdrBrightnessFactor
-    val hdrDimPlayerControls: Boolean = false
+    val hdrDimPlayerControls: Boolean = false,
+    val shadowDepth: Int = DEFAULT_SUBTITLE_SHADOW_DEPTH,
+    val importedFontId: String? = null
 ) {
     val effectiveEdgeStyle: SubtitleEdgeStyle
         get() = edgeStyle ?: if (outlineEnabled) SubtitleEdgeStyle.OUTLINE else SubtitleEdgeStyle.NONE
@@ -956,10 +958,12 @@ class PlayerSettingsDataStore @Inject constructor(
     private val subtitleOutlineColorKey = intPreferencesKey("subtitle_outline_color")
     private val subtitleOutlineWidthKey = intPreferencesKey("subtitle_outline_width")
     private val subtitleFontKey = stringPreferencesKey("subtitle_font")
+    private val importedSubtitleFontKey = stringPreferencesKey(com.nuvio.tv.core.player.ImportedSubtitleFonts.SELECTION_KEY)
     private val subtitleEdgeStyleKey = stringPreferencesKey("subtitle_edge_style")
     private val subtitleOutlineSizeKey = stringPreferencesKey("subtitle_outline_size")
     private val subtitleShadowEnabledKey = booleanPreferencesKey("subtitle_shadow_enabled")
     private val subtitleShadowOpacityKey = intPreferencesKey("subtitle_shadow_opacity")
+    private val subtitleShadowDepthKey = intPreferencesKey("subtitle_shadow_depth")
     private val subtitleHdrStyleEnabledKey = booleanPreferencesKey("subtitle_hdr_style_enabled")
     private val subtitleHdrTextColorKey = intPreferencesKey("subtitle_hdr_text_color")
     private val subtitleHdrBrightnessKey = intPreferencesKey("subtitle_hdr_brightness")
@@ -1537,6 +1541,7 @@ class PlayerSettingsDataStore @Inject constructor(
                         outlineColor = prefs[subtitleOutlineColorKey] ?: Color.Black.toArgb(),
                         outlineWidth = prefs[subtitleOutlineWidthKey] ?: 2,
                         font = parseSubtitleFont(prefs[subtitleFontKey]),
+                        importedFontId = prefs[importedSubtitleFontKey],
                         edgeStyle = resolveSubtitleEdgeStyle(prefs[subtitleEdgeStyleKey], prefs[subtitleOutlineEnabledKey]),
                         outlineSize = parseSubtitleOutlineSize(prefs[subtitleOutlineSizeKey]),
                         shadowEnabled = prefs[subtitleShadowEnabledKey],
@@ -1546,7 +1551,9 @@ class PlayerSettingsDataStore @Inject constructor(
                         hdrStyleEnabled = prefs[subtitleHdrStyleEnabledKey] ?: (prefs[dimHdrOverlaysKey] ?: false),
                         hdrTextColor = prefs[subtitleHdrTextColorKey] ?: Color.White.toArgb(),
                         hdrBrightness = prefs[subtitleHdrBrightnessKey] ?: SubtitleStyleSettings.HDR_BRIGHTNESS_DEFAULT,
-                        hdrDimPlayerControls = prefs[subtitleHdrDimPlayerControlsKey] ?: false
+                        hdrDimPlayerControls = prefs[subtitleHdrDimPlayerControlsKey] ?: false,
+                        shadowDepth = (prefs[subtitleShadowDepthKey] ?: DEFAULT_SUBTITLE_SHADOW_DEPTH)
+                            .coerceIn(MIN_SUBTITLE_SHADOW_DEPTH, MAX_SUBTITLE_SHADOW_DEPTH)
                     )
                 },
                 bufferSettings = BufferSettings(
@@ -2507,6 +2514,12 @@ class PlayerSettingsDataStore @Inject constructor(
     suspend fun setSubtitleFont(font: SubtitleFont?) {
         store().edit { prefs ->
             if (font == null) prefs.remove(subtitleFontKey) else prefs[subtitleFontKey] = font.name
+            prefs.remove(importedSubtitleFontKey)
+        }
+    }
+    suspend fun setImportedSubtitleFont(id: String?) {
+        store().edit {
+            if (id == null) it.remove(importedSubtitleFontKey) else it[importedSubtitleFontKey] = id
         }
     }
     suspend fun setSubtitleOutlineSize(size: SubtitleOutlineSize) {
@@ -2517,6 +2530,9 @@ class PlayerSettingsDataStore @Inject constructor(
     }
     suspend fun setSubtitleShadowOpacity(opacity: Int) {
         store().edit { it[subtitleShadowOpacityKey] = normalizeSubtitleShadowOpacity(opacity) }
+    }
+    suspend fun setSubtitleShadowDepth(depth: Int) {
+        store().edit { it[subtitleShadowDepthKey] = depth.coerceIn(MIN_SUBTITLE_SHADOW_DEPTH, MAX_SUBTITLE_SHADOW_DEPTH) }
     }
     private fun currentSubtitleOutline(prefs: androidx.datastore.preferences.core.Preferences): SubtitleOutlineSize =
         parseSubtitleOutlineSize(prefs[subtitleOutlineSizeKey])
@@ -2536,8 +2552,10 @@ class PlayerSettingsDataStore @Inject constructor(
         val defaults = SubtitleStyleSettings()
         store().edit { prefs ->
             prefs.remove(subtitleFontKey)
+            prefs.remove(importedSubtitleFontKey)
             writeSubtitleEdges(prefs, DEFAULT_SUBTITLE_EDGE_STYLE.toOutlineSize(), DEFAULT_SUBTITLE_EDGE_STYLE.hasShadow())
             prefs[subtitleShadowOpacityKey] = DEFAULT_SUBTITLE_SHADOW_OPACITY
+            prefs[subtitleShadowDepthKey] = DEFAULT_SUBTITLE_SHADOW_DEPTH
             prefs[subtitleSizeKey] = defaults.size
             prefs[subtitleBitmapSizeKey] = defaults.bitmapSize
             prefs[subtitleTextColorKey] = defaults.textColor

@@ -30,11 +30,11 @@ internal object SentReportsList {
         }.take(MAX).toList()
 
     fun added(reports: List<SentReport>, report: SentReport): List<SentReport> {
-        val clean = report.copy(code = report.code.plain(), kind = report.kind.plain())
+        val clean = report.copy(code = report.code.withoutWhitespace(), kind = report.kind.withoutWhitespace().take(24))
         return (listOf(clean) + reports.filterNot { it.code == clean.code }).take(MAX)
     }
 
-    private fun String.plain(): String = filterNot { it.isWhitespace() }.take(24)
+    private fun String.withoutWhitespace(): String = filterNot { it.isWhitespace() }
 }
 
 /** The codes of reports the relay accepted from this box, newest first. Code, kind and time only. */

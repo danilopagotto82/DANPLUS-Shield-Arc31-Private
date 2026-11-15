@@ -330,14 +330,15 @@ fun LibraryScreen(
     if (LocalV2Appearance.current != null) V2Atmosphere(background = LocalV2Appearance.current!!.settingsBackground)
     val globalLandscape = com.nuvio.tv.ui.components.LocalLandscapePosterMode.current
 
+    Column(Modifier.sidebarPageContent().fillMaxSize()) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(
             minSize = if (globalLandscape) posterCardStyle.height else posterCardStyle.width
         ),
         state = gridState,
         modifier = Modifier
-            .sidebarPageContent()
-            .fillMaxSize()
+            .weight(1f)
+            .fillMaxWidth()
             .focusRestorer {
                 val lastKey = lastFocusedPosterKey
                 (if (lastKey != null && lastKey in posterFocusRequesters) {
@@ -660,6 +661,18 @@ fun LibraryScreen(
         item(span = { GridItemSpan(maxLineSpan) }) { Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm)) }
     }
 
+        if (viewMode == LibraryViewMode.Saved) {
+            val focusedIndex = lastFocusedPosterKey?.let(visibleItemIndexByKey::get)
+            val item = focusedIndex?.let(uiState.visibleItems::getOrNull) ?: uiState.visibleItems.firstOrNull()
+            if (item != null) {
+                val preview = remember(item) { item.toMetaPreview() }
+                com.nuvio.tv.ui.components.DanPlusFocusDock(
+                    item = preview,
+                    modifier = Modifier.padding(horizontal = NuvioTheme.spacing.xxxl)
+                )
+            }
+        }
+    }
     } // Browse atmosphere and grid
 
     if (uiState.showManageDialog && uiState.listManagement != null) {

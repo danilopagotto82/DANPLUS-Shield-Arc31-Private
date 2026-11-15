@@ -758,6 +758,13 @@ internal fun CalendarRowItem(
     }
 }
 
+@Composable
+internal fun calendarNetworkText(row: CalendarRow): String? {
+    if (!row.streaming) return row.network
+    val streaming = stringResource(R.string.calendar_streaming_source)
+    return listOfNotNull(streaming, row.network?.takeUnless { it.equals(streaming, ignoreCase = true) }).joinToString(" · ")
+}
+
 /** The time and, where it helps, the date for the right of a row; nothing for shows without a date. */
 @Composable
 internal fun calendarTimeTexts(row: CalendarRow, formats: CalendarFormats, showDate: Boolean): Pair<String?, String?> {
@@ -1006,7 +1013,7 @@ internal fun CalendarSidePanel(
                 }
                 val meta = listOfNotNull(
                     calendarLabelText(row.label),
-                    row.network,
+                    calendarNetworkText(row),
                     details?.let { calendarRuntimeText(it) },
                     calendarRatingGenre(row.rating ?: details?.rating, row.genre ?: details?.genre)
                 )

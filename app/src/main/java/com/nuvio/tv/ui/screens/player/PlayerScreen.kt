@@ -645,15 +645,28 @@ fun PlayerScreen(
     LaunchedEffect(uiState.error) {
         uiState.error?.let { com.nuvio.tv.core.formatcheck.FormatCheckSession.onError(it) }
     }
-    val seekThumbsEnabled = SeekThumbnailPreferences.enabledFlow(context).collectAsState(initial = false)
+    val seekThumbsEnabled = remember(context) { SeekThumbnailPreferences.enabledFlow(context) }.collectAsState(initial = false)
     val thumbsOnMpv = uiState.internalPlayerEngine == InternalPlayerEngine.MVP_PLAYER
     val lastThumbRun = remember { mutableStateOf<Pair<String?, Boolean>?>(null) }
     val seekrConfigured by SeekrPreviews.configured.collectAsState()
-    val seekrContent = SeekrPreviews.content(
-        viewModel.scoutContentId, uiState.contentType, uiState.currentSeason, uiState.currentEpisode
-    ).takeIf { seekrConfigured && !uiState.isLive }
+    val seekrAllowed by remember(context) { SeekThumbnailPreferences.seekrAllowedFlow(context) }.collectAsState(initial = false)
+    val contentIdForSeekr = viewModel.scoutContentId
+    val resolvedSeekrId = uiState.seekrMetadataId.takeIf { uiState.seekrMetadataForContentId == contentIdForSeekr }
+    val seekrContent = sequenceOf(contentIdForSeekr, resolvedSeekrId)
+        .mapNotNull { SeekrPreviews.content(it, uiState.contentType, uiState.currentSeason, uiState.currentEpisode) }
+        .firstOrNull().takeIf { seekrConfigured && seekrAllowed && !uiState.isLive }
+    val seekrNeedsLocalFallback = remember(uiState.currentStreamUrl, seekrContent, thumbsOnMpv, seekThumbsEnabled.value) {
+        kotlinx.coroutines.flow.MutableStateFlow(false)
+    }
     var seekrTrack by remember(uiState.currentStreamUrl, seekrContent, seekThumbsEnabled.value, thumbsOnMpv) {
         mutableStateOf<SeekrTrack?>(null)
+    }
+    var seekrStatus by remember(uiState.currentStreamUrl, seekrContent, seekrAllowed, seekrConfigured) {
+        mutableStateOf(when {
+            !seekrAllowed || !seekrConfigured || uiState.isLive -> SeekrPreviews.LookupStatus.Off
+            seekrContent == null -> SeekrPreviews.LookupStatus.NotFound
+            else -> SeekrPreviews.LookupStatus.Checking
+        })
     }
     LaunchedEffect(seekThumbsEnabled.value, uiState.currentStreamUrl, uiState.isTorrentStream, thumbsOnMpv, seekrContent) {
         val thumbSourceUrl = uiState.currentStreamUrl
@@ -661,14 +674,14 @@ fun PlayerScreen(
         SeekThumbnails.stopSession(handBackPlayer = handsPlayerBackOnRestart(previousRun, thumbSourceUrl, thumbsOnMpv))
         val engineChanged = previousRun != null && previousRun.first == thumbSourceUrl && previousRun.second != thumbsOnMpv
         lastThumbRun.value = thumbSourceUrl to thumbsOnMpv
-        if (!seekThumbsEnabled.value || thumbSourceUrl.isNullOrBlank() ||
+        if ((!seekThumbsEnabled.value && seekrContent == null) || thumbSourceUrl.isNullOrBlank() ||
             com.nuvio.tv.core.formatcheck.FormatCheckSession.active
         ) {
             SeekThumbnails.dropServerMemory()
             return@LaunchedEffect
         }
         suspend fun startNativeThumbnails(allowHold: Boolean) {
-            if (thumbsOnMpv) return
+            if (thumbsOnMpv || !seekThumbsEnabled.value) return
             // A media server's own thumbnails first (also for its HLS transcodes); without them our own engine runs.
             val serverCheckStart = SystemClock.elapsedRealtime()
             val serverThumbs = viewModel.serverThumbnails(thumbSourceUrl)
@@ -720,19 +733,25 @@ fun PlayerScreen(
         }
 
         // The player opens normally so the lookup uses the actual duration of this release.
-        val track = withTimeoutOrNull(30_000) {
-            val duration = viewModel.playbackTimeline.first { it.duration > 0 }.duration
-            SeekrPreviews.track(content, duration)
+        seekrStatus = SeekrPreviews.LookupStatus.Checking
+        val result = withTimeoutOrNull(30_000) {
+            val playback = viewModel.playbackTimeline.first { it.duration > 0 }
+            SeekrPreviews.lookup(content, playback.duration, playback.playbackPosition)
         }
-        if (track == null) {
+        seekrStatus = result?.status ?: SeekrPreviews.LookupStatus.Unavailable
+        seekrTrack = result?.track
+        if (result?.status != SeekrPreviews.LookupStatus.Ready) {
             startNativeThumbnails(allowHold = false)
         } else {
             SeekThumbnails.stopSession()
             SeekThumbnails.dropServerMemory()
-            seekrTrack = track
             viewModel.seekThumbnailIdentity()?.let { identity ->
                 CopyPrePick.drop(identity)
                 NextEpisodeThumbs.stopAndJoinFor(identity)
+            }
+            if (seekThumbsEnabled.value && !thumbsOnMpv) {
+                seekrNeedsLocalFallback.first { it }
+                startNativeThumbnails(allowHold = false)
             }
         }
     }
@@ -823,7 +842,7 @@ fun PlayerScreen(
                 pauseRequest = pauseRequest,
                 seenRequest = pauseSeen,
                 hasTimeline = customHasTimeline,
-                thumbnailsOn = seekThumbsEnabled.value,
+                thumbnailsOn = seekThumbsEnabled.value || seekrTrack != null,
                 pressedSincePause = keyPresses[0] != pressesAtStart,
                 onControl = focusOnControl[0],
             )
@@ -1990,6 +2009,17 @@ fun PlayerScreen(
                 },
                 filename = viewModel.currentFilename.takeIf { uiState.showPlayerLoadingSource },
                 progress = uiState.loadingProgress,
+                previewStatus = if (uiState.showPlayerLoadingStatus && (seekrConfigured || seekThumbsEnabled.value)) {
+                    stringResource(when (seekrStatus) {
+                        SeekrPreviews.LookupStatus.Off -> R.string.seekr_lookup_off
+                        SeekrPreviews.LookupStatus.Checking -> R.string.seekr_lookup_checking
+                        SeekrPreviews.LookupStatus.Ready -> R.string.seekr_lookup_ready
+                        SeekrPreviews.LookupStatus.NotFound -> R.string.seekr_lookup_not_found
+                        SeekrPreviews.LookupStatus.InvalidKey -> R.string.seekr_lookup_invalid
+                        SeekrPreviews.LookupStatus.RateLimited -> R.string.seekr_key_rate_limit
+                        SeekrPreviews.LookupStatus.Unavailable -> R.string.seekr_lookup_unavailable
+                    })
+                } else null,
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(2f)
@@ -2185,7 +2215,14 @@ fun PlayerScreen(
                     )
                 })
             }
-            SeekThumbnailOverlayHost(uiState = uiState, viewModel = viewModel, track = seekrTrack, modifier = Modifier.zIndex(2.65f))
+            SeekThumbnailOverlayHost(
+                uiState = uiState,
+                viewModel = viewModel,
+                track = seekrTrack,
+                modifier = Modifier.zIndex(2.65f),
+                onRemotePreviewReady = { seekrStatus = SeekrPreviews.LookupStatus.Ready },
+                onRemotePreviewMissing = { seekrNeedsLocalFallback.value = true }
+            )
             if (!prepareVisible) {
                 SeekThumbnailProgressHint(
                     uiState = uiState,
@@ -2944,11 +2981,20 @@ private fun MpvPlayerSurface(
     val latestAspectMode by rememberUpdatedState(aspectMode)
     val latestSubtitleStyle by rememberUpdatedState(subtitleStyle)
     val latestMetricsCallback by rememberUpdatedState(onSubtitleTextMetricsChanged)
-    val mpvView = remember(context) {
-        NuvioMpvSurfaceView(context).apply {
-            isFocusable = false
-            isFocusableInTouchMode = false
+    val viewResult = remember(context) {
+        runCatching {
+            NuvioMpvSurfaceView(context).apply {
+                isFocusable = false
+                isFocusableInTouchMode = false
+            }
         }
+    }
+    val mpvView = viewResult.getOrNull()
+    if (mpvView == null) {
+        LaunchedEffect(viewModel, viewResult) {
+            viewResult.exceptionOrNull()?.let(viewModel::onMpvSurfaceCreationFailed)
+        }
+        return
     }
 
     AndroidView(
@@ -3405,7 +3451,7 @@ internal fun PlayerView.applySubtitleStyleIfNeeded(
         setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, scaledFontSize)
         setApplyEmbeddedFontSizes(false)
 
-        val typeface = subtitleTypeface(context, subtitleStyle.font, subtitleStyle.bold)
+        val typeface = subtitleTypeface(context, subtitleStyle.font, subtitleStyle.bold, subtitleStyle.importedFontId)
         val edges = exoSubtitleEdges(subtitleStyle)
 
         setStyle(

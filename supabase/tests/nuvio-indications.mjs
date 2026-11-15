@@ -60,11 +60,58 @@ try {
     assert.equal((await call("list", sender, { box: "sent" })).length, 2);
     assert.deepEqual(await call("list", spouse, inbox, shield, null, [profile(spouse)]), []);
     await db.exec("reset role");
+    const cardMigration = "../migrations/20261115222728_nuvio_indications_card_delivery.sql";
+    await db.exec(await readFile(new URL(cardMigration, import.meta.url), "utf8"));
+    await db.exec("set role authenticated");
+    await assert.rejects(() => call("list", sender, { box: "sent" }), /permission denied/);
+    await db.exec("set role service_role");
+    const sent = { box: "sent" };
+    assert.ok((await call("list", sender, sent)).every((item) =>
+        item.send_id === null && item.backdrop_path === null));
+
+    const delivery = {
+        ...movie, media_id: "tt456", send_id: "60000000-0000-0000-0000-000000000001",
+        backdrop_path: "/horizonte.jpg",
+    };
+    const request = (suffix, recipients, extras = {}) => ({
+        ...delivery, recipients, request_id: "50000000-0000-0000-0000-00000000000" + suffix, ...extras,
+    });
+    const toSpouse = request(2, [spouse]);
+    const toMother = request(3, [mother]);
+    assert.deepEqual(await call("send", sender, toSpouse), { accepted: 1 });
+    assert.deepEqual(await call("send", sender, toMother), { accepted: 1 });
+    assert.deepEqual(await call("send", sender, toSpouse, fire), { accepted: 1 });
+    await assert.rejects(() => call("send", sender, request(4, [spouse], {
+        media_id: "tt789", backdrop_path: "https://untrusted.example/backdrop.jpg",
+    })), /violates check constraint/);
+    const separate = request(5, [spouse], {
+        media_id: "tt789", send_id: "60000000-0000-0000-0000-000000000002",
+    });
+    assert.deepEqual(await call("send", sender, separate), { accepted: 1 });
+    const grouped = (await call("list", sender, sent, fire)).filter((item) => item.send_id === delivery.send_id);
+    assert.deepEqual(grouped.map((item) => item.recipient_id).sort(), [spouse, mother].sort());
+    assert.ok(grouped.every((item) => item.backdrop_path === delivery.backdrop_path));
+    const received = (await call("list", spouse, inbox, fire)).find((item) => item.media_id === delivery.media_id);
+    assert.equal(received.backdrop_path, delivery.backdrop_path);
+    assert.equal(received.send_id, null);
+    assert.equal(received.recipient_id, spouse);
+    assert.deepEqual(await call("list", other, sent, fire, null, [profile(other)], secondOwner), []);
+
+    await db.exec("reset role");
+    await db.exec(await readFile(new URL(cardMigration.replace("/migrations/", "/rollback/"), import.meta.url), "utf8"));
+    await db.exec("set role service_role");
+    assert.ok((await call("list", sender, sent)).every((item) =>
+        !Object.hasOwn(item, "send_id") && !Object.hasOwn(item, "backdrop_path")));
+    await db.exec("reset role");
+    await db.exec(await readFile(new URL(cardMigration, import.meta.url), "utf8"));
+    await db.exec("set role service_role");
+    assert.equal((await call("list", sender, sent)).filter((item) => item.send_id === delivery.send_id).length, 2);
+    await db.exec("reset role");
     const rollback = file.replace("/migrations/", "/rollback/");
     await db.exec(await readFile(new URL(rollback, import.meta.url), "utf8"));
     await assert.rejects(() => call("list", spouse, inbox), /does not exist/);
-    assert.equal((await db.query("select count(*)::integer as total from danplus_nuvio.recommendations")).rows[0].total, 2);
-    console.log("PASS — same account across sessions, profile isolation, retry, PIN, read, dismiss and rollback");
+    assert.equal((await db.query("select count(*)::integer as total from danplus_nuvio.recommendations")).rows[0].total, 5);
+    console.log("PASS â€” same account across sessions, profile isolation, retry, delivery grouping, backdrop validation, PIN, read, dismiss and rollback");
 } finally {
     await db.close();
 }

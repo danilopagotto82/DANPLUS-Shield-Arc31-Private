@@ -52,23 +52,38 @@ internal fun V2PreferenceControls(initialFocusRequester: FocusRequester? = null)
     val device = LocalDeviceUiPreferences.current
     val appearance = LocalV2Appearance.current
     SettingsGroupCard(title = stringResource(R.string.v2_experience_title)) {
+        val selectedNavigation = if (appearance?.navigationStyle == NavigationStyle.TOP_NAVIGATION) {
+            NavigationStyle.TOP_NAVIGATION
+        } else {
+            NavigationStyle.FLOATING_SIDEBAR
+        }
         V2ChoiceRow(
-            title = stringResource(R.string.v2_experience_title),
-            subtitle = stringResource(R.string.v2_experience_subtitle),
-            initialFocusRequester = initialFocusRequester,
-            selected = device.interfaceExperience,
+            title = stringResource(R.string.v2_navigation_title),
+            selected = selectedNavigation,
             options = listOf(
-                InterfaceExperience.NUVIO_V2 to stringResource(R.string.v2_experience_v2),
-                InterfaceExperience.ORIGINAL_NUVIO to stringResource(R.string.v2_experience_original)
+                NavigationStyle.FLOATING_SIDEBAR to "Nuvio Original",
+                NavigationStyle.TOP_NAVIGATION to "DanPlus"
             ),
-            styledLabel = { experience ->
-                if (experience == InterfaceExperience.NUVIO_V2) buildAnnotatedString {
-                    withStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.ExtraBold)) { append("DAN") }
-                    withStyle(SpanStyle(color = Color(0xFF69B9FF), fontWeight = FontWeight.Normal)) { append("PLUS") }
-                } else null
+            initialFocusRequester = initialFocusRequester,
+            styledLabel = { style ->
+                buildAnnotatedString {
+                    if (style == NavigationStyle.FLOATING_SIDEBAR) {
+                        withStyle(SpanStyle(color = Color(0xFF69B9FF), fontWeight = FontWeight.Bold)) { append("Nuvio") }
+                        append(" Original")
+                    } else {
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("Dan") }
+                        withStyle(SpanStyle(color = Color(0xFF69B9FF))) { append("Plus") }
+                    }
+                }
             },
             onSelect = { value ->
-                DeviceUiPreferenceStore.update(context) { it.copy(interfaceExperience = value) }
+                V2AppearancePreferenceStore.update(context) { it.copy(navigationStyle = value) }
+                // A device still using the legacy renderer can enter the V2 top navigation explicitly.
+                if (value == NavigationStyle.TOP_NAVIGATION &&
+                    device.interfaceExperience == InterfaceExperience.ORIGINAL_NUVIO
+                ) {
+                    DeviceUiPreferenceStore.update(context) { it.copy(interfaceExperience = InterfaceExperience.NUVIO_V2) }
+                }
             }
         )
         if (appearance != null) {
@@ -99,17 +114,6 @@ internal fun V2PreferenceControls(initialFocusRequester: FocusRequester? = null)
                 ),
                 onSelect = { value ->
                     V2AppearancePreferenceStore.update(context) { it.copy(visualStyle = value) }
-                }
-            )
-            V2ChoiceRow(
-                title = stringResource(R.string.v2_navigation_title),
-                selected = appearance.navigationStyle,
-                options = listOf(
-                    NavigationStyle.FLOATING_SIDEBAR to stringResource(R.string.v2_navigation_sidebar),
-                    NavigationStyle.TOP_NAVIGATION to stringResource(R.string.v2_navigation_top)
-                ),
-                onSelect = { value ->
-                    V2AppearancePreferenceStore.update(context) { it.copy(navigationStyle = value) }
                 }
             )
             V2ChoiceRow(
@@ -294,7 +298,9 @@ private fun <T> V2ChoiceRow(
     val scope = rememberCoroutineScope()
     if (selected is VisualStyle || selected is NavigationStyle || selected is FocusStyle ||
         selected is PlayerChromeStyle || selected is SettingsPresentation) {
-        V2VisualOptions(title, selected, options) { value -> scope.launch { onSelect(value) } }
+        V2VisualOptions(title, selected, options, initialFocusRequester, styledLabel) { value ->
+            scope.launch { onSelect(value) }
+        }
         return
     }
     var open by remember { mutableStateOf(false) }

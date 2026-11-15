@@ -94,7 +94,9 @@ object MemoryBudget {
 
     private val deviceRamBytes: Long = NuvioExoPlayerPerformanceHelper.getRamFromMemInfo()
 
-    val budgetMb: Int = budgetMbFor(offHeapBuffers, deviceRamBytes, maxHeapMb)
+    val budgetMb: Int = BufferSizing.playbackBufferLimitMb(
+        budgetMbFor(offHeapBuffers, deviceRamBytes, maxHeapMb)
+    )
 
     internal fun budgetMbFor(offHeap: Boolean, deviceRamBytes: Long, maxHeapMb: Long): Int {
         if (offHeap) return NuvioExoPlayerPerformanceHelper.safeNativeMemoryLimitMbForRam(deviceRamBytes)
@@ -331,8 +333,12 @@ object MemoryBudget {
     )
 
     /** The chunk size playback uses: the saved one, no larger than [customMaxChunkMb]. */
-    fun customChunkKb(context: Context, settings: PlayerSettings): Int =
-        settings.parallelChunkSizeKb.coerceAtMost(customMaxChunkMb(context, settings) * 1024)
+    fun customChunkKb(context: Context, settings: PlayerSettings): Int {
+        val limitMb = customMaxChunkMb(context, settings)
+        val effectiveLimitMb = if (BufferSizing.is64BitPlaybackProcess) limitMb
+            else limitMb.coerceAtMost(BufferSizing.MAX_32_BIT_CHUNK_MB)
+        return settings.parallelChunkSizeKb.coerceAtMost(effectiveLimitMb * 1024)
+    }
 
     /** Max chunk size that fits budget given current buffer size */
     fun maxChunkMb(

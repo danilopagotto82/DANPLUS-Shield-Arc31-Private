@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -52,6 +54,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import androidx.compose.ui.res.stringResource
@@ -194,7 +197,9 @@ fun SeekThumbnailOverlayHost(
     uiState: PlayerUiState,
     viewModel: PlayerViewModel,
     track: SeekrTrack?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRemotePreviewReady: () -> Unit = {},
+    onRemotePreviewMissing: () -> Unit = {}
 ) {
     val durationFlow = remember(viewModel) {
         viewModel.playbackTimeline.map { it.duration }.distinctUntilChanged()
@@ -206,7 +211,8 @@ fun SeekThumbnailOverlayHost(
         pendingPositionMs = uiState.pendingPreviewSeekPosition,
         gliding = gliding,
         playing = uiState.isPlaying,
-        barShown = uiState.showControls || uiState.showSeekOverlay
+        barShown = uiState.showControls || uiState.showSeekOverlay,
+        recentSeekPositionMs = uiState.recentSeekThumbnailPositionMs
     )
     DisposableEffect(Unit) { onDispose { SeekThumbnailOverlay.visible = false } }
     val stripPlace = remember { booleanArrayOf(false) }
@@ -231,15 +237,25 @@ fun SeekThumbnailOverlayHost(
         thumbnailShown = true
     )
 
+    val latestSeekPosition by rememberUpdatedState(seekPositionMs)
+    val reportMissing by rememberUpdatedState(onRemotePreviewMissing)
     val remoteThumb by key(track) {
-        produceState<SeekrThumbnail?>(null, seekPositionMs) {
-            val current = value
-            if (current == null || seekPositionMs !in current.cueStartMs until current.cueEndMs) {
-                value = track?.thumbnailFor(seekPositionMs)
+        produceState<SeekrThumbnail?>(null) {
+            val remoteTrack = track ?: return@produceState
+            // A changing cursor must not cancel a sheet download already in progress.
+            snapshotFlow { latestSeekPosition }.collect { position ->
+                val current = value
+                if (current == null || position !in current.cueStartMs until current.cueEndMs) {
+                    value = remoteTrack.thumbnailFor(position)?.takeIf {
+                        !it.bitmap.isRecycled && it.bitmap.width > 0 && it.bitmap.height > 0
+                    }
+                    if (value == null) reportMissing()
+                }
             }
         }
     }
     val matchingRemote = remoteThumb?.takeIf { seekPositionMs in it.cueStartMs until it.cueEndMs }
+    if (matchingRemote != null) SideEffect(onRemotePreviewReady)
     if (matchingRemote == null && stripSpacing != null && showsStrip) {
         val aspect = SeekThumbnails.frameAspect() ?: (16f / 9f)
         // Re-spaced only when the speed crosses a step, and never back down while the glide stands still.

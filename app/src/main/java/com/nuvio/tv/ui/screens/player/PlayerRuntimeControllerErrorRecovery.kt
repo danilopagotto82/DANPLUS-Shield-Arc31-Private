@@ -1,4 +1,6 @@
 package com.nuvio.tv.ui.screens.player
+import com.nuvio.tv.data.local.StreamAutoPlayMode
+import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.data.local.InternalPlayerEngine
 
 import android.os.SystemClock
@@ -1084,7 +1086,9 @@ internal fun PlayerRuntimeController.advanceToNextLiveSource(
     slowSourceAddon: String? = null,
     stillWaitingForData: () -> Boolean = { true }
 ): Boolean {
-    deadSourceStreamUrls.add(currentStreamUrl)
+    if (!sourceSelectedAutomatically || hasRenderedFirstFrame) return false
+    val failedUrl = currentStreamUrl
+    deadSourceStreamUrls.add(failedUrl)
     serverPlayback.session(currentStreamUrl)?.target?.let { deadSourceStreamUrls.add(it.key()) }
     _uiState.update { it.copy(deadSourceStreamUrls = deadSourceStreamUrls.toSet()) }
 
@@ -1103,7 +1107,7 @@ internal fun PlayerRuntimeController.advanceToNextLiveSource(
         if (next != null) {
             errorRetryJob?.cancel()
             errorRetryJob = scope.launch {
-                if (!stillWaitingForData()) return@launch
+                if (currentStreamUrl != failedUrl || !sourceSelectedAutomatically || hasRenderedFirstFrame || !stillWaitingForData()) return@launch
                 failOverToSource(next, detailedError, savedPosition, slowSourceAddon != null)
             }
             return true
@@ -1123,8 +1127,8 @@ internal fun PlayerRuntimeController.advanceToNextLiveSource(
         val deadline = SystemClock.elapsedRealtime() + FAILOVER_SOURCE_LIST_WAIT_MS
         var next: Stream? = null
         while (true) {
-            if (currentSourceRequestKey() != requestKey) return@launch
-            if (!stillWaitingForData()) {
+            if (currentSourceRequestKey() != requestKey || currentStreamUrl != failedUrl || !sourceSelectedAutomatically) return@launch
+            if (hasRenderedFirstFrame || !stillWaitingForData()) {
                 _uiState.update { it.copy(sourceFailoverNotice = null) }
                 return@launch
             }
@@ -1170,6 +1174,13 @@ private fun PlayerRuntimeController.nextFailoverSource(addonName: String?): Stre
         }
     }
     val request = currentSourceStreamsRequest()
+    val settings = currentPlayerSettingsForReport
+    val regexMatches = if (settings.streamAutoPlayMode == StreamAutoPlayMode.REGEX_MATCH) {
+        StreamAutoPlaySelector.filterByAutoPlayRegex(streams, settings.streamAutoPlayRegex).toSet()
+    } else null
+    val currentLabel = listOfNotNull(currentFilename, state.currentStreamName, state.currentStreamDescription).joinToString(" ")
+    val wantsRemux = REMUX_SOURCE.containsMatchIn(currentLabel)
+    val wantsDub = DUBBED_SOURCE.containsMatchIn(currentLabel)
     return SourceFailoverSelection.selectNext(
         streams = streams,
         currentIndex = currentIdx,
@@ -1178,9 +1189,18 @@ private fun PlayerRuntimeController.nextFailoverSource(addonName: String?): Stre
         deadUrls = deadSourceStreamUrls,
         season = request?.season,
         episode = request?.episode,
-        addonName = addonName
+        addonName = addonName,
+        matchesProfile = { stream ->
+            val label = listOfNotNull(stream.behaviorHints?.filename, stream.name, stream.title, stream.description).joinToString(" ")
+            (regexMatches == null || stream in regexMatches) &&
+                (!wantsRemux || REMUX_SOURCE.containsMatchIn(label)) &&
+                (!wantsDub || DUBBED_SOURCE.containsMatchIn(label))
+        }
     )
 }
+
+private val REMUX_SOURCE = Regex("""\bremux\b""", RegexOption.IGNORE_CASE)
+private val DUBBED_SOURCE = Regex("""\b(dublad[oa]s?|dubbed)\b""", RegexOption.IGNORE_CASE)
 
 private fun PlayerRuntimeController.showSourceFailoverOverlay(
     attemptNo: Int,

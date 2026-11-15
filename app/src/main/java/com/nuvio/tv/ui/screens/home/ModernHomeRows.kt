@@ -801,6 +801,7 @@ internal fun ModernRowSection(
     onNavigateToDetail: (String, String, String) -> Unit,
     onNavigateToFolderDetail: (String, String) -> Unit,
     onLoadMoreCatalog: (String, String, String) -> Unit,
+    onNavigateToCatalogSeeAll: (String, String, String) -> Unit,
     onBackdropInteraction: () -> Unit,
     onExpandedCatalogFocusKeyChange: (String?) -> Unit,
     sharedPlaceholderShimmerOffsetState: State<Float>?,
@@ -989,7 +990,7 @@ internal fun ModernRowSection(
                             return@collect
                         }
                         val lastRequestedTotal = loadMoreRequestedTotals[rowState.key]
-                        if (rowState.hasMore &&
+                        if (rowState.hasMore && !rowState.showCatalogOverflow &&
                             !rowState.isLoading &&
                             lastRequestedTotal != total
                         ) {
@@ -1475,6 +1476,19 @@ internal fun ModernRowSection(
                                     Modifier.focusProperties { canFocus = false }
                                 } else Modifier
                             )
+                        }
+                    }
+                }
+                val catalogId = row.catalogId
+                val addonId = row.addonId
+                val type = row.apiType
+                if (row.showCatalogOverflow && catalogId != null && addonId != null && type != null) {
+                    item(key = row.key + ":see-all") {
+                        androidx.tv.material3.Button(
+                            onClick = { onNavigateToCatalogSeeAll(catalogId, addonId, type) },
+                            modifier = Modifier.padding(horizontal = 10.dp)
+                        ) {
+                            Text(stringResource(R.string.action_see_all))
                         }
                     }
                 }

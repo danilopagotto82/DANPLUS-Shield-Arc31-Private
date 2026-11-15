@@ -1,7 +1,10 @@
 package com.nuvio.tv.data.local
 
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
@@ -30,6 +33,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,6 +44,16 @@ data class ValidationResult(
     val collectionCount: Int = 0,
     val folderCount: Int = 0
 )
+
+@Serializable
+internal data class SpecialHighlightSelection(
+    val id: String,
+    val style: String,
+    val solid: Int? = null,
+    val gradient: Int? = null
+)
+
+internal data class SpecialHighlightSnapshot(val revision: Long, val mutation: String?, val selection: SpecialHighlightSelection?)
 
 @Singleton
 class CollectionsDataStore @Inject constructor(
@@ -60,6 +74,9 @@ class CollectionsDataStore @Inject constructor(
     private val highlightStyleKey = stringPreferencesKey("collection_highlight_style")
     private val highlightSolidColorKey = intPreferencesKey("collection_highlight_solid_rgb")
     private val highlightGradientColorKey = intPreferencesKey("collection_highlight_gradient_rgb")
+    private val highlightProfileKey = stringPreferencesKey("special_highlight_profile")
+    private val highlightRevisionKey = longPreferencesKey("special_highlight_revision")
+    private val highlightMutationKey = stringPreferencesKey("special_highlight_mutation")
     private fun string(resId: Int, vararg args: Any): String = appContext.getString(resId, *args)
 
     val collections: Flow<List<Collection>> =
@@ -88,35 +105,37 @@ class CollectionsDataStore @Inject constructor(
     }
 
     suspend fun addCollection(collection: Collection, saveHighlight: Boolean = false) {
-        store().edit { prefs ->
+        val profile = profileManager.activeProfile
+        store(profile?.id ?: profileManager.activeProfileId.value).edit { prefs ->
             val current = parseCollections(prefs[collectionsKey]).toMutableList()
             current.add(collection)
             prefs[collectionsKey] = gson.toJson(current.map { it.toSerializable() })
-            if (saveHighlight) prefs.updateHighlight(collection)
+            if (saveHighlight) prefs.updateHighlight(collection, profile?.serverProfileId)
         }
     }
 
     suspend fun updateCollection(collection: Collection, saveHighlight: Boolean = false) {
-        store().edit { prefs ->
+        val profile = profileManager.activeProfile
+        store(profile?.id ?: profileManager.activeProfileId.value).edit { prefs ->
             val current = parseCollections(prefs[collectionsKey]).toMutableList()
             val index = current.indexOfFirst { it.id == collection.id }
             if (index >= 0) {
                 current[index] = collection
-                if (saveHighlight) prefs.updateHighlight(collection)
+                if (saveHighlight) prefs.updateHighlight(collection, profile?.serverProfileId)
             }
             prefs[collectionsKey] = gson.toJson(current.map { it.toSerializable() })
         }
     }
 
     suspend fun removeCollection(collectionId: String) {
-        store().edit { prefs ->
+        val profile = profileManager.activeProfile
+        store(profile?.id ?: profileManager.activeProfileId.value).edit { prefs ->
             val current = parseCollections(prefs[collectionsKey]).toMutableList()
             current.removeAll { it.id == collectionId }
             if (prefs[highlightIdKey] == collectionId) {
-                prefs.remove(highlightIdKey)
-                prefs.remove(highlightStyleKey)
-                prefs.remove(highlightSolidColorKey)
-                prefs.remove(highlightGradientColorKey)
+                val previous = prefs.readSpecialHighlight()
+                prefs.writeSpecialHighlight(null)
+                if (previous != null) prefs.recordHighlightMutation(profile?.serverProfileId)
             }
             if (current.isEmpty()) {
                 prefs.remove(collectionsKey)
@@ -126,18 +145,82 @@ class CollectionsDataStore @Inject constructor(
         }
     }
 
-    private fun androidx.datastore.preferences.core.MutablePreferences.updateHighlight(collection: Collection) {
-        val highlight = collection.highlight
-        if (highlight != null) {
-            this[highlightIdKey] = collection.id
-            this[highlightStyleKey] = highlight.name
-        } else if (this[highlightIdKey] == collection.id) {
-            remove(highlightStyleKey)
+    private fun MutablePreferences.updateHighlight(collection: Collection, serverProfileId: String?) {
+        val previous = readSpecialHighlight()
+        val next = collection.highlight?.let { style ->
+            SpecialHighlightSelection(collection.id, style.name, collection.highlightColors.solid,
+                collection.highlightColors.gradient)
         }
-        if (this[highlightIdKey] == collection.id) {
-            val (solid, gradient) = collection.highlightColors
-            if (solid == null) remove(highlightSolidColorKey) else this[highlightSolidColorKey] = solid
-            if (gradient == null) remove(highlightGradientColorKey) else this[highlightGradientColorKey] = gradient
+        if (next == null && this[highlightIdKey] != collection.id) return
+        writeSpecialHighlight(next)
+        if (previous != next || (next != null && this[highlightProfileKey] != serverProfileId)) {
+            recordHighlightMutation(serverProfileId)
+        }
+    }
+
+    private fun Preferences.readSpecialHighlight(): SpecialHighlightSelection? {
+        val id = this[highlightIdKey] ?: return null
+        val style = this[highlightStyleKey] ?: return null
+        return SpecialHighlightSelection(id, style, this[highlightSolidColorKey], this[highlightGradientColorKey])
+    }
+
+    private fun MutablePreferences.writeSpecialHighlight(selection: SpecialHighlightSelection?) {
+        if (selection == null) {
+            remove(highlightIdKey)
+            remove(highlightStyleKey)
+            remove(highlightSolidColorKey)
+            remove(highlightGradientColorKey)
+            return
+        }
+        this[highlightIdKey] = selection.id
+        this[highlightStyleKey] = selection.style
+        selection.solid?.let { this[highlightSolidColorKey] = it } ?: remove(highlightSolidColorKey)
+        selection.gradient?.let { this[highlightGradientColorKey] = it } ?: remove(highlightGradientColorKey)
+    }
+
+    private fun MutablePreferences.recordHighlightMutation(serverProfileId: String?) {
+        if (serverProfileId == null) {
+            remove(highlightProfileKey)
+            remove(highlightRevisionKey)
+            remove(highlightMutationKey)
+            return
+        }
+        if (this[highlightProfileKey] != serverProfileId) {
+            this[highlightProfileKey] = serverProfileId
+            remove(highlightRevisionKey)
+        }
+        this[highlightMutationKey] = UUID.randomUUID().toString()
+    }
+
+    internal suspend fun specialHighlightSnapshot(profileId: Int, serverProfileId: String): SpecialHighlightSnapshot {
+        val prefs = store(profileId).data.first()
+        if (prefs[highlightProfileKey] != serverProfileId) return SpecialHighlightSnapshot(0, null, null)
+        return SpecialHighlightSnapshot(prefs[highlightRevisionKey] ?: 0,
+            prefs[highlightMutationKey], prefs.readSpecialHighlight())
+    }
+
+    internal suspend fun applySpecialHighlight(
+        profileId: Int,
+        serverProfileId: String,
+        request: SpecialHighlightSnapshot,
+        revision: Long,
+        selection: SpecialHighlightSelection?
+    ) {
+        store(profileId).edit { prefs ->
+            val bound = prefs[highlightProfileKey] == serverProfileId
+            val currentRevision = if (bound) prefs[highlightRevisionKey] ?: 0 else 0
+            val currentMutation = if (bound) prefs[highlightMutationKey] else null
+            if (revision < currentRevision || (revision == 0L && request.mutation == null)) return@edit
+            if (bound && currentMutation != request.mutation) {
+                // A newer local edit happened while the request was in flight.
+                if (revision > currentRevision) prefs[highlightRevisionKey] = revision
+                return@edit
+            }
+            if (!bound && request.mutation != null) return@edit
+            prefs[highlightProfileKey] = serverProfileId
+            prefs[highlightRevisionKey] = revision
+            prefs.remove(highlightMutationKey)
+            prefs.writeSpecialHighlight(selection)
         }
     }
 

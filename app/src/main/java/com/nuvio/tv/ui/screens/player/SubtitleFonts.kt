@@ -122,9 +122,23 @@ internal fun mpvSubtitleFontResources(): List<Int> =
         listOf(R.font.atkinson_hyperlegible_next_italic, R.font.source_sans3_italic)
 
 private val notoTypefaces = ConcurrentHashMap<Boolean, Typeface>()
+private val importedTypefaces by lazy { android.util.LruCache<String, Typeface>(8) }
 
 /** Cached Android resources; never resolved from the UI font or downloaded. */
-internal fun subtitleTypeface(context: Context?, font: SubtitleFont?, bold: Boolean): Typeface {
+internal fun subtitleTypeface(
+    context: Context?, font: SubtitleFont?, bold: Boolean, importedFontId: String? = null
+): Typeface {
+    if (context != null && importedFontId != null) {
+        com.nuvio.tv.core.player.ImportedSubtitleFonts.get(context, importedFontId)?.let { imported ->
+            runCatching {
+                val key = imported.file.absolutePath
+                val base = importedTypefaces.get(key) ?: Typeface.createFromFile(imported.file).also {
+                    importedTypefaces.put(key, it)
+                }
+                Typeface.create(base, if (bold) Typeface.BOLD else Typeface.NORMAL)
+            }.getOrNull()?.let { return it }
+        }
+    }
     if (font == null) return if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
     val ctx = requireNotNull(context)
     if (font == SubtitleFont.NOTO_SANS_SEMIBOLD && Build.VERSION.SDK_INT >= 29) {
@@ -164,8 +178,7 @@ private fun notoSubtitleTypeface(context: Context, bold: Boolean): Typeface {
 /** libass/MPV must discover the actual bundled fonts, not just receive a name. */
 @Synchronized
 internal fun prepareMpvSubtitleFonts(context: Context): File {
-    val directory = File(context.filesDir, "subtitle-fonts-v1")
-    check(directory.isDirectory || directory.mkdirs())
+    val directory = com.nuvio.tv.core.player.ImportedSubtitleFonts.rendererDirectory(context)
     for (resource in mpvSubtitleFontResources()) {
         val bytes = context.resources.openRawResource(resource).use { it.readBytes() }
         val target = File(directory, "${context.resources.getResourceEntryName(resource)}.ttf")

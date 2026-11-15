@@ -142,9 +142,6 @@ fun V2TopNavigation(
                             }
                         }
                     }
-                    com.nuvio.tv.ui.components.DeviceSystemClock(
-                        modifier = Modifier.padding(start = 8.dp, end = 8.dp)
-                    )
                     if (profile != null) {
                         Spacer(Modifier.width(12.dp))
                         var profileFocused by remember { mutableStateOf(false) }
@@ -163,6 +160,9 @@ fun V2TopNavigation(
                                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(76.dp))
                         }
                     }
+                    com.nuvio.tv.ui.components.DeviceSystemClock(
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp)
+                    )
                 }
             }
         }

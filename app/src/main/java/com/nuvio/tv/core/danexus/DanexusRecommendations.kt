@@ -28,6 +28,7 @@ data class ProfileRecommendation(
     val remoteWatched: Boolean = false,
     val remoteViewerId: String? = null,
     val remoteChange: String? = null,
+    val sendId: String? = null,
 )
 
 /** Persists the D12 outbox and cached recommendations on this device. */
@@ -56,7 +57,8 @@ class DanexusRecommendations(context: Context) {
                     r.optBoolean("remote"),
                     r.optBoolean("remoteWatched"),
                     r.optString("remoteViewerId").takeIf { it.isNotBlank() },
-                    r.optString("remoteChange").takeIf { it.isNotBlank() })
+                    r.optString("remoteChange").takeIf { it.isNotBlank() },
+                    r.optString("sendId").takeIf { it.isNotBlank() })
                     }.getOrNull() }.sortedByDescending { it.createdAt }
         }.getOrDefault(emptyList())
     }
@@ -74,6 +76,7 @@ class DanexusRecommendations(context: Context) {
         val targets = recipients.distinct().filter { it != from }
         if (targets.isEmpty()) return@synchronized 0
         val createdAt = System.currentTimeMillis()
+        val sendId = UUID.randomUUID().toString()
         val updated = targets.fold(read(owner)) { rows, to ->
             ProfileRecommendationRules.deliver(rows, ProfileRecommendation(
                 UUID.randomUUID().toString(), from, to, meta.id, meta.apiType,
@@ -83,7 +86,8 @@ class DanexusRecommendations(context: Context) {
                 episodeKeys = ProfileRecommendationRules.episodeKeys(meta),
                 fromServerId = serverIds[from],
                 toServerId = serverIds[to],
-                uploadPending = syncEnabled && serverIds[from] != null && serverIds[to] != null
+                uploadPending = syncEnabled && serverIds[from] != null && serverIds[to] != null,
+                sendId = sendId
             ))
         }
         save(owner, updated)
@@ -155,7 +159,8 @@ class DanexusRecommendations(context: Context) {
             .put("synopsis", r.synopsis.orEmpty()).put("episodes", JSONArray(r.episodeKeys.toList()))
             .put("fromServerId", r.fromServerId.orEmpty()).put("toServerId", r.toServerId.orEmpty())
             .put("uploadPending", r.uploadPending).put("remote", r.remote).put("remoteWatched", r.remoteWatched)
-            .put("remoteViewerId", r.remoteViewerId.orEmpty()).put("remoteChange", r.remoteChange.orEmpty())) }
+            .put("remoteViewerId", r.remoteViewerId.orEmpty()).put("remoteChange", r.remoteChange.orEmpty())
+            .put("sendId", r.sendId.orEmpty())) }
         return array.toString()
     }
     companion object {

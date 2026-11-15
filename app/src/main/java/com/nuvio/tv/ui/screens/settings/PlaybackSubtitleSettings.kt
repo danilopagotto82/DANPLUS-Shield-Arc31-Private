@@ -7,14 +7,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nuvio.tv.R
+import com.nuvio.tv.core.player.ImportedSubtitleFonts
 import com.nuvio.tv.data.local.AVAILABLE_SUBTITLE_LANGUAGES
 import com.nuvio.tv.data.local.LibassRenderScale
 import com.nuvio.tv.data.local.LibassRenderMode
 import com.nuvio.tv.data.local.PlayerPreference
 import com.nuvio.tv.data.local.PlayerSettings
+import com.nuvio.tv.data.local.MAX_SUBTITLE_SHADOW_DEPTH
+import com.nuvio.tv.data.local.MIN_SUBTITLE_SHADOW_DEPTH
 import com.nuvio.tv.data.local.MAX_SUBTITLE_SHADOW_OPACITY
 import com.nuvio.tv.data.local.MIN_SUBTITLE_SHADOW_OPACITY
 import com.nuvio.tv.data.local.SubtitleOutlineSize
@@ -125,16 +129,44 @@ internal fun PlaybackSubtitlesSection(
     )
 
     SettingsSectionLabel(text = stringResource(R.string.sub_style_label))
+    SubtitleStylePreview(style)
+    val context = LocalContext.current
     var showFontPicker by remember { mutableStateOf(false) }
+    var showImportedFonts by remember { mutableStateOf(false) }
+    var showUpload by remember { mutableStateOf(false) }
+    val importedFont = remember(style.importedFontId, showImportedFonts) {
+        ImportedSubtitleFonts.get(context, style.importedFontId)
+    }
     SettingsActionRow(
         title = stringResource(R.string.subtitle_font_family),
         subtitle = null,
-        value = subtitleFontName(style.font),
+        value = importedFont?.family ?: subtitleFontName(style.font),
         enabled = enabled,
         onClick = { showFontPicker = true }
     )
     if (showFontPicker && enabled) {
         SubtitleFontDialog(style.font, { font -> onUpdate { setSubtitleFont(font) } }) { showFontPicker = false }
+    }
+    SettingsActionRow(
+        title = stringResource(R.string.subtitle_import_manage),
+        subtitle = null,
+        value = null,
+        enabled = enabled,
+        onClick = { showImportedFonts = true }
+    )
+    if (showImportedFonts && enabled && !showUpload) {
+        ImportedSubtitleFontsDialog(
+            selectedId = style.importedFontId,
+            onSelect = { id -> onUpdate { setImportedSubtitleFont(id) } },
+            onUpload = { showUpload = true },
+            onDismiss = { showImportedFonts = false }
+        )
+    }
+    if (showUpload && enabled) {
+        SubtitleFontUploadDialog(
+            onUploaded = { font -> onUpdate { setImportedSubtitleFont(font.id) } },
+            onDismiss = { showUpload = false }
+        )
     }
     SliderSettingsItem(
         title = stringResource(R.string.sub_size),
@@ -205,6 +237,16 @@ internal fun PlaybackSubtitlesSection(
         enabled = enabled
     )
     if (style.effectiveShadowEnabled) {
+        SliderSettingsItem(
+            title = stringResource(R.string.subtitle_shadow_depth),
+            value = style.shadowDepth,
+            valueText = style.shadowDepth.toString(),
+            minValue = MIN_SUBTITLE_SHADOW_DEPTH,
+            maxValue = MAX_SUBTITLE_SHADOW_DEPTH,
+            step = 1,
+            onValueChange = { depth -> onUpdate { setSubtitleShadowDepth(depth) } },
+            enabled = enabled
+        )
         SliderSettingsItem(
             title = stringResource(R.string.subtitle_shadow_opacity),
             value = style.shadowOpacity,

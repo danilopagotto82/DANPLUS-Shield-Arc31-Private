@@ -82,6 +82,8 @@ internal fun PlayerRuntimeController.applyMetaDetails(meta: Meta) {
     _uiState.update { state ->
         state.copy(
             description = description ?: state.description,
+            seekrMetadataId = meta.imdbId ?: meta.id,
+            seekrMetadataForContentId = contentId,
             poster = state.poster ?: meta.poster,
             currentEpisodeTitle = episodeTitle ?: state.currentEpisodeTitle,
             releaseYear = playerMovieYear(meta.releaseInfo) ?: state.releaseYear,

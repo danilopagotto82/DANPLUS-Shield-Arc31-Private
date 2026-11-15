@@ -42,11 +42,16 @@ class ScoutMixCatalogProvider @Inject constructor(
     override val addons: Flow<List<Addon>> = flowOf(emptyList())
 
     override val collections: Flow<List<Collection>> = if (!ScoutMixes.available) flowOf(emptyList()) else
-        combine(store.mixes, LocaleCache.tags) { mixes, _ ->
+        combine(store.mixes, LocaleCache.tags, store.hiddenReadyMixes) { all, _, hidden ->
+            val gate = com.nuvio.tv.core.ratinglimit.ratingLimitGateOrNull(context)
+            val limit = gate?.activeLimit()
+            val mixes = if (gate == null || limit == null) all else all.map { mix ->
+                mix.copy(shows = gate.keepFitting(limit, mix.shows) { (it.imdbId ?: it.id) to it.type })
+            }.filter { it.shows.isNotEmpty() }
             if (mixes.isEmpty()) emptyList() else {
                 val local = context.withAppLocale()
                 val own = scoutMixCollection(local.getString(R.string.scout_mixes_title), mixes, homeWords(local))
-                listOf(own.copy(folders = own.folders + readyFolders(local, mixes)))
+                listOf(own.copy(folders = own.folders + readyFolders(local, mixes, hidden)))
             }
         }.let { collections ->
             combine(collections, scoutStore.profile.map { it.settings.listEmojis }.distinctUntilChanged()) { rows, enabled ->
@@ -68,9 +73,10 @@ class ScoutMixCatalogProvider @Inject constructor(
     )
 
     /** The occasion in season, if any, then the way to every ready-made mix. */
-    private suspend fun readyFolders(local: Context, mixes: List<ScoutMix>): List<CollectionFolder> = buildList {
+    private suspend fun readyFolders(local: Context, mixes: List<ScoutMix>, hidden: Set<String>): List<CollectionFolder> = buildList {
         val kind = local.getString(R.string.scout_premix_kind)
-        ScoutReadyMixes.inSeason(java.time.LocalDate.now())?.let { season ->
+        val today = java.time.LocalDate.now()
+        ScoutReadyMixes.inSeason(today)?.takeUnless { it.scoutHiddenKey(today) in hidden }?.let { season ->
             val occasion = season.occasion ?: return@let
             val episodes = runCatching { ready.occasionEpisodes(occasion) }.getOrDefault(emptyList())
             if (episodes.size < SCOUT_OCCASION_FEWEST) return@let

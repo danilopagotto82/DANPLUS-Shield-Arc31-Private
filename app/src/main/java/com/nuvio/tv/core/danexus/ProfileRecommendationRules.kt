@@ -27,6 +27,15 @@ internal object ProfileRecommendationRules {
             else row.to == active && (person == null || row.from == person)
         }
 
+    fun cards(rows: List<ProfileRecommendation>, active: Int, sent: Boolean, person: Int?) =
+        inbox(rows, active, sent, person).groupBy { row ->
+            if (sent && person == null && row.sendId != null) {
+                "send:${row.from}:${row.type}:${row.contentId}:${row.sendId}"
+            } else {
+                "row:${row.key}"
+            }
+        }.toList()
+
     fun deliver(rows: List<ProfileRecommendation>, item: ProfileRecommendation): List<ProfileRecommendation> {
         if (item.from == item.to) return rows
         return listOf(item) + rows.filterNot {

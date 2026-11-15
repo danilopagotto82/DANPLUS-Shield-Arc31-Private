@@ -101,4 +101,5 @@
     <string name="scout_premix_no_link_skipped">No links for %1$s, so Scout picked another episode.</string>
     <string name="scout_premix_no_link_stopped">No links for the last 3 episodes. Press Play to try this one, or Remix.</string>
     <string name="scout_premix_none">Nothing fits these choices. Try another decade or kind.</string>
+    <string name="scout_premix_restore_hidden">Restore hidden mixes</string>
 </resources>

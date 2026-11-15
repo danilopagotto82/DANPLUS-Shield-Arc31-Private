@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.*
 import com.nuvio.tv.domain.model.*
@@ -26,7 +27,14 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 /** Cached artwork and code-drawn chrome illustrate the choices without network work. */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-internal fun <T> V2VisualOptions(title: String, selectedValue: T, options: List<Pair<T, String>>, onSelect: (T) -> Unit) {
+internal fun <T> V2VisualOptions(
+    title: String,
+    selectedValue: T,
+    options: List<Pair<T, String>>,
+    initialFocusRequester: FocusRequester?,
+    styledLabel: ((T) -> AnnotatedString?)?,
+    onSelect: (T) -> Unit
+) {
     val accent = NuvioTheme.colors.Secondary
     val values = options.map { it.first }
     val requesters = remember(values) { values.associateWith { FocusRequester() } }
@@ -41,6 +49,7 @@ internal fun <T> V2VisualOptions(title: String, selectedValue: T, options: List<
                 Card(onClick = { onSelect(value) },
                     modifier = Modifier.weight(1f)
                         .then(if (chosen) Modifier.settingsJumpAnchor(title, shape) else Modifier)
+                        .then(if (chosen && initialFocusRequester != null) Modifier.focusRequester(initialFocusRequester) else Modifier)
                         .focusRequester(requesters.getValue(value)).onFocusChanged { focused = it.isFocused }
                         .settingsItemFocus(focused)
                         .semantics { selected = chosen },
@@ -55,7 +64,7 @@ internal fun <T> V2VisualOptions(title: String, selectedValue: T, options: List<
                     Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         V2OptionPreview(value, accent, Modifier.width(112.dp).height(63.dp))
                         Row(Modifier.weight(1f), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(label, style = MaterialTheme.typography.labelLarge, color = Color.White,
+                            Text(styledLabel?.invoke(value) ?: AnnotatedString(label), style = MaterialTheme.typography.labelLarge, color = Color.White,
                                 modifier = Modifier.weight(1f))
                             Canvas(Modifier.padding(start = 10.dp).size(16.dp)) {
                                 drawCircle(if (chosen) accent else Color.White.copy(alpha = .55f), style = Stroke(1.5.dp.toPx()))

@@ -161,3 +161,6 @@ internal fun scoutReadyFresh(builtAt: Long, today: LocalDate = LocalDate.now(), 
 /** The same shuffle all week, a new one each Monday. */
 internal fun scoutReadyWeekSeed(today: LocalDate = LocalDate.now()): Long =
     today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toEpochDay()
+
+internal fun ScoutReadyMix.scoutHiddenKey(today: java.time.LocalDate): String =
+    if (occasion == null) id else "$id|${today.year}"

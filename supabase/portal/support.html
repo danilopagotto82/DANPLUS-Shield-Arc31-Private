@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatórios · DanPlus</title>
+<link rel="stylesheet" href="/support.css">
+<main>
+  <header><h1>Relatórios DanPlus</h1><button id="sign-out" type="button" hidden>Sair</button></header>
+  <form id="sign-in" class="panel sign-in">
+    <h2>Área administrativa</h2>
+    <label>E-mail<input name="email" type="email" autocomplete="username" required></label>
+    <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+    <div class="sign-in-actions">
+      <button>Entrar</button>
+      <button id="email-login" type="button">Entrar por e-mail</button>
+    </div>
+  </form>
+  <form id="email-verification" class="panel sign-in" hidden>
+    <h2>Confirme seu e-mail</h2>
+    <p>Copie o código ou o link da mensagem do DanPlus e cole abaixo.</p>
+    <label>Código ou link<input name="verification" type="password" autocomplete="one-time-code" maxlength="2048" required></label>
+    <div class="sign-in-actions">
+      <button>Confirmar</button>
+      <button id="email-back" type="button">Voltar</button>
+    </div>
+  </form>
+  <p id="notice" role="status" aria-live="polite"></p>
+  <div id="workspace" hidden>
+    <section class="panel" aria-labelledby="queue-title">
+      <h2 id="queue-title">Caixa de entrada</h2>
+      <form id="filters">
+        <label>Tipo<select name="kind"><option value="">Todos</option><option value="bug">Problema</option><option value="idea">Sugestão</option><option value="crash">Travamento</option><option value="playback">Reprodução</option><option value="auth">Conta</option></select></label>
+        <label>Estado<select name="status" data-status><option value="">Todos</option></select></label>
+        <label>Protocolo<input name="protocol" inputmode="text" spellcheck="false" maxlength="36" pattern="[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}"></label>
+        <button>Filtrar</button>
+      </form>
+      <ul id="queue" aria-label="Relatórios"></ul>
+      <p id="empty" hidden>Nenhum relatório para esses filtros.</p>
+      <button id="next" hidden>Próximos relatórios</button>
+    </section>
+    <section class="panel" id="detail" hidden>
+      <h2 id="detail-title" tabindex="-1">Relatório</h2>
+      <p id="protocol"></p>
+      <p id="summary"></p>
+      <p id="meta"></p>
+      <details><summary>Diagnóstico do aparelho</summary><pre id="diagnostic"></pre></details>
+      <form id="update">
+        <label>Estado<select name="status" data-status></select></label>
+        <label id="reply-label">Resposta para a conta do usuário<textarea name="reply" maxlength="4000" rows="4"></textarea></label>
+        <p id="legacy" hidden>O envio antigo não tem uma conta verificada para receber respostas. Você pode organizar o chamado e guardar uma nota interna.</p>
+        <label>Nota interna<textarea name="note" maxlength="4000" rows="3"></textarea></label>
+        <button>Salvar</button>
+      </form>
+      <h3>Histórico</h3>
+      <ol id="events"></ol>
+    </section>
+  </div>
+</main>
+<script type="module" src="/support.mjs"></script>
+</html>

@@ -95,6 +95,15 @@ class ForkUpdateRepositoryTest {
         assertEquals(asset(), AbiSelector.chooseBestApkAsset(all, listOf("arm64-v8a", "armeabi-v7a")))
         assertEquals(asset("universal"), AbiSelector.chooseBestApkAsset(all, listOf("x86")))
     }
+    @Test fun fireUsesItsOwnReleaseAssetEvenOnADeviceWithBothAbis() {
+        val shield = asset()
+        val fire = asset("armeabi-v7a").copy(name = "DaNexus-FireTV-2.0.0-armeabi-v7a.apk")
+        val complete = listOf(shield, fire)
+        assertEquals(fire, AbiSelector.chooseBestApkAsset(complete, listOf("arm64-v8a", "armeabi-v7a"), fireChannel = true))
+        assertNull(AbiSelector.chooseBestApkAsset(listOf(shield), listOf("armeabi-v7a"), fireChannel = true))
+        assertEquals(shield, AbiSelector.chooseBestApkAsset(complete, listOf("arm64-v8a")))
+    }
+
     @Test fun `update keeps the installed APK type on a box that supports both`() {
         val device = listOf("arm64-v8a", "armeabi-v7a", "armeabi")
         val all = listOf(asset("armeabi-v7a"), asset())

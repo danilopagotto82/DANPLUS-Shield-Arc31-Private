@@ -15,6 +15,7 @@ import java.util.Locale
 /** Problems that Arc can show come from outside Arc, with the key the report and the inbox use. */
 enum class PlayerErrorCause(val key: String) {
     ServerSilent("server_silent"),
+    SourceSlow("source_slow"),
     ServerRefused("server_refused"),
     Limit("limit"),
     ServerUnreachable("server_unreachable"),
@@ -159,6 +160,25 @@ internal fun silentServerCard(context: Context, seconds: Int, source: String?, f
         ),
         fromWatchdog
     )
+
+/** Classify a slow source only with observed transfer and a file bitrate estimate. */
+internal fun slowSourceCard(
+    context: Context, source: String?, bytes: Long, elapsedMs: Long, fileBitrateBps: Long
+): PlayerErrorCard? {
+    if (bytes <= 0L || elapsedMs < 10_000L || fileBitrateBps <= 0L) return null
+    val measuredBps = bytes.toDouble() * 8_000.0 / elapsedMs
+    if (measuredBps >= fileBitrateBps * .75) return null
+    val facts = context.getString(
+        R.string.player_error_facts_slow, measuredBps / 1_000_000.0, fileBitrateBps / 1_000_000.0
+    )
+    return PlayerErrorCard(
+        PlayerErrorCause.SourceSlow,
+        context.getString(R.string.player_error_card_slow_title),
+        context.getString(R.string.player_error_card_slow),
+        PlayerErrorCauses.factsLine(source, facts),
+        fromWatchdog = true
+    )
+}
 
 internal fun unreachableServerCard(context: Context, source: String?, fromWatchdog: Boolean): PlayerErrorCard =
     PlayerErrorCard(

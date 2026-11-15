@@ -62,18 +62,27 @@ class ReusedLinkRefreshTest {
         assertNull(ReusedLinkRefresh.sameSource(listOf(dead), saved(), setOf("https://cdn.example/dead"), 1, 2))
     }
 
-    @Test fun theEntryNameIsUsedWhenThereIsNoFileName() {
+    @Test fun theEntryNameAndGroupAloneCannotProveFileIdentity() {
         val byName = stream("https://cdn.example/fresh", name = "TorBox 2160p", group = "aio|torbox|2160p")
         val otherGroup = stream("https://cdn.example/x", name = "TorBox 2160p", group = "other")
-        val picked = ReusedLinkRefresh.sameSource(listOf(otherGroup, byName), saved(filename = null), emptySet(), 1, 2)
-        assertEquals("https://cdn.example/fresh", picked?.url)
+        assertNull(ReusedLinkRefresh.sameSource(listOf(otherGroup, byName), saved(filename = null), emptySet(), 1, 2))
     }
 
-    @Test fun groupAndSizeAreTheLastMatch() {
-        val renamed = stream("https://cdn.example/fresh", name = "renamed", group = "aio|torbox|2160p", size = 4_000L)
-        assertEquals(renamed, ReusedLinkRefresh.sameSource(listOf(renamed), saved(filename = null), emptySet(), 1, 2))
-        val differentSize = renamed.copy(behaviorHints = renamed.behaviorHints?.copy(videoSize = 5_000L))
+    @Test fun theEntryNameGroupAndSizeCanMatchAnOlderRecordWithoutAFileName() {
+        val same = stream("https://cdn.example/fresh", group = "aio|torbox|2160p", size = 4_000L)
+        assertEquals(same, ReusedLinkRefresh.sameSource(listOf(same), saved(filename = null), emptySet(), 1, 2))
+        val differentSize = same.copy(behaviorHints = same.behaviorHints?.copy(videoSize = 5_000L))
         assertNull(ReusedLinkRefresh.sameSource(listOf(differentSize), saved(filename = null), emptySet(), 1, 2))
+    }
+
+    @Test fun torrentIdentityMustKeepTheFileIndexAndRejectAmbiguousAddresses() {
+        val hash = "a".repeat(40)
+        val entry = saved().copy(infoHash = hash, fileIdx = 7, addonName = "AIOStreams")
+        val anotherEpisode = stream("https://cdn.example/wrong-file").copy(infoHash = hash, fileIdx = 8)
+        val renewed = stream("https://cdn.example/right-file").copy(infoHash = hash, fileIdx = 7)
+        val differentAddon = renewed.copy(url = "https://cdn.example/wrong-addon", addonName = "Other")
+        assertEquals(renewed, ReusedLinkRefresh.sameSource(listOf(anotherEpisode, renewed, differentAddon), entry, emptySet(), 1, 2))
+        assertNull(ReusedLinkRefresh.sameSource(listOf(renewed, renewed.copy(url = "https://cdn.example/alternate")), entry, emptySet(), 1, 2))
     }
 
     @Test fun noMatchingEntryMeansNoPick() {

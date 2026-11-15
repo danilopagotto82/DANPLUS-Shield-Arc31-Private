@@ -208,6 +208,7 @@ fun FolderDetailScreen(
                     onSelectTab = viewModel::selectTab,
                     onNavigateToDetail = onNavigateToDetail,
                     onPreviewFocus = viewModel::onItemFocused,
+                    previewCredits = viewModel.previewCredits.collectAsStateWithLifecycle(),
                     isItemWatched = isItemWatched,
                     onLoadMore = { viewModel.loadMoreItems(uiState.selectedTabIndex) },
                     onSaveFocusState = { verticalIndex, verticalOffset, focusedItemKey ->
@@ -227,6 +228,27 @@ fun FolderDetailScreen(
                         folder, uiState.collectionTitle,
                         Modifier.padding(horizontal = NuvioTheme.spacing.xxxl, vertical = NuvioTheme.spacing.sm)
                     )
+                    val showcase = uiState.viewMode == FolderViewMode.SHOWCASE
+                    var focusedShowcaseItem by remember(folder) { mutableStateOf<Pair<MetaPreview, String>?>(null) }
+                    val firstShowcaseItem = remember(uiState.tabs) {
+                        uiState.tabs.asSequence().filterNot { it.isAllTab }.mapNotNull { tab ->
+                            val row = tab.catalogRow ?: return@mapNotNull null
+                            row.items.firstOrNull()?.let { it to (it.sourceAddonBaseUrl ?: row.addonBaseUrl) }
+                        }.firstOrNull()
+                    }
+                    if (showcase) {
+                        (focusedShowcaseItem ?: firstShowcaseItem)?.let { (item, addon) ->
+                            FolderShowcase(
+                                item = item,
+                                addon = addon,
+                                onWatch = onWatch,
+                                onOpen = { selected, source ->
+                                    HeroBackdropState.update(selected.backdropUrl)
+                                    onNavigateToDetail(selected.id, selected.apiType, source)
+                                }
+                            )
+                        }
+                    }
                     RowsContent(
                         uiState = uiState,
                         focusState = rowsFocusState,
@@ -236,18 +258,9 @@ fun FolderDetailScreen(
                         onSaveFocusState = { vi, vo, rk, ikm, m, ma, ri, ii ->
                             viewModel.saveRowsFocusState(vi, vo, rk, ikm, m, ma, ri, ii)
                         },
-                        onItemFocus = if (uiState.viewMode == FolderViewMode.ROWS) viewModel::onItemFocused else { _ -> },
-                        leadingContent = if (uiState.viewMode == FolderViewMode.SHOWCASE) {
-                            {
-                                FolderShowcase(
-                                    tabs = uiState.tabs,
-                                    onWatch = onWatch,
-                                    onOpen = { item, addon ->
-                                        HeroBackdropState.update(item.backdropUrl)
-                                        onNavigateToDetail(item.id, item.apiType, addon)
-                                    }
-                                )
-                            }
+                        onItemFocus = if (showcase) { _ -> } else viewModel::onItemFocused,
+                        onShowcaseFocus = if (showcase) {
+                            { item, source -> focusedShowcaseItem = item to source }
                         } else null,
                         onItemLongPress = { item, addonBaseUrl ->
                             viewModel.posterOptions.show(item, addonBaseUrl)
@@ -339,6 +352,7 @@ private fun TabbedGridContent(
     isItemWatched: (MetaPreview) -> Boolean = { false },
     onItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
     scoutAction: (@Composable () -> Unit)? = null,
+    previewCredits: State<Map<Pair<String, String>, FolderPreviewCredits>>,
     onPreviewFocus: (MetaPreview) -> Unit = {}
 ) {
     val tabFocusRequesters = remember(uiState.tabs.size) { uiState.tabs.indices.map { FocusRequester() } }
@@ -521,6 +535,7 @@ private fun TabbedGridContent(
                     LaunchedEffect(preview?.id, preview?.apiType) { preview?.let(onPreviewFocus) }
                     FolderSidePreview(
                         item = preview,
+                        credits = preview?.let { previewCredits.value[it.apiType to it.id] },
                         modifier = Modifier.fillMaxHeight().fillMaxWidth(.29f)
                             .padding(start = NuvioTheme.spacing.xxxl, top = NuvioTheme.spacing.lg, bottom = NuvioTheme.spacing.lg)
                     )
@@ -656,7 +671,7 @@ private fun RowsContent(
     focusedPosterBackdropTrailerMuted: Boolean = true,
     trailerPreviewUrls: Map<String, String> = emptyMap(),
     trailerPreviewAudioUrls: Map<String, String> = emptyMap(),
-    leadingContent: (@Composable () -> Unit)? = null
+    onShowcaseFocus: ((MetaPreview, String) -> Unit)? = null
 ) {
     val sourceTabs = remember(uiState.tabs) { uiState.tabs.filter { tab ->
         if (tab.isAllTab) return@filter false
@@ -824,7 +839,6 @@ private fun RowsContent(
         contentPadding = PaddingValues(top = NuvioTheme.spacing.lg, bottom = NuvioTheme.spacing.xxxl),
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxl)
     ) {
-        if (leadingContent != null) item(key = "folder_showcase") { leadingContent() }
         sourceTabs.forEachIndexed { index, tab ->
             // Compute rowKey early so we can use it as item key for focus restoration
             val catalogRow = tab.catalogRow
@@ -935,6 +949,11 @@ private fun RowsContent(
                             onItemFocused = { itemIndex ->
                                 currentFocusedRowKey.value = rowKey
                                 rowFocusedItemIndex[rowKey] = itemIndex
+                                if (onShowcaseFocus != null) {
+                                    catalogRow.items.getOrNull(itemIndex)?.let { item ->
+                                        onShowcaseFocus(item, item.sourceAddonBaseUrl ?: catalogRow.addonBaseUrl)
+                                    }
+                                }
                             }
                         )
                     }

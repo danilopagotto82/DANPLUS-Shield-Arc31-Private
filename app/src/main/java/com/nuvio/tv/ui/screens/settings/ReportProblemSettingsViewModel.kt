@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
+import com.nuvio.tv.data.repository.AccountReportsRepository
 import com.nuvio.tv.data.repository.AppReportChoices
 import com.nuvio.tv.data.repository.AppReportRepository
 import com.nuvio.tv.data.repository.PlaybackIssueReceipt
@@ -34,7 +35,8 @@ internal fun PlaybackIssueReceipt.toSendState(): ReportSendState =
 class ReportProblemSettingsViewModel @Inject constructor(
     private val playerSettingsDataStore: PlayerSettingsDataStore,
     private val appReportRepository: AppReportRepository,
-    sentReportsStore: SentReportsStore
+    sentReportsStore: SentReportsStore,
+    private val accountReports: AccountReportsRepository
 ) : ViewModel() {
     val recorderEnabled: StateFlow<Boolean> = playerSettingsDataStore.playerSettings
         .map { it.reportRecorderEnabled }
@@ -42,6 +44,11 @@ class ReportProblemSettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
 
     val sentReports: StateFlow<List<SentReport>> = sentReportsStore.reports
+
+    internal val reportAccount = accountReports.accountChanges
+        .stateIn(viewModelScope, SharingStarted.Eagerly, accountReports.currentAccount)
+
+    internal suspend fun loadAccountReports(account: String) = accountReports.list(account)
 
     private val _send = MutableStateFlow(ReportSendState())
     val send: StateFlow<ReportSendState> = _send.asStateFlow()

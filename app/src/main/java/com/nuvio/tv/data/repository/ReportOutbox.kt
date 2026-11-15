@@ -23,6 +23,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -36,7 +37,7 @@ internal enum class ReportRoute(val key: String, val path: String) {
 }
 
 internal sealed interface ReportUpload {
-    data class Accepted(val id: String, val followUrl: String?) : ReportUpload
+    data class Accepted(val id: String, val followUrl: String?, val accountBound: Boolean = false) : ReportUpload
     data class Refused(val code: Int) : ReportUpload
     data class Unreachable(val reason: String) : ReportUpload
 }
@@ -52,7 +53,9 @@ internal fun Response<PlaybackIssueReportResponseDto>.toReportUpload(): ReportUp
     return reportUploadResult(code(), isSuccessful, reply?.reportId?.takeIf { it.isNotBlank() } ?: reply?.id, reply?.followUrl)
 }
 
-internal data class WaitingReport(val file: File, val route: ReportRoute, val kind: String, val savedAtMs: Long)
+internal data class WaitingReport(
+    val file: File, val route: ReportRoute, val kind: String, val savedAtMs: Long, val account: ReportAccountScope?
+)
 
 /** Reports the viewer pressed Send on, kept cleaned and compressed while the relay cannot be reached. */
 internal class ReportOutboxFiles(
@@ -61,7 +64,7 @@ internal class ReportOutboxFiles(
     private val now: () -> Long = System::currentTimeMillis
 ) {
     @Synchronized
-    fun save(route: ReportRoute, kind: String, json: ByteArray): Boolean {
+    fun save(route: ReportRoute, kind: String, json: ByteArray, account: ReportAccountScope? = null): Boolean {
         prune()
         if (freeBytes() < MIN_FREE_BYTES) return false
         val packed = gzip(json)
@@ -69,7 +72,8 @@ internal class ReportOutboxFiles(
         if (packed.size > MAX_REPORT_BYTES || waiting.size >= MAX_REPORTS) return false
         if (waiting.sumOf { it.file.length() } + packed.size > MAX_TOTAL_BYTES) return false
         if (!dir.isDirectory && !dir.mkdirs()) return false
-        val name = "${now()}-${UUID.randomUUID().toString().take(8)}.${route.key}.$kind.gz"
+        val accountSuffix = account?.let { "." + it.actor + "." + it.owner }.orEmpty()
+        val name = "${now()}-${UUID.randomUUID().toString().take(8)}.${route.key}.$kind$accountSuffix.gz"
         val part = File(dir, "$name.part")
         return runCatching {
             part.writeBytes(packed)
@@ -99,7 +103,8 @@ internal class ReportOutboxFiles(
     private fun parse(file: File): WaitingReport? {
         val parts = NAME.matchEntire(file.name)?.groupValues ?: return null
         val route = ReportRoute.entries.firstOrNull { it.key == parts[2] } ?: return null
-        return WaitingReport(file, route, parts[3], parts[1].toLongOrNull() ?: return null)
+        val account = parts[4].takeIf { it.isNotEmpty() }?.let { ReportAccountScope(it, parts[5]) }
+        return WaitingReport(file, route, parts[3], parts[1].toLongOrNull() ?: return null, account)
     }
 
     private fun gzip(bytes: ByteArray): ByteArray {
@@ -114,7 +119,8 @@ internal class ReportOutboxFiles(
         const val MAX_TOTAL_BYTES = 3_145_728L
         const val MIN_FREE_BYTES = 300L * 1024 * 1024
         const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
-        private val NAME = Regex("""(\d+)-[0-9a-f]+\.([a-z]+)\.([a-z_]+)\.gz""")
+        private const val UUID_PART = "[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
+        private val NAME = Regex("""(\d+)-[0-9a-f]+\.([a-z]+)\.([a-z_]+)(?:\.($UUID_PART)\.($UUID_PART))?\.gz""")
     }
 }
 
@@ -146,10 +152,11 @@ internal class ReportRetrySchedule(
 internal suspend fun sendWaitingReports(
     files: ReportOutboxFiles,
     upload: suspend (WaitingReport, ByteArray) -> ReportUpload,
+    eligible: (WaitingReport) -> Boolean = { true },
     onAccepted: suspend (WaitingReport, ReportUpload.Accepted) -> Unit
 ): Boolean {
     files.prune()
-    for (report in files.pending()) {
+    for (report in files.pending().filter(eligible)) {
         val json = files.read(report)
         if (json == null) {
             files.delete(report)
@@ -171,7 +178,8 @@ internal suspend fun sendWaitingReports(
 class ReportOutbox @Inject constructor(
     @ApplicationContext private val context: Context,
     private val api: Lazy<ReportRelayApi>,
-    private val sentReports: SentReportsStore
+    private val sentReports: SentReportsStore,
+    private val accountReports: AccountReportsRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val files by lazy {
@@ -188,27 +196,42 @@ class ReportOutbox @Inject constructor(
             delay(START_DELAY_MS)
             files.prune()
             ensureWorker(firstWaitMs = 0L)
+            accountReports.accountChanges.collect {
+                networkBack.trySend(Unit)
+                ensureWorker(firstWaitMs = 0L)
+            }
         }
     }
 
     internal suspend fun deliver(route: ReportRoute, kind: String, json: ByteArray): PlaybackIssueReceipt =
         withContext(Dispatchers.IO) {
-            when (val result = upload(route, json)) {
+            val account = accountReports.submissionScope()
+            when (val result = upload(route, json, account)) {
                 is ReportUpload.Accepted -> {
-                    runCatching { sentReports.add(result.id, kind) }
+                    if (!result.accountBound) runCatching { sentReports.add(result.id, kind) }
                     PlaybackIssueReceipt(result.id, result.followUrl)
                 }
                 is ReportUpload.Refused -> error("Report upload failed: HTTP ${result.code}")
                 is ReportUpload.Unreachable -> {
                     schedule.tried(SystemClock.elapsedRealtime())
-                    if (!files.save(route, kind, json)) error("Report upload failed: ${result.reason}")
+                    if (!files.save(route, kind, json, account)) error("Report upload failed: ${result.reason}")
                     ensureWorker(firstWaitMs = schedule.failed())
                     PlaybackIssueReceipt("", null, saved = true)
                 }
             }
         }
 
-    private suspend fun upload(route: ReportRoute, json: ByteArray): ReportUpload = try {
+    private suspend fun upload(route: ReportRoute, json: ByteArray, account: ReportAccountScope?): ReportUpload {
+        if (account != null) {
+            if (accountReports.currentAccount != account.actor) return ReportUpload.Unreachable("Account is not active")
+            val result = accountReports.upload(account, route, json)
+            if (result != null) return result
+            if (accountReports.currentAccount != account.actor) return ReportUpload.Unreachable("Account is not active")
+        }
+        return uploadDeviceReport(route, json)
+    }
+
+    private suspend fun uploadDeviceReport(route: ReportRoute, json: ByteArray): ReportUpload = try {
         api.get().upload(route.path, json.toRequestBody(JSON)).toReportUpload()
     } catch (e: CancellationException) {
         throw e
@@ -216,9 +239,12 @@ class ReportOutbox @Inject constructor(
         ReportUpload.Unreachable(e.javaClass.simpleName)
     }
 
+    private fun canSend(report: WaitingReport): Boolean =
+        report.account == null || report.account.actor == accountReports.currentAccount
+
     @Synchronized
     private fun ensureWorker(firstWaitMs: Long) {
-        if (worker?.isActive == true || files.pending().isEmpty()) return
+        if (worker?.isActive == true || files.pending().none(::canSend)) return
         watchNetwork()
         worker = scope.launch { retryUntilEmpty(firstWaitMs) }
     }
@@ -236,10 +262,11 @@ class ReportOutbox @Inject constructor(
             schedule.tried(SystemClock.elapsedRealtime())
             val unreachable = sendWaitingReports(
                 files,
-                upload = { report, json -> upload(report.route, json) },
+                upload = { report, json -> upload(report.route, json, report.account) },
+                eligible = ::canSend,
                 onAccepted = { report, accepted ->
                     schedule.succeeded()
-                    runCatching { sentReports.add(accepted.id, report.kind) }
+                    if (!accepted.accountBound) runCatching { sentReports.add(accepted.id, report.kind) }
                 }
             )
             if (unreachable) {
@@ -254,7 +281,7 @@ class ReportOutbox @Inject constructor(
 
     @Synchronized
     private fun finishIfEmpty(): Boolean {
-        if (files.pending().isNotEmpty()) return false
+        if (files.pending().any(::canSend)) return false
         stopWatchingNetwork()
         worker = null
         return true

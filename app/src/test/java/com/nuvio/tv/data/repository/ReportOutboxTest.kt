@@ -26,6 +26,27 @@ class ReportOutboxTest {
         assertArrayEquals(json, files.read(waiting))
     }
 
+    @Test fun `an account report preserves its actor and owner without being sent by another account`() = runBlocking {
+        val scope = ReportAccountScope(
+            "10000000-0000-0000-0000-000000000001",
+            "10000000-0000-0000-0000-000000000002"
+        )
+        assertTrue(files.save(ReportRoute.App, "bug", json, scope))
+        assertEquals(scope, files.pending().single().account)
+        val received = mutableListOf<ReportAccountScope?>()
+        val upload: suspend (WaitingReport, ByteArray) -> ReportUpload = { queued, bytes ->
+            assertArrayEquals(json, bytes)
+            received += queued.account
+            ReportUpload.Accepted("receipt", null, accountBound = true)
+        }
+        sendWaitingReports(files, upload, eligible = { it.account?.actor == scope.owner }, onAccepted = { _, _ -> })
+        assertTrue(received.isEmpty())
+        assertEquals(1, files.pending().size)
+        sendWaitingReports(files, upload, eligible = { it.account == scope }, onAccepted = { _, _ -> })
+        assertEquals(listOf(scope), received)
+        assertTrue(files.pending().isEmpty())
+    }
+
     @Test fun `the file on disk is compressed`() {
         val large = "cleaned report text ".repeat(5_000).toByteArray()
         assertTrue(files.save(ReportRoute.Playback, "playback", large))

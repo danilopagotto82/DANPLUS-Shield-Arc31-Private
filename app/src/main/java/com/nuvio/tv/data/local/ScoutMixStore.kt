@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.ScoutMix
 import com.nuvio.tv.domain.model.ScoutMixShow
@@ -25,6 +26,7 @@ private const val PREFIX = "mix:"
 private const val READY = "ready:"
 private val PICK_SOURCES = booleanPreferencesKey("pick_sources")
 private val NO_SOURCES = stringPreferencesKey("no_sources")
+private val HIDDEN_READY_MIXES = stringSetPreferencesKey("hidden_ready_mixes")
 private const val NO_SOURCES_DAYS = 7L
 
 /** Each profile's mixes, on this device only. */
@@ -45,6 +47,26 @@ class ScoutMixStore @Inject constructor(
 
     suspend fun setPickSources(on: Boolean) {
         factory.get(profileManager.activeProfileId.value, FEATURE).edit { it[PICK_SOURCES] = on }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val hiddenReadyMixes: Flow<Set<String>> = profileManager.activeProfileId.flatMapLatest { id ->
+        factory.get(id, FEATURE).data.map { it[HIDDEN_READY_MIXES].orEmpty() }
+    }
+
+    suspend fun hideReadyMix(key: String, expectedProfile: Int) {
+        if (profileId() != expectedProfile) return
+        factory.get(expectedProfile, FEATURE).edit {
+            val thisYear = java.time.LocalDate.now().year.toString()
+            it[HIDDEN_READY_MIXES] = it[HIDDEN_READY_MIXES].orEmpty().filterTo(linkedSetOf()) { value ->
+                '|' !in value || value.substringAfterLast('|') == thisYear
+            } + key
+        }
+    }
+
+    suspend fun restoreHiddenReadyMixes(expectedProfile: Int) {
+        if (profileId() != expectedProfile) return
+        factory.get(expectedProfile, FEATURE).edit { it.remove(HIDDEN_READY_MIXES) }
     }
 
     /** Ready-made mixes this profile has opened, kept apart so they never join the viewer's own. */

@@ -20,6 +20,24 @@ class ProfileRecommendationRulesTest {
         assertEquals(listOf("c"), ProfileRecommendationRules.inbox(rows, 1, true, 3).map { it.key })
     }
 
+    @Test fun sentCardsGroupOnlyConfirmedRecipientsFromTheSameSend() {
+        val rows = listOf(
+            row("a", 1, 2).copy(sendId = "send-a"),
+            row("b", 1, 3).copy(sendId = "send-a"),
+            row("c", 1, 4).copy(sendId = "send-b"),
+            row("d", 1, 5),
+            row("e", 1, 6, "other-film").copy(sendId = "send-a"),
+            row("f", 3, 2).copy(sendId = "send-a")
+        )
+
+        val sent = ProfileRecommendationRules.cards(rows, 1, true, null)
+        assertEquals(listOf(listOf("a", "b"), listOf("c"), listOf("d"), listOf("e")),
+            sent.map { (_, group) -> group.map { it.key } })
+        assertEquals(listOf("b"), ProfileRecommendationRules.cards(rows, 1, true, 3).single().second.map { it.key })
+        assertEquals(listOf(listOf("a"), listOf("f")),
+            ProfileRecommendationRules.cards(rows, 2, false, null).map { (_, group) -> group.map { it.key } })
+    }
+
     @Test fun recommendingAgainReplacesOnlyTheSameSenderRecipientAndTitle() {
         val rows = listOf(row("old", 1, 2), row("other-profile", 1, 3), row("other-film", 1, 2, "second"))
         val updated = ProfileRecommendationRules.deliver(rows, row("new", 1, 2))

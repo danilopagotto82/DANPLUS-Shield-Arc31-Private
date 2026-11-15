@@ -96,6 +96,9 @@ data class PlayerUiState(
     val showSeekOverlay: Boolean = false,
     val pendingPreviewSeekPosition: Long? = null,
     val previewThumbPositionMs: Long? = null,
+    val recentSeekThumbnailPositionMs: Long? = null,
+    val seekrMetadataId: String? = null,
+    val seekrMetadataForContentId: String? = null,
     // Counts the pauses made at the remote; each one puts focus on the timeline.
     val pauseFocusRequest: Int = 0,
     val playbackSpeed: Float = 1f,

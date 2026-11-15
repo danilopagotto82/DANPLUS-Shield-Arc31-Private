@@ -438,6 +438,10 @@ class PlaybackSettingsViewModel @Inject constructor(
 
     suspend fun setSubtitleShadowOpacity(opacity: Int) { playerSettingsDataStore.setSubtitleShadowOpacity(opacity) }
 
+    suspend fun setSubtitleShadowDepth(depth: Int) { playerSettingsDataStore.setSubtitleShadowDepth(depth) }
+
+    suspend fun setImportedSubtitleFont(id: String?) { playerSettingsDataStore.setImportedSubtitleFont(id) }
+
     suspend fun setSubtitleOutlineColor(color: Int) {
         playerSettingsDataStore.setSubtitleOutlineColor(color)
     }

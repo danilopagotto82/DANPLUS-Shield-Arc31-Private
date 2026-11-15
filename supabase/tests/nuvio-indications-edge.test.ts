@@ -11,8 +11,9 @@ const profile = {
     id: profileId, user_id: owner, profile_index: 2, name: "Esposa",
     avatar_color_hex: "#123456", pin_enabled: true, updated_at: "2026-11-13T00:00:00Z",
 };
-const send = { operation: "send", profile_id: profileId, payload: {} };
-const indication = { recipient_id: profileId, media_id: "tt123", media_type: "movie", created_at: "2026-11-13T00:00:00Z", episode_keys: [], watched: false };
+const artwork = { send_id: wrongProfileId, backdrop_path: "/horizonte.jpg" };
+const send = { operation: "send", profile_id: profileId, payload: artwork };
+const indication = { backdrop_path: artwork.backdrop_path, recipient_id: profileId, media_id: "tt123", media_type: "movie", created_at: "2026-11-13T00:00:00Z", episode_keys: [], watched: false };
 
 Deno.test("Nuvio authorizes the account and PIN before Supabase accepts a write", async () => {
     const nativeFetch = globalThis.fetch;
@@ -65,6 +66,8 @@ Deno.test("Nuvio authorizes the account and PIN before Supabase accepts a write"
         assert.equal(mutation.owner, owner);
         assert.equal(mutation.caller_session, session);
         assert.deepEqual(mutation.payload, {});
+        assert.equal((await request({ ...send, proof: wrongProfileId })).status, 200);
+        assert.deepEqual(mutations[1].payload, artwork);
         const inbox = await request({ operation: "list", profile_id: profileId, proof: wrongProfileId, payload: { box: "received" } });
         assert.deepEqual(await inbox.json(), [{ ...indication, watched: true }]);
     } finally {

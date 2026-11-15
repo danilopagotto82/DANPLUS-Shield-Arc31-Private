@@ -117,7 +117,8 @@ internal fun DiscoverSection(
     onSelectWatchFilter: (DiscoverWatchFilter) -> Unit,
     onLoadMore: () -> Unit,
     onItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showFocusDock: Boolean = false
 ) {
     val selectedCatalog = uiState.discoverCatalogs.firstOrNull { it.key == uiState.selectedDiscoverCatalogKey }
     val filteredCatalogs = uiState.discoverCatalogs.filter { it.type == uiState.selectedDiscoverType }
@@ -314,7 +315,8 @@ internal fun DiscoverSection(
 
             visibleResults.isNotEmpty() || (hasFilters && selectedCatalog != null &&
                 (uiState.discoverHasMore || uiState.pendingDiscoverResults.isNotEmpty())) -> {
-                Box(modifier = Modifier.onFocusChanged { gridHasFocus = it.hasFocus }) {
+                Box(modifier = (if (showFocusDock) Modifier.weight(1f) else Modifier)
+                    .onFocusChanged { gridHasFocus = it.hasFocus }) {
                 DiscoverGrid(
                     items = visibleResults,
                     posterCardStyle = posterCardStyle,
@@ -349,6 +351,11 @@ internal fun DiscoverSection(
                     filterKey = "${uiState.selectedDiscoverType}|${uiState.selectedDiscoverCatalogKey}|${uiState.selectedDiscoverGenre}|" +
                         "${uiState.selectedDiscoverLetter}|${uiState.discoverYear}|${uiState.discoverWatchFilter}"
                 )
+                }
+                if (showFocusDock) {
+                    (visibleResults.getOrNull(focusedItemIndex) ?: visibleResults.firstOrNull())?.let { item ->
+                        com.nuvio.tv.ui.components.DanPlusFocusDock(item)
+                    }
                 }
             }
 

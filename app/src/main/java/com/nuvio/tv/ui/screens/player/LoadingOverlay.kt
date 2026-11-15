@@ -63,7 +63,8 @@ fun LoadingOverlay(
     sourceLine: String? = null,
     filename: String? = null,
     progress: Float? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    previewStatus: String? = null
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -147,6 +148,12 @@ fun LoadingOverlay(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                previewStatus?.let {
+                    Text(
+                        text = it, style = MaterialTheme.typography.labelMedium,
+                        color = LoadingGold, maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                }
                 val source = sourceLine?.takeIf { it.isNotBlank() }
                     ?: filename?.takeIf { it.isNotBlank() }
                 if (source != null) {

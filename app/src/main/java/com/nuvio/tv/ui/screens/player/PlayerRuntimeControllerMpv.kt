@@ -14,9 +14,14 @@ private const val MPV_RESUME_SEEK_TOLERANCE_MS = 1500L
 
 internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
     if (mpvView === view) return
+    if (mpvView != null) {
+        if (mpvMediaSessionPlayer != null) releaseMediaSession()
+        releaseMpvPlayer()
+    }
     mpvView = view
 
     if (view == null) return
+    mpvSurfaceCreationFailure = null
     if (!isUsingMpvEngine()) return
     if (currentStreamUrl.isBlank()) return
     if (!mpvMediaLoadPrepared) return
@@ -30,6 +35,7 @@ internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
         performPendingMpvHardRestartIfNeeded(view)
         view.applyHi10pGnextSoftwareFallback(shouldUseMpvHi10pGnextSoftwareFallback())
         view.applyHardwareDecodeMode(mpvHardwareDecodeModeSetting)
+        view.ensureInitialized()
         registerMpvEventRelay(view)
         view.setMedia(currentStreamUrl, currentHeaders)
         val playerInitLine =
@@ -72,32 +78,15 @@ internal fun PlayerRuntimeController.attachMpvView(view: NuvioMpvSurfaceView?) {
         updateMpvAvailableTracks()
         scheduleHideControls()
         emitScrobbleStart()
-    }.onFailure {
-        val technical = it.message?.trim()?.takeIf { message -> message.isNotEmpty() }
-        val explanation = context.getString(com.nuvio.tv.R.string.player_error_mpv_surface_failed)
-        val detailedError = if (technical == null || technical.equals(explanation, ignoreCase = true)) {
-            explanation
-        } else {
-            "$explanation\n\n$technical"
-        }
-        if (
-            maybeAutoSwitchInternalPlayerOnStartupError(
-                detailedError = detailedError,
-                allowEngineFailover = true
-            )
-        ) {
-            return@onFailure
-        }
-        cancelNextEpisodeAutoPlayOnFatalError()
-        _uiState.update { state ->
-            state.copy(
-                error = detailedError,
-                showLoadingOverlay = false,
-                playbackEnded = false,
-                postPlayMode = null
-            )
-        }
+    }.onFailure { error ->
+        handleMpvInitializationFailure(error, com.nuvio.tv.R.string.player_error_mpv_surface_failed, allowEngineFailover = true)
     }
+}
+
+internal fun PlayerRuntimeController.onMpvSurfaceCreationFailed(error: Throwable) {
+    mpvSurfaceCreationFailure = error
+    if (!isUsingMpvEngine() || !mpvMediaLoadPrepared) return
+    handleMpvInitializationFailure(error, com.nuvio.tv.R.string.player_error_mpv_surface_failed, allowEngineFailover = true)
 }
 
 internal fun PlayerRuntimeController.initializeMpvPlayer(
@@ -121,6 +110,10 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(
 
     val view = mpvView
     if (view == null) {
+        mpvSurfaceCreationFailure?.let { error ->
+            handleMpvInitializationFailure(error, com.nuvio.tv.R.string.player_error_mpv_surface_failed, allowEngineFailover)
+            return
+        }
         setLoadingStatus(
             phase = "mpv_waiting_surface",
             message = context.getString(com.nuvio.tv.R.string.player_loading_building),
@@ -146,6 +139,7 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(
         performPendingMpvHardRestartIfNeeded(view)
         view.applyHi10pGnextSoftwareFallback(shouldUseMpvHi10pGnextSoftwareFallback())
         view.applyHardwareDecodeMode(mpvHardwareDecodeModeSetting)
+        view.ensureInitialized()
         registerMpvEventRelay(view)
         val initialResumePosition = resolvePendingInitialResumePosition()
             .takeIf { it > 0L }
@@ -208,32 +202,30 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(
         scheduleHideControls()
         emitScrobbleStart()
     }.onFailure { error ->
-        Log.e(PlayerRuntimeController.TAG, "libmpv initialize failed: ${error.message}", error)
-        val technical = error.message?.trim()?.takeIf { it.isNotEmpty() }
-        val explanation = context.getString(com.nuvio.tv.R.string.player_error_mpv_playback_failed)
-        val detailedError = if (technical == null || technical.equals(explanation, ignoreCase = true)) {
-            explanation
-        } else {
-            "$explanation\n\n$technical"
-        }
-        if (
-            maybeAutoSwitchInternalPlayerOnStartupError(
-                detailedError = detailedError,
-                allowEngineFailover = allowEngineFailover
-            )
-        ) {
-            return@onFailure
-        }
-        cancelNextEpisodeAutoPlayOnFatalError()
-        _uiState.update {
-            it.copy(
-                error = detailedError,
-                showLoadingOverlay = false,
-                isBuffering = false,
-                playbackEnded = false,
-                postPlayMode = null
-            )
-        }
+        handleMpvInitializationFailure(error, com.nuvio.tv.R.string.player_error_mpv_playback_failed, allowEngineFailover)
+    }
+}
+
+private fun PlayerRuntimeController.handleMpvInitializationFailure(
+    error: Throwable,
+    explanationRes: Int,
+    allowEngineFailover: Boolean
+) {
+    Log.e(PlayerRuntimeController.TAG, "libmpv initialize failed: ${error.javaClass.simpleName}")
+    if (mpvMediaSessionPlayer != null) releaseMediaSession()
+    releaseMpvPlayer()
+    val explanation = context.getString(explanationRes)
+    if (maybeAutoSwitchInternalPlayerOnStartupError(explanation, allowEngineFailover = allowEngineFailover)) return
+    cancelNextEpisodeAutoPlayOnFatalError()
+    _uiState.update {
+        it.copy(
+            error = explanation,
+            showLoadingOverlay = false,
+            isBuffering = false,
+            isPlaying = false,
+            playbackEnded = false,
+            postPlayMode = null
+        )
     }
 }
 
@@ -582,6 +574,7 @@ private fun PlayerRuntimeController.applyMpvTrackSnapshot(snapshot: MpvTrackSnap
 private fun PlayerRuntimeController.performPendingMpvHardRestartIfNeeded(view: NuvioMpvSurfaceView): Boolean {
     if (!pendingMpvHardRestartOnNextAttach) return false
     pendingMpvHardRestartOnNextAttach = false
+    unregisterMpvEventRelay()
     runCatching {
         Log.d(PlayerRuntimeController.TAG, "Applying MPV hard restart for startup engine failover")
         view.releasePlayer()

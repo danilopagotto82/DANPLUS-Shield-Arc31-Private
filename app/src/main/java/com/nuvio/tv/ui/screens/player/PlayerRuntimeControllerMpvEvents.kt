@@ -269,6 +269,10 @@ internal fun PlayerRuntimeController.handleMpvPlaybackError(
         lastPlaybackDiagnosticsForReport =
             lastPlaybackDiagnosticsForReport.copy(result = "Error: $detailedError")
 
+        if (isMpvHttpErrorFresh(mpvLastHttpErrorAtMs, SystemClock.elapsedRealtime()) &&
+            tryFreshLinkForRefusedLink(httpCode, detailedError)
+        ) return
+
         if (isMpvDeadLinkHttpStatus(httpCode) &&
             isMpvHttpErrorFresh(mpvLastHttpErrorAtMs, SystemClock.elapsedRealtime()) &&
             advanceToNextLiveSource(detailedError)

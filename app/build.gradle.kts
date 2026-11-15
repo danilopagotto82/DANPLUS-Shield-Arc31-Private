@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+import com.android.build.api.dsl.ApplicationProductFlavor
 import com.android.build.gradle.internal.tasks.CompileArtProfileTask
 import com.android.build.gradle.internal.tasks.L8DexDesugarLibTask
 import java.io.File
@@ -106,6 +107,7 @@ fun truthy(value: String?): Boolean {
 }
 
 val buildingAppBundle = gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }
+val buildingUnifiedOta = providers.gradleProperty("danplusUnifiedOta").orNull == "true"
 val useDebugReleaseSigning = env("CI_USE_DEBUG_SIGNING").equals("true", ignoreCase = true)
 val useLocalFfmpegDecoder = truthy(
     providers.gradleProperty("useLocalFfmpegDecoder").orNull
@@ -133,6 +135,8 @@ android {
         targetSdk = 36
         versionCode = providers.gradleProperty("arcVersionCode").orNull?.toIntOrNull() ?: 1641
         versionName = providers.gradleProperty("arcVersionName").orNull ?: "1.1.0-arc.6"
+        manifestPlaceholders["danplusLauncherLabel"] =
+            if (buildingUnifiedOta) "DanPlus 2.0" else "@string/app_name"
         // Optional -PnuvioAppIdSuffix=.name installs a local test build next to the main app.
         providers.gradleProperty("nuvioAppIdSuffix").orNull?.takeIf { it.isNotBlank() }?.let {
             applicationIdSuffix = it
@@ -208,18 +212,28 @@ android {
         buildConfigField("boolean", "UPDATE_CHECK_ENABLED", "true")
     }
 
+    fun ApplicationProductFlavor.enableFullFeatures() {
+        dimension = "distribution"
+        buildConfigField("boolean", "FEATURE_PLUGINS_ENABLED", "true")
+        buildConfigField("boolean", "FEATURE_IN_APP_UPDATES_ENABLED", "true")
+        buildConfigField("boolean", "FEATURE_IN_APP_TRAILERS_ENABLED", "true")
+        buildConfigField("boolean", "FEATURE_EXTERNAL_TRAILERS_ENABLED", "true")
+        buildConfigField("boolean", "FEATURE_EXTERNAL_PLAYBACK_KEEP_ALIVE_ENABLED", "true")
+        buildConfigField("boolean", "FEATURE_CUSTOM_SERVER_CONNECTIONS_ENABLED", "true")
+    }
+
     flavorDimensions += "distribution"
     productFlavors {
         create("full") {
-            dimension = "distribution"
-            buildConfigField("boolean", "FEATURE_PLUGINS_ENABLED", "true")
-            buildConfigField("boolean", "FEATURE_IN_APP_UPDATES_ENABLED", "true")
-            buildConfigField("boolean", "FEATURE_IN_APP_TRAILERS_ENABLED", "true")
-            buildConfigField("boolean", "FEATURE_EXTERNAL_TRAILERS_ENABLED", "true")
-            buildConfigField("boolean", "FEATURE_EXTERNAL_PLAYBACK_KEEP_ALIVE_ENABLED", "true")
-            buildConfigField("boolean", "FEATURE_CUSTOM_SERVER_CONNECTIONS_ENABLED", "true")
+            enableFullFeatures()
+            if (buildingUnifiedOta) ndk.abiFilters += "arm64-v8a"
         }
-
+        if (buildingUnifiedOta) create("fullFire") {
+            enableFullFeatures()
+            applicationId = "com.danexus.tv.fire.debug"
+            ndk.abiFilters += "armeabi-v7a"
+            matchingFallbacks += "full"
+        }
     }
 
     externalNativeBuild {
@@ -300,6 +314,12 @@ android {
             buildConfigField("String", "PREMIUMIZE_CLIENT_ID", "\"${localProperties.getProperty("PREMIUMIZE_CLIENT_ID", "")}\"")
             buildConfigField("String", "SPONSOR_NAMES", buildConfigString(sponsorNames))
         }
+        if (buildingUnifiedOta) create("fireOta") {
+            initWith(buildTypes.getByName("release"))
+            // Fire’s published lineage uses the local Android debug certificate, with a release build type.
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
         create("benchmark") {
             initWith(buildTypes.getByName("release"))
             signingConfig = signingConfigs.getByName("debug")
@@ -318,7 +338,7 @@ android {
 
     splits {
         abi {
-            isEnable = !buildingAppBundle
+            isEnable = !buildingAppBundle && !buildingUnifiedOta
             reset()
             include("armeabi-v7a", "arm64-v8a")
             isUniversalApk = false
@@ -353,6 +373,10 @@ android {
         getByName("main") {
             jniLibs.srcDirs("src/main/jniLibs")
         }
+        if (buildingUnifiedOta) getByName("fullFire") {
+            java.srcDir("src/full/java")
+            manifest.srcFile("src/full/AndroidManifest.xml")
+        }
     }
 
     packaging {
@@ -378,8 +402,17 @@ android {
 }
 
 androidComponents {
-    // Only the full flavor ships the in-app updater.
-    onVariants(selector().withFlavor("distribution" to "full")) { variant ->
+    if (buildingUnifiedOta) {
+        beforeVariants(selector().withFlavor("distribution" to "fullFire")) { variant ->
+            variant.enable = variant.buildType == "fireOta"
+        }
+        beforeVariants(selector().withFlavor("distribution" to "full").withBuildType("fireOta")) { variant ->
+            variant.enable = false
+        }
+    }
+
+    // Both full variants ship the in-app updater and bundled installation profile.
+    onVariants(selector().all()) { variant ->
         // AGP makes no ART profile for debuggable variants, and ART ignores .dm files for them anyway.
         if (variant.debuggable) return@onVariants
         val variantName = variant.name.replaceFirstChar { it.uppercase() }

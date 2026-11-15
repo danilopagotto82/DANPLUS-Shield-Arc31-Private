@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
@@ -140,7 +141,10 @@ internal fun WhereToWatchSection(
                 }
             }
             status?.let { Text(it) }
-            Text(stringResource(R.string.detail_watch_attribution))
+            Text(
+                text = stringResource(R.string.detail_watch_attribution),
+                style = MaterialTheme.typography.labelSmall
+            )
         }
     }
 }

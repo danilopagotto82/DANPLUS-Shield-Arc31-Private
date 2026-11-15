@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
+import android.os.SystemClock
 import com.nuvio.tv.core.player.dvmkv.DtsStreamType
 import com.nuvio.tv.core.util.TtffTrace
 import android.net.Uri
@@ -56,6 +57,7 @@ internal const val AUDIO_DELAY_HOLD_THRESHOLD_MS = 1000L
 internal const val AUDIO_DELAY_HOLD_FAST_THRESHOLD_MS = 2000L
 internal const val AUDIO_DELAY_HOLD_REPEAT_INTERVAL_MS = 100L
 internal const val WATCH_PROGRESS_SAVE_INTERVAL_MS = 90_000L
+internal const val RECENT_SEEK_THUMBNAIL_MS = 3_200L
 
 /**
  * Audio delay split into its sources, so the stream hint and the user's tweak on that stream
@@ -476,11 +478,14 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                     val eofNow = view.isEofReached()
                     if (!eofNow) mpvEofSeenClear = true
                     val mpvEofReached = mpvEofSeenClear && eofNow
-                    val naturalEnded = !view.isLiveStreamNow() && (nearEnd || mpvEofReached) && shouldTreatAsNaturalPlaybackCompletion(
-                        hasRenderedFirstFrame = firstFrameReady,
-                        hasFatalError = !_uiState.value.error.isNullOrBlank(),
-                        durationMs = effectiveDuration
-                    ) && !isPlaceholderPlayback()
+                    // Getting close to the end is not EOF. A stalled network read can stay there indefinitely.
+                    val freshHttpFailure = isMpvHttpErrorFresh(mpvLastHttpErrorAtMs, SystemClock.elapsedRealtime())
+                    val naturalEnded = !view.isLiveStreamNow() && nearEnd && mpvEofReached && !cacheBuffering &&
+                        shouldTreatAsNaturalPlaybackCompletion(
+                            hasRenderedFirstFrame = firstFrameReady,
+                            hasFatalError = !_uiState.value.error.isNullOrBlank() || freshHttpFailure || mpvLastFileError != null,
+                            durationMs = effectiveDuration
+                        ) && !isPlaceholderPlayback()
                     val wasEnded = _uiState.value.playbackEnded
                     _uiState.update { state ->
                         state.copy(
@@ -1972,6 +1977,7 @@ fun PlayerRuntimeController.onEvent(
             }
             seekPlaybackTo(target, seekParameters)
             updatePlaybackTimeline(currentPosition = target)
+            showRecentSeekThumbnail(target)
             scheduleProgressSyncAfterSeek()
             if (_uiState.value.showControls) {
                 showControlsTemporarily()
@@ -1997,6 +2003,7 @@ fun PlayerRuntimeController.onEvent(
         }
         is PlayerEvent.OnPreviewSeekBy -> {
             if (_playbackTimeline.value.isLive) return
+            clearRecentSeekThumbnail()
             stopScrubGlide()
             seekSettleJob?.cancel()
             scrubHoldClock.press(android.os.SystemClock.uptimeMillis())
@@ -2041,6 +2048,7 @@ fun PlayerRuntimeController.onEvent(
         }
         is PlayerEvent.OnSeekTo -> {
             if (_playbackTimeline.value.isLive) return
+            clearRecentSeekThumbnail()
             dropSeekSettle()
             stopScrubGlide()
             releaseScrubHold()
@@ -2815,9 +2823,9 @@ private fun PlayerRuntimeController.commitPendingSeek() {
     releaseScrubHold()
     updatePlaybackTimeline(currentPosition = landing.positionMs)
     pendingPreviewSeekPosition = null
-    // Paused, the thumbnail of the landing stays up; playing on, nothing is left to show.
     val shownAfter = if (userPausedManually) target else null
     _uiState.update { it.copy(pendingPreviewSeekPosition = null, previewThumbPositionMs = shownAfter) }
+    if (shownAfter == null) showRecentSeekThumbnail(landing.positionMs)
     scheduleProgressSyncAfterSeek()
     if (_uiState.value.showControls) {
         showControlsTemporarily()
@@ -2923,6 +2931,25 @@ internal fun PlayerRuntimeController.holdPlaybackForScrub(always: Boolean = fals
     scrubHoldPaused = true
     player.pause()
     android.util.Log.d("ThumbWorker", "scrub: playback held while seeking")
+}
+
+private fun PlayerRuntimeController.showRecentSeekThumbnail(positionMs: Long) {
+    recentSeekThumbnailJob?.cancel()
+    _uiState.update { it.copy(recentSeekThumbnailPositionMs = positionMs) }
+    SeekThumbnails.notePriority(positionMs)
+    recentSeekThumbnailJob = scope.launch {
+        delay(RECENT_SEEK_THUMBNAIL_MS)
+        recentSeekThumbnailJob = null
+        _uiState.update { it.copy(recentSeekThumbnailPositionMs = null) }
+    }
+}
+
+internal fun PlayerRuntimeController.clearRecentSeekThumbnail() {
+    recentSeekThumbnailJob?.cancel()
+    recentSeekThumbnailJob = null
+    if (_uiState.value.recentSeekThumbnailPositionMs != null) {
+        _uiState.update { it.copy(recentSeekThumbnailPositionMs = null) }
+    }
 }
 
 /** Drops the thumbnail kept from a paused tap; a seek still in progress keeps its own. */

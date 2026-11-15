@@ -33,4 +33,7 @@
     <string name="report_check_try_source_notice">or check your add-on or Debrid account</string>
     <string name="report_check_send_anyway">Send anyway</string>
     <string name="debrid_busy">The Debrid service is busy right now (error %1$d). This comes from the service, not from Arc. Try again in a moment, or pick another source.</string>
+    <string name="player_error_card_slow_title">The source is slow</string>
+    <string name="player_error_card_slow">The source is sending data more slowly than this video needs.</string>
+    <string name="player_error_facts_slow">%1$.1f Mbps received · %2$.1f Mbps estimated for the video</string>
 </resources>

@@ -543,7 +543,10 @@ internal class PlayerMediaSourceFactory(
         headers: Map<String, String>
     ): DataSource.Factory {
         HostSpeeds.attach(context.applicationContext.getSharedPreferences("auto_speedup_hosts", Context.MODE_PRIVATE))
-        AutoSpeedup.begin(url, NuvioExoPlayerPerformanceHelper.getDevicePhysicalRamBytes(context))
+        AutoSpeedup.begin(
+            url, NuvioExoPlayerPerformanceHelper.getDevicePhysicalRamBytes(context),
+            com.nuvio.tv.core.player.BufferSizing.is64BitPlaybackProcess
+        )
         val limits = AutoSpeedup.limits
         AutoSpeedup.lazyMemory = AutoSpeedup.lazyMemoryFor(limits)
         val heldLimit: (() -> Long)? = if (AutoSpeedup.lazyMemory) AutoSpeedup::heldLimitBytes else null

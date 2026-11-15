@@ -35,6 +35,7 @@ internal fun buildModernHomePresentation(
     context: Context,
     maxCatalogRows: Int? = null
 ): ModernHomePresentationState {
+    val displayLimit = homeCatalogDisplayLimit(context)
     val visibleHomeRows = resolveVisibleHomeRows(input)
     val localizedContext = context.withAppLocale()
     val strContinueWatching = localizedContext.getString(R.string.continue_watching)
@@ -212,7 +213,9 @@ internal fun buildModernHomePresentation(
                             supportsSkip = row.supportsSkip,
                             hasMore = row.hasMore,
                             isLoading = row.isLoading,
-                            items = row.items.mapIndexed { itemIndex, item ->
+                            showCatalogOverflow = row.items.size > displayLimit ||
+                                (row.hasMore && row.items.size >= displayLimit),
+                            items = row.items.take(displayLimit).mapIndexed { itemIndex, item ->
                                 val occurrence = rowItemOccurrenceCounts.getOrDefault(item.id, 0)
                                 rowItemOccurrenceCounts[item.id] = occurrence + 1
                                 val cacheKey = "${item.id}_$occurrence"

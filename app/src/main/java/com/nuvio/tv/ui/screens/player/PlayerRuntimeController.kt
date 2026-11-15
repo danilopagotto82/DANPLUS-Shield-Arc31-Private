@@ -780,6 +780,7 @@ class PlayerRuntimeController(
     internal var mpvHi10pGnextSoftwareFallbackEnabledSetting: Boolean = false
     internal var mpvHardwareDecodeModeSetting: MpvHardwareDecodeMode = MpvHardwareDecodeMode.AUTO_SAFE
     internal var mpvPreferredAudioLanguages: List<String> = emptyList()
+    internal var sourceSelectedAutomatically = navigationArgs.sourceSelectedAutomatically
     internal var currentStreamBingeGroup: String? = navigationArgs.bingeGroup
     internal var recordedPluginPlayIdentity: String? = null
     // Per-device delay + current stream's behaviorHints.audioDelayMs + the user's tweak on that stream.
@@ -827,6 +828,7 @@ class PlayerRuntimeController(
     internal var mpvMediaSessionPlayer: MpvMediaSessionPlayer? = null
     internal var ffmpegAudioRenderer: FfmpegAudioRenderer? = null
     internal var mpvView: NuvioMpvSurfaceView? = null
+    internal var mpvSurfaceCreationFailure: Throwable? = null
     internal val subtitleCueTracker = SubtitleCueTracker()
     internal var mpvInitializationInProgress: Boolean = false
     internal var mpvMediaLoadPrepared: Boolean = false
@@ -910,6 +912,7 @@ class PlayerRuntimeController(
     // the timeline stays pinned to the phantom position and the next gesture
     // commits from it, possibly across an episode boundary.
     internal var pendingPreviewSeekExpiryJob: kotlinx.coroutines.Job? = null
+    internal var recentSeekThumbnailJob: kotlinx.coroutines.Job? = null
     internal var pendingResumeProgress: WatchProgress? = null
     internal var hasRetriedCurrentStreamAfter416: Boolean = false
     internal var isReleasingPlayer: Boolean = false

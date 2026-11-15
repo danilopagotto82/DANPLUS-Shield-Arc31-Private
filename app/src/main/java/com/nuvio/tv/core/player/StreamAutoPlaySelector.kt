@@ -196,55 +196,54 @@ object StreamAutoPlaySelector {
             StreamAutoPlayMode.FIRST_STREAM -> candidateStreams.firstOrNull { isPlayable(it) }
             StreamAutoPlayMode.QUALITY_RANK ->
                 StreamQualityRank.rank(candidateStreams.filter { isPlayable(it) }, debridStreamPreferences).firstOrNull()
-            StreamAutoPlayMode.REGEX_MATCH -> {
-                val pattern = regexPattern.trim()
-
-                // Try to compile the user regex
-                val userRegex = runCatching { Regex(pattern, RegexOption.IGNORE_CASE) }.getOrNull()
-                if (userRegex == null) return null
-
-                // Auto-extract exclusion patterns from negative lookaheads
-                val exclusionMatches = Regex("\\(\\?![^)]*?\\(([^)]+)\\)").findAll(pattern)
-
-                val exclusionWords = exclusionMatches
-                    .flatMap { match -> match.groupValues[1].split("|") }
-                    .map { it.trim() }
-                    .filter { it.isNotBlank() }
-                    .toList()
-
-                val excludeRegex = if (exclusionWords.isNotEmpty()) {
-                    Regex("\\b(${exclusionWords.joinToString("|")})\\b", RegexOption.IGNORE_CASE)
-                } else null
-
-                // 1. Build list of ALL regex‑matching streams
-                val matchingStreams = candidateStreams.filter { stream ->
-                    if (!isPlayable(stream)) return@filter false
-
-                    val searchableText = buildString {
-                        append(stream.addonName).append(' ')
-                        append(stream.name.orEmpty()).append(' ')
-                        append(stream.title.orEmpty()).append(' ')
-                        append(stream.description.orEmpty()).append(' ')
-                        append(stream.getStreamUrl().orEmpty())
-                        if (stream.isTorrent()) append(' ').append(stream.infoHash.orEmpty())
-                        if (stream.serverTarget != null) append(' ').append(stream.behaviorHints?.filename.orEmpty())
-                    }
-
-                    // Must match include pattern
-                    if (!userRegex.containsMatchIn(searchableText)) return@filter false
-
-                    // Must NOT match exclusion pattern
-                    if (excludeRegex != null && excludeRegex.containsMatchIn(searchableText)) {
-                        return@filter false
-                    }
-
-                    true
-                }
-
-                if (matchingStreams.isEmpty()) return null
-                matchingStreams.firstOrNull { isPlayable(it) }
-            }
-
+            StreamAutoPlayMode.REGEX_MATCH -> filterByAutoPlayRegex(candidateStreams, regexPattern).firstOrNull()
         }
     }
+
+    internal fun filterByAutoPlayRegex(candidateStreams: List<Stream>, regexPattern: String): List<Stream> {
+        val pattern = regexPattern.trim()
+
+        // Try to compile the user regex
+        val userRegex = runCatching { Regex(pattern, RegexOption.IGNORE_CASE) }.getOrNull()
+        if (userRegex == null) return emptyList()
+
+        // Auto-extract exclusion patterns from negative lookaheads
+        val exclusionMatches = Regex("\\(\\?![^)]*?\\(([^)]+)\\)").findAll(pattern)
+
+        val exclusionWords = exclusionMatches
+            .flatMap { match -> match.groupValues[1].split("|") }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+
+        val excludeRegex = if (exclusionWords.isNotEmpty()) {
+            runCatching { Regex("\\b(${exclusionWords.joinToString("|")})\\b", RegexOption.IGNORE_CASE) }
+                .getOrElse { return emptyList() }
+        } else null
+
+        return candidateStreams.filter { stream ->
+            if (!isPlayable(stream)) return@filter false
+
+            val searchableText = buildString {
+                append(stream.addonName).append(' ')
+                append(stream.name.orEmpty()).append(' ')
+                append(stream.title.orEmpty()).append(' ')
+                append(stream.description.orEmpty()).append(' ')
+                append(stream.getStreamUrl().orEmpty())
+                if (stream.isTorrent()) append(' ').append(stream.infoHash.orEmpty())
+                if (stream.serverTarget != null) append(' ').append(stream.behaviorHints?.filename.orEmpty())
+            }
+
+            // Must match include pattern
+            if (!userRegex.containsMatchIn(searchableText)) return@filter false
+
+            // Must NOT match exclusion pattern
+            if (excludeRegex != null && excludeRegex.containsMatchIn(searchableText)) {
+                return@filter false
+            }
+
+            true
+        }
+    }
+
 }

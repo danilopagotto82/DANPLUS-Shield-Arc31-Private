@@ -4,6 +4,7 @@ import android.content.Context
 import com.nuvio.tv.R
 import com.nuvio.tv.core.catalog.BuiltInCatalogs
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.core.ratinglimit.ratingLimitGateOrNull
 import com.nuvio.tv.core.player.EpisodeShufflePlayback
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.core.util.withAppLocale
@@ -83,14 +84,20 @@ class ScoutMixLibrary @Inject constructor(
 
     /** The episode of these shows stopped partway most recently, from saved progress alone, with no lookup. */
     suspend fun startedEpisode(shows: List<ScoutMixShow>): Pair<ScoutMixShow, com.nuvio.tv.domain.model.WatchProgress>? {
+        val gate = ratingLimitGateOrNull(context)
+        val limit = gate?.activeLimit()
+        val allowed = if (gate != null && limit != null) gate.keepFitting(limit, shows) { (it.imdbId ?: it.id) to it.type } else shows
         val partway = watchProgress.allProgress.first().filter { it.season != null && it.episode != null && it.isInProgress() }
         if (partway.isEmpty()) return null
-        return shows.mapNotNull { show ->
+        return allowed.mapNotNull { show ->
             partway.filter { it.contentId == show.id || it.contentId == show.imdbId }.maxByOrNull { it.lastWatched }?.let { show to it }
         }.maxByOrNull { it.second.lastWatched }
     }
 
     suspend fun episodes(profileId: Int, show: ScoutMixShow): ScoutMixEpisodes? = withTimeoutOrNull(LOOKUP_TIMEOUT_MS) {
+        val gate = ratingLimitGateOrNull(context)
+        val limit = gate?.limitFor(profileId)
+        if (gate != null && limit != null && !limit.allows(gate.rating(show.imdbId ?: show.id, show.type).rank)) return@withTimeoutOrNull null
         val result = metaRepository.getMetaFromAllAddons(show.type, show.id)
             .first { it !is NetworkResult.Loading }
         val meta = (result as? NetworkResult.Success)?.data ?: return@withTimeoutOrNull null

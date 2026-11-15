@@ -84,6 +84,7 @@ private val localOnlyLayoutProfileSettingsKeys = setOf(
 )
 
 internal val localOnlyPlayerProfileSettingsKeys = setOf(
+    com.nuvio.tv.core.player.ImportedSubtitleFonts.SELECTION_KEY,
     "player_preference",
     "internal_player_engine",
     "auto_switch_internal_player_on_error",

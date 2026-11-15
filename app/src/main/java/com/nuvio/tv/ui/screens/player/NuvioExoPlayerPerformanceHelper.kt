@@ -9,6 +9,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+import com.nuvio.tv.core.player.BufferSizing
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.ui.screens.settings.MemoryBudget
 
@@ -136,8 +137,8 @@ object NuvioExoPlayerPerformanceHelper {
         val autoMb = getAutoBufferMb(context)
         val (automatic, targetMb) = targetBufferFor(settings, safeLimitMb, autoMb)
         targetIsAutomatic = automatic
-        targetBufferSizeMb = targetMb
-        unsizedTargetBufferSizeMb = targetMb
+        targetBufferSizeMb = BufferSizing.playbackBufferLimitMb(targetMb)
+        unsizedTargetBufferSizeMb = targetBufferSizeMb
 
         val effectiveBufferMb = when {
             settings.nuvioPerformanceModeEnabled -> {
@@ -154,15 +155,15 @@ object NuvioExoPlayerPerformanceHelper {
             else -> MemoryBudget.defaultBufferSizeMb
         }
         calculatedMemoryUsageMb = MemoryBudget.totalUsageMb(
-            effectiveBufferMb,
-            settings.parallelConnectionCount,
-            Math.ceil(settings.parallelChunkSizeKb / 1024.0).toInt(),
+            BufferSizing.playbackBufferLimitMb(effectiveBufferMb),
+            BufferSizing.effectiveConnectionCount(settings.parallelConnectionCount),
+            Math.ceil(MemoryBudget.customChunkKb(context, settings) / 1024.0).toInt(),
             settings.useParallelConnections && settings.parallelNetworkEnabled
         )
 
         // Reported in the pool log only; the shared pool itself is never replaced.
         connectionPoolSize = if (settings.parallelNetworkEnabled && settings.useParallelConnections) {
-            settings.parallelConnectionCount * 2
+            BufferSizing.effectiveConnectionCount(settings.parallelConnectionCount) * 2
         } else {
             DEFAULT_NUVIO_CONNECTION_POOL_SIZE
         }
@@ -180,7 +181,9 @@ object NuvioExoPlayerPerformanceHelper {
     fun downloadWindow(settings: PlayerSettings, context: Context): MemoryBudget.DownloadWindow {
         val safeLimitMb = getSafeNativeMemoryLimitMb(context)
         val (automatic, targetMb) = targetBufferFor(settings, safeLimitMb, getAutoBufferMb(context))
-        return downloadWindow(settings.nuvioPerformanceModeEnabled, automatic, targetMb, safeLimitMb)
+        return downloadWindow(
+            settings.nuvioPerformanceModeEnabled, automatic, BufferSizing.playbackBufferLimitMb(targetMb), safeLimitMb
+        )
     }
 
     /** The window the player runs with now, from the settings it last applied. */
@@ -295,7 +298,7 @@ object NuvioExoPlayerPerformanceHelper {
      * Calculates the safe ExoPlayer native target buffer size limit in MB based on RAM tier thresholds.
      */
     fun getSafeNativeMemoryLimitMb(context: Context): Int =
-        safeNativeMemoryLimitMbForRam(getDevicePhysicalRamBytes(context))
+        BufferSizing.playbackBufferLimitMb(safeNativeMemoryLimitMbForRam(getDevicePhysicalRamBytes(context)))
 
     fun safeNativeMemoryLimitMbForRam(totalMem: Long): Int {
         val gb = 1024L * 1024L * 1024L
@@ -313,7 +316,7 @@ object NuvioExoPlayerPerformanceHelper {
 
     /** The automatic buffer for this box: what the app uses unless the user sets a size. */
     fun getAutoBufferMb(context: Context): Int =
-        com.nuvio.tv.core.player.BufferSizing.autoBufferMbForRam(getDevicePhysicalRamBytes(context))
+        BufferSizing.playbackBufferLimitMb(BufferSizing.autoBufferMbForRam(getDevicePhysicalRamBytes(context)))
 
     /** Lowers an automatic target to what the box has free; returns the sizing line for the log. */
     fun sizeTargetFromFreeMemory(

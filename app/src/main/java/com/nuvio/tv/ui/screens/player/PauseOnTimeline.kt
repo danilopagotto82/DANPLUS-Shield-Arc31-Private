@@ -54,12 +54,14 @@ internal object PauseOnTimeline {
         pendingPositionMs: Long?,
         gliding: Boolean,
         playing: Boolean,
-        barShown: Boolean
+        barShown: Boolean,
+        recentSeekPositionMs: Long? = null
     ): Long? = when {
-        thumbPositionMs == null -> null
-        gliding && pendingPositionMs != null -> thumbPositionMs
-        !playing && barShown -> thumbPositionMs
-        else -> null
+        gliding && pendingPositionMs != null -> thumbPositionMs ?: pendingPositionMs
+        !barShown -> null
+        pendingPositionMs != null -> thumbPositionMs ?: pendingPositionMs
+        !playing && thumbPositionMs != null -> thumbPositionMs
+        else -> recentSeekPositionMs
     }
 
     /** After a held seek showed the strip, the picture keeps the strip's centre place until it goes away. */

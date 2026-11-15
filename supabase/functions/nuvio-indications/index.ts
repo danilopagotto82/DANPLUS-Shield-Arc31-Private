@@ -1,6 +1,6 @@
 const NUVIO_URL = "https://api.nuvio.tv";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const OPERATIONS = new Set(["profiles", "unlock", "send", "list", "read", "dismiss"]);
+const OPERATIONS = new Set(["profiles", "unlock", "send", "list", "read", "dismiss", "special_highlight"]);
 
 type Profile = {
     id: string;
@@ -70,11 +70,11 @@ async function profilesFor(owner: string, headers: Record<string, string>): Prom
     return profiles;
 }
 
-async function database(payload: Record<string, unknown>): Promise<unknown> {
+async function database(payload: Record<string, unknown>, rpc = "nuvio_indications_v1"): Promise<unknown> {
     const origin = Deno.env.get("SUPABASE_URL");
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!origin || !key) throw new RequestError(503, "D12_STORAGE_UNAVAILABLE");
-    const response = await fetch(origin + "/rest/v1/rpc/nuvio_indications_v1", {
+    const response = await fetch(origin + "/rest/v1/rpc/" + rpc, {
         method: "POST",
         headers: { apikey: key, Authorization: "Bearer " + key, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -191,6 +191,9 @@ async function handle(request: Request): Promise<unknown> {
     const actor = profiles.find((profile) => profile.id === body.profile_id);
     if (!actor) throw new RequestError(403, "D12_PROFILE_UNAVAILABLE");
     const payload = body.payload as Record<string, unknown>;
+    if (body.operation === "special_highlight") {
+        return await database({ owner, profile: actor.id, payload }, "danplus_special_highlight_v1");
+    }
     if (body.operation === "unlock") {
         if (!actor.pin_enabled) return { unlocked: true };
         const pin = payload.pin;

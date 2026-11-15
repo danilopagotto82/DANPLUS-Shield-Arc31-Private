@@ -112,8 +112,12 @@ class PauseOnTimelineTest {
     }
 
     @Test
-    fun playing_aTapShowsNothing() {
-        assertNull(PauseOnTimeline.thumbnailPositionMs(90_000L, 90_000L, gliding = false, playing = true, barShown = true))
+    fun playing_aTapShowsTheTargetAndTheCommittedSeekCanLinger() {
+        assertEquals(90_000L, PauseOnTimeline.thumbnailPositionMs(90_000L, 90_000L, gliding = false, playing = true, barShown = true))
+        assertEquals(90_000L, PauseOnTimeline.thumbnailPositionMs(null, null, gliding = false, playing = true,
+            barShown = true, recentSeekPositionMs = 90_000L))
+        assertNull(PauseOnTimeline.thumbnailPositionMs(null, null, gliding = false, playing = true,
+            barShown = false, recentSeekPositionMs = 90_000L))
         assertNull(PauseOnTimeline.thumbnailPositionMs(90_000L, null, gliding = false, playing = true, barShown = true))
     }
 

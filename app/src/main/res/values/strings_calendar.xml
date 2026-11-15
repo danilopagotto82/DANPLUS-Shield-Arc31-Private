@@ -174,4 +174,5 @@
     <string name="calendar_zone_region_europe">Europe</string>
     <string name="calendar_zone_region_indian">Indian Ocean</string>
     <string name="calendar_zone_region_pacific">Pacific</string>
+    <string name="calendar_streaming_source">Streaming</string>
 </resources>

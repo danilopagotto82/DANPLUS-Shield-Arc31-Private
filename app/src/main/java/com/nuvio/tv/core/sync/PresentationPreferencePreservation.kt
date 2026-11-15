@@ -36,6 +36,7 @@ internal fun captureMissingPresentationChoices(
             "card_depth_trailers_enabled"
         )
         "player_settings" -> setOf(
+            "subtitle_shadow_depth",
             "speculative_stream_search_enabled",
             "show_source_line_badges",
             "show_source_line_release_group",

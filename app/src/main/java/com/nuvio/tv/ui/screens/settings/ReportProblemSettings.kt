@@ -2,7 +2,11 @@
 
 package com.nuvio.tv.ui.screens.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.text.format.DateFormat
 import android.text.format.DateUtils
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
@@ -23,15 +27,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.data.repository.AccountReport
 import com.nuvio.tv.data.repository.AppReportChoices
 import com.nuvio.tv.data.repository.AppReportKind
 import com.nuvio.tv.data.repository.SentReport
@@ -44,6 +52,7 @@ import com.nuvio.tv.ui.screens.player.ReportHeading
 import com.nuvio.tv.ui.screens.player.ReportNoteDialog
 import com.nuvio.tv.ui.screens.player.ReportSentDialog
 import com.nuvio.tv.ui.theme.NuvioTheme
+import kotlinx.coroutines.CancellationException
 
 internal enum class ReportWhere(val key: String, @StringRes val label: Int) {
     Home("home_rows", R.string.report_where_home),
@@ -57,7 +66,7 @@ internal enum class ReportWhere(val key: String, @StringRes val label: Int) {
     Elsewhere("somewhere_else", R.string.report_where_other)
 }
 
-private enum class ReportDialogKind { PlaybackHint, Bug, Idea, SentList }
+private enum class ReportDialogKind { PlaybackHint, Bug, Idea, SentList, AccountList }
 
 private enum class ReportFormStep { Where, Note, Ready }
 
@@ -73,6 +82,7 @@ internal fun ReportProblemSettingsContent(
 ) {
     val recorderEnabled by viewModel.recorderEnabled.collectAsStateWithLifecycle()
     val sentReports by viewModel.sentReports.collectAsStateWithLifecycle()
+    val reportAccount by viewModel.reportAccount.collectAsStateWithLifecycle()
     val send by viewModel.send.collectAsStateWithLifecycle()
     val askAfterExit by crashViewModel.promptEnabled.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<ReportDialogKind?>(null) }
@@ -124,6 +134,26 @@ internal fun ReportProblemSettingsContent(
                         )
                     }
                 }
+                if (reportAccount != null) {
+                    item(key = "accountReports") {
+                        SettingsActionRow(
+                            title = stringResource(R.string.report_account_title),
+                            subtitle = stringResource(R.string.report_account_hint),
+                            onClick = { open(ReportDialogKind.AccountList) }
+                        )
+                    }
+                }
+                item(key = "sentReports") {
+                    val latest = sentReports.firstOrNull()
+                    SettingsActionRow(
+                        title = stringResource(R.string.report_sent_list_title),
+                        subtitle = latest?.let {
+                            stringResource(R.string.report_sent_list_latest, it.code, reportAge(it.timeMs))
+                        } ?: stringResource(R.string.report_sent_list_empty),
+                        value = sentReports.size.takeIf { it > 0 }?.toString(),
+                        onClick = { open(ReportDialogKind.SentList) }
+                    )
+                }
                 item(key = "options") {
                     SettingsGroupCard(title = stringResource(R.string.report_group_options)) {
                         SettingsToggleRow(
@@ -138,15 +168,7 @@ internal fun ReportProblemSettingsContent(
                             checked = askAfterExit,
                             onToggle = { crashViewModel.setPromptEnabled(!askAfterExit) }
                         )
-                        val latest = sentReports.firstOrNull()
-                        SettingsActionRow(
-                            title = stringResource(R.string.report_sent_list_title),
-                            subtitle = latest?.let {
-                                stringResource(R.string.report_sent_list_latest, it.code, reportAge(it.timeMs))
-                            } ?: stringResource(R.string.report_sent_list_empty),
-                            value = sentReports.size.takeIf { it > 0 }?.toString(),
-                            onClick = { open(ReportDialogKind.SentList) }
-                        )
+
                     }
                 }
             }
@@ -162,6 +184,16 @@ internal fun ReportProblemSettingsContent(
         ReportDialogKind.Bug -> ReportFormDialog(AppReportKind.Bug, send, viewModel::send, close)
         ReportDialogKind.Idea -> ReportFormDialog(AppReportKind.Idea, send, viewModel::send, close)
         ReportDialogKind.SentList -> SentReportsDialog(sentReports, close)
+        ReportDialogKind.AccountList -> {
+            val account = reportAccount
+            if (account == null) {
+                LaunchedEffect(Unit) { close() }
+            } else {
+                key(account) {
+                    AccountReportsDialog(load = { viewModel.loadAccountReports(account) }, onClose = close)
+                }
+            }
+        }
         null -> Unit
     }
 
@@ -328,6 +360,9 @@ private fun sentKindLabel(kind: String): Int? = when (kind) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SentReportsDialog(reports: List<SentReport>, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val clipboard = remember(context) { context.getSystemService(ClipboardManager::class.java) }
+    val dateFormat = remember(context) { DateFormat.getMediumDateFormat(context) }
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos { }
@@ -336,7 +371,9 @@ private fun SentReportsDialog(reports: List<SentReport>, onClose: () -> Unit) {
     NuvioDialog(
         onDismiss = onClose,
         title = stringResource(R.string.report_sent_list_title),
-        subtitle = stringResource(R.string.report_sent_list_empty).takeIf { reports.isEmpty() },
+        subtitle = stringResource(
+            if (reports.isEmpty()) R.string.report_sent_list_empty else R.string.report_sent_copy_hint
+        ),
         width = 560.dp,
         usePlatformDefaultWidth = false,
         solidWithoutBlur = true
@@ -351,11 +388,19 @@ private fun SentReportsDialog(reports: List<SentReport>, onClose: () -> Unit) {
                     items(reports, key = { it.code }) { report ->
                         SettingsActionRow(
                             title = report.code,
-                            subtitle = sentKindLabel(report.kind)?.let { stringResource(it) },
-                            value = reportAge(report.timeMs),
+                            subtitle = listOfNotNull(
+                                sentKindLabel(report.kind)?.let { stringResource(it) },
+                                stringResource(R.string.report_sent_title)
+                            ).joinToString(" · "),
+                            value = dateFormat.format(java.util.Date(report.timeMs)),
                             trailingIcon = null,
                             jumpAnchor = false,
-                            onClick = {},
+                            onClick = {
+                                clipboard?.let {
+                                    it.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.report_sent_list_title), report.code))
+                                    Toast.makeText(context, R.string.report_sent_copied, Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             modifier = if (report == reports.first()) Modifier.focusRequester(firstFocus) else Modifier
                         )
                     }
@@ -368,6 +413,111 @@ private fun SentReportsDialog(reports: List<SentReport>, onClose: () -> Unit) {
                 onClick = onClose,
                 primary = true,
                 modifier = if (reports.isEmpty()) Modifier.focusRequester(firstFocus) else Modifier
+            )
+        }
+    }
+}
+
+@StringRes
+private fun accountReportStatus(status: String): Int = when (status) {
+    "received" -> R.string.report_sent_title
+    "read" -> R.string.report_account_read
+    "cause_found" -> R.string.report_account_cause_found
+    "fixed" -> R.string.report_account_fixed
+    "not_danplus" -> R.string.report_account_not_danplus
+    "closed" -> R.string.report_account_closed
+    else -> R.string.report_account_unknown
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AccountReportsDialog(
+    load: suspend () -> List<AccountReport>,
+    onClose: () -> Unit
+) {
+    var reports by remember { mutableStateOf<List<AccountReport>?>(null) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf<AccountReport?>(null) }
+    val firstFocus = remember { FocusRequester() }
+    val current = selected
+    val context = LocalContext.current
+    val dateFormat = remember(context) { DateFormat.getMediumDateFormat(context) }
+    fun date(value: String): String = runCatching {
+        dateFormat.format(java.util.Date.from(java.time.OffsetDateTime.parse(value).toInstant()))
+    }.getOrDefault("")
+
+    LaunchedEffect(Unit) {
+        try {
+            reports = load()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            loadFailed = true
+        }
+    }
+    LaunchedEffect(reports, loadFailed, current) {
+        withFrameNanos { }
+        runCatching { firstFocus.requestFocus() }
+    }
+    val rows = reports
+    NuvioDialog(
+        onDismiss = { if (current == null) onClose() else selected = null },
+        title = stringResource(if (current == null) R.string.report_account_title else R.string.report_account_replies),
+        subtitle = current?.id,
+        width = 560.dp,
+        usePlatformDefaultWidth = false,
+        solidWithoutBlur = true
+    ) {
+        if (current == null) {
+            when {
+                loadFailed -> Text(stringResource(R.string.report_account_unavailable))
+                rows == null -> Text(stringResource(R.string.report_account_loading))
+                rows.isEmpty() -> Text(stringResource(R.string.report_account_empty))
+                else -> LazyColumn(Modifier.weight(1f, fill = false)) {
+                    items(rows, key = { it.id }) { report ->
+                        val label = sentKindLabel(report.kind)?.let { stringResource(it) } ?: report.id
+                        SettingsActionRow(
+                            title = label,
+                            subtitle = listOf(date(report.receivedAt), stringResource(accountReportStatus(report.status)))
+                                .filter { it.isNotBlank() }.joinToString(" · "),
+                            onClick = { selected = report },
+                            modifier = if (report == rows.first()) Modifier.focusRequester(firstFocus) else Modifier
+                        )
+                    }
+                }
+            }
+        } else {
+            Text(stringResource(accountReportStatus(current.status)))
+            if (current.replies.isEmpty()) {
+                Text(stringResource(R.string.report_account_no_reply))
+            } else {
+                LazyColumn(Modifier.weight(1f, fill = false)) {
+                    items(current.replies) { reply ->
+                        Column(Modifier.fillMaxWidth()) {
+                            Text(date(reply.at), color = NuvioTheme.colors.TextSecondary)
+                            Text(reply.text)
+                        }
+                    }
+                }
+            }
+        }
+        SettingsDialogActionRow {
+            if (current != null) {
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.report_account_copy_protocol),
+                    onClick = {
+                        context.getSystemService(ClipboardManager::class.java)?.let {
+                            it.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.report_account_title), current.id))
+                            Toast.makeText(context, R.string.report_sent_copied, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+            }
+            SettingsDialogActionButton(
+                text = stringResource(R.string.action_close),
+                primary = true,
+                onClick = { if (current == null) onClose() else selected = null },
+                modifier = if (current != null || rows.isNullOrEmpty()) Modifier.focusRequester(firstFocus) else Modifier
             )
         }
     }

@@ -11,17 +11,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,9 +26,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Icon
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
@@ -48,7 +44,11 @@ import com.nuvio.tv.ui.util.localizedGenreLabel
 import java.text.NumberFormat
 
 @Composable
-internal fun FolderSidePreview(item: MetaPreview?, modifier: Modifier = Modifier) {
+internal fun FolderSidePreview(
+    item: MetaPreview?,
+    credits: FolderPreviewCredits?,
+    modifier: Modifier = Modifier
+) {
     val colors = NuvioTheme.colors
     val shape = RoundedCornerShape(NuvioTheme.radii.lg)
     val wash = remember(colors.Secondary) {
@@ -59,43 +59,47 @@ internal fun FolderSidePreview(item: MetaPreview?, modifier: Modifier = Modifier
             .background(wash, shape)
             .border(1.dp, colors.Secondary.copy(alpha = .26f), shape)
             .padding(NuvioTheme.spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
+        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
         if (item != null) {
-            FolderTitleArtwork(item)
-            FolderMetadata(item)
+            FolderTitleArtwork(item, logoHeight = 64.dp, centered = true)
+            FolderPreviewDivider()
+            FolderMetadata(item, forGrade = true)
+            FolderPreviewDivider()
             item.description?.takeIf { it.isNotBlank() }?.let {
-                Text(it, color = colors.TextSecondary, style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 6, overflow = TextOverflow.Ellipsis)
+                Text(it, color = colors.TextSecondary, style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 4, overflow = TextOverflow.Ellipsis)
+                FolderPreviewDivider()
+            }
+            val director = credits?.director ?: item.director.firstOrNull { it.isNotBlank() }
+            val cast = credits?.cast.orEmpty()
+            if (director != null || cast.isNotEmpty()) {
+                Text(stringResource(R.string.dan_folder_credits), style = MaterialTheme.typography.titleSmall)
+                director?.let {
+                    Text(stringResource(R.string.dan_folder_director, it), style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (cast.isNotEmpty()) {
+                    Text(cast.joinToString(" · "), style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
 }
 
 @Composable
+private fun FolderPreviewDivider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(NuvioTheme.colors.TextSecondary.copy(alpha = .22f)))
+}
+
+@Composable
 internal fun FolderShowcase(
-    tabs: List<FolderTab>,
+    item: MetaPreview,
+    addon: String,
     onWatch: (MetaPreview, String) -> Unit,
     onOpen: (MetaPreview, String) -> Unit
 ) {
-    val slides = remember(tabs) {
-        val rows = tabs.filterNot { it.isAllTab }.mapNotNull { it.catalogRow }
-        val seen = HashSet<Pair<String, String>>()
-        buildList {
-            for (index in 0 until 6) {
-                for (row in rows) {
-                    val item = row.items.getOrNull(index) ?: continue
-                    if (seen.add(item.apiType to item.id)) add(item to (item.sourceAddonBaseUrl ?: row.addonBaseUrl))
-                    if (size == 6) return@buildList
-                }
-            }
-        }
-    }
-    if (slides.isEmpty()) return
-
-    var index by rememberSaveable { mutableIntStateOf(0) }
-    val current = index.coerceIn(slides.indices)
-    val (item, addon) = slides[current]
     val colors = NuvioTheme.colors
     val shape = RoundedCornerShape(NuvioTheme.radii.xl)
     val scrim = remember(colors.Background) {
@@ -122,68 +126,45 @@ internal fun FolderShowcase(
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
         ) {
             Column(Modifier.fillMaxWidth(.68f), verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
-                FolderTitleArtwork(item)
+                FolderTitleArtwork(item, logoHeight = 64.dp)
                 FolderMetadata(item)
                 item.description?.takeIf { it.isNotBlank() }?.let {
                     Text(it, color = colors.TextPrimary, style = MaterialTheme.typography.bodyMedium,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
-                    if (item.apiType == "movie" || item.apiType == "series" || item.apiType == "tv") {
-                        ScoutChip(stringResource(R.string.dan_folder_watch), onClick = { onWatch(item, addon) }, primary = true)
-                    }
-                    ScoutChip(stringResource(R.string.tmdb_details_title), onClick = { onOpen(item, addon) })
+            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
+                if (item.apiType == "movie" || item.apiType == "series" || item.apiType == "tv") {
+                    ScoutChip(stringResource(R.string.dan_folder_watch), onClick = { onWatch(item, addon) }, primary = true)
                 }
-                if (slides.size > 1) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        ScoutChip(
-                            label = "",
-                            onClick = { index = (current + slides.size - 1) % slides.size },
-                            icon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.dan_folder_previous), Modifier.size(20.dp)) }
-                        )
-                        Text(stringResource(R.string.dan_folder_slide, current + 1, slides.size))
-                        ScoutChip(
-                            label = "",
-                            onClick = { index = (current + 1) % slides.size },
-                            icon = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.dan_folder_next), Modifier.size(20.dp)) }
-                        )
-                    }
-                }
+                ScoutChip(stringResource(R.string.tmdb_details_title), onClick = { onOpen(item, addon) })
             }
         }
     }
 }
 
 @Composable
-private fun FolderTitleArtwork(item: MetaPreview) {
+private fun FolderTitleArtwork(item: MetaPreview, logoHeight: Dp = 58.dp, centered: Boolean = false) {
     val logo = item.logo?.takeIf { it.isNotBlank() }
     var failed by remember(logo) { mutableStateOf(false) }
     if (logo != null && !failed) {
         AsyncImage(
             model = sizedHomeArtworkUrl(logo, 500),
             contentDescription = item.name,
-            modifier = Modifier.fillMaxWidth().height(58.dp),
+            modifier = Modifier.fillMaxWidth().height(logoHeight),
             contentScale = ContentScale.Fit,
-            alignment = Alignment.CenterStart,
+            alignment = if (centered) Alignment.Center else Alignment.CenterStart,
             onError = { failed = true }
         )
     } else {
         Text(item.name, style = MaterialTheme.typography.headlineMedium, color = NuvioTheme.colors.TextPrimary,
+            modifier = Modifier.fillMaxWidth(), textAlign = if (centered) TextAlign.Center else TextAlign.Start,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
-private fun FolderMetadata(item: MetaPreview) {
+private fun FolderMetadata(item: MetaPreview, forGrade: Boolean = false) {
     val rating = item.imdbRating?.takeIf { it.isFinite() && it > 0f }?.let {
         val locale = LocalConfiguration.current.locales[0] ?: java.util.Locale.getDefault()
         val number = remember(it, locale) {
@@ -194,21 +175,34 @@ private fun FolderMetadata(item: MetaPreview) {
         "★ $number"
     }
     val duration = item.runtime?.takeIf { it.isNotBlank() }?.let {
-        it.toIntOrNull()?.let { minutes -> stringResource(R.string.dan_folder_minutes, minutes) } ?: it
+        val minutes = if (forGrade) folderRuntimeMinutes.matchEntire(it.trim())?.groupValues?.get(1)?.toIntOrNull()
+            else it.toIntOrNull()
+        when {
+            minutes == null -> it
+            !forGrade || minutes < 60 -> stringResource(R.string.dan_folder_minutes, minutes)
+            minutes % 60 == 0 -> "${minutes / 60}h"
+            else -> "${minutes / 60}h ${(minutes % 60).toString().padStart(2, '0')}"
+        }
     }
     val details = listOfNotNull(
         item.releaseInfo?.takeIf { it.isNotBlank() }, duration,
         item.ageRating?.takeIf { it.isNotBlank() }, rating
     ).joinToString(" · ")
     if (details.isNotEmpty()) {
-        Text(details, color = NuvioTheme.colors.TextPrimary, style = MaterialTheme.typography.labelLarge,
+        val style = MaterialTheme.typography.labelLarge
+        Text(details, color = NuvioTheme.colors.TextPrimary,
+            style = if (forGrade) style.copy(fontSize = (style.fontSize.value + 2).sp) else style,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
     val context = LocalContext.current
     val genres = item.genres.take(3).map { localizedGenreLabel(context, it) }
         .joinToString(" · ").ifBlank { localizedContentType(item.apiType) }
     if (genres.isNotBlank()) {
-        Text(genres, color = NuvioTheme.colors.TextSecondary, style = MaterialTheme.typography.labelMedium,
+        val style = MaterialTheme.typography.labelMedium
+        Text(genres, color = NuvioTheme.colors.TextSecondary,
+            style = if (forGrade) style.copy(fontSize = (style.fontSize.value + 2).sp) else style,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
+private val folderRuntimeMinutes = Regex("""(\d+)(?:\s*m(?:in)?)?""", RegexOption.IGNORE_CASE)

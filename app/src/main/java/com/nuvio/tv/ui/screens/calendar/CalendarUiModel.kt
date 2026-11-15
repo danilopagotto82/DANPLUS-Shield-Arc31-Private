@@ -50,7 +50,8 @@ data class CalendarRow(
     val logo: String? = null,
     val rating: Double? = null,
     val genre: String? = null,
-    val personal: Boolean = false
+    val personal: Boolean = false,
+    val streaming: Boolean = false
 ) {
     val dimmed: Boolean get() = status == CalendarRowStatus.WATCHED
     val isFilm: Boolean get() = type == CalendarTitleType.MOVIE
@@ -160,7 +161,8 @@ fun calendarRow(
         logo = title.logo?.takeIf(String::isNotBlank),
         rating = title.rating,
         genre = title.genre,
-        personal = title.origins.any { it.started || it.savesFilms } || title.key in bells
+        personal = title.origins.any { it.started || it.savesFilms } || title.key in bells,
+        streaming = title.tvmazeStreaming || kind == CalendarRowKind.FILM_DIGITAL
     )
 }
 

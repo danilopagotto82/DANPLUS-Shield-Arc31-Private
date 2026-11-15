@@ -39,6 +39,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.scout.scoutHiddenKey
 import com.nuvio.tv.core.scout.ScoutMixDecade
 import com.nuvio.tv.core.scout.ScoutReadyMix
 import com.nuvio.tv.core.scout.ScoutReadyMixBuilder
@@ -90,7 +91,8 @@ data class ScoutReadyState(
     val tab: ScoutReadyTab = ScoutReadyTab.DECADES,
     val tiles: List<ScoutReadyTileState> = emptyList(),
     val focused: String? = null,
-    val savedIds: Set<String> = emptySet()
+    val savedIds: Set<String> = emptySet(),
+    val hasHidden: Boolean = false
 ) {
     val focusedTile: ScoutReadyTileState? get() = tiles.firstOrNull { it.mix.id == focused } ?: tiles.firstOrNull()
 }
@@ -107,6 +109,7 @@ class ScoutReadyMixesViewModel @Inject constructor(
     private var loadJob: Job? = null
     private val loaded = HashMap<String, ScoutReadyTileState>()
     private var taste: Map<String, Double> = emptyMap()
+    private var hiddenRecipes: Set<String> = emptySet()
 
     init {
         showTab(ScoutReadyTab.DECADES)
@@ -114,6 +117,22 @@ class ScoutReadyMixesViewModel @Inject constructor(
         viewModelScope.launch {
             store.mixes.collect { mixes -> _state.update { it.copy(savedIds = mixes.mapNotNull { mix -> mix.savedFrom }.toSet()) } }
         }
+        viewModelScope.launch {
+            store.hiddenReadyMixes.collect { hidden ->
+                hiddenRecipes = hidden
+                showTab(_state.value.tab)
+            }
+        }
+    }
+
+    fun hideMix(mix: ScoutReadyMix) {
+        val profile = store.profileId()
+        viewModelScope.launch { store.hideReadyMix(mix.scoutHiddenKey(LocalDate.now()), profile) }
+    }
+
+    fun restoreHidden() {
+        val profile = store.profileId()
+        viewModelScope.launch { store.restoreHiddenReadyMixes(profile) }
     }
 
     fun setFamily(on: Boolean) {
@@ -153,13 +172,16 @@ class ScoutReadyMixesViewModel @Inject constructor(
     }
 
     private fun showTab(tab: ScoutReadyTab) {
-        val mixes = ScoutReadyMixes.tab(tab, family, LocalDate.now(), Locale.getDefault().country, taste)
+        val today = LocalDate.now()
+        val mixes = ScoutReadyMixes.tab(tab, family, today, Locale.getDefault().country, taste)
+            .filterNot { it.scoutHiddenKey(today) in hiddenRecipes }
         _state.update { now ->
             ScoutReadyState(
                 tab = tab,
                 tiles = scoutDistinctArt(mixes.map { loaded[it.id] ?: ScoutReadyTileState(it) }.filterNot { it.hidden }),
                 focused = mixes.firstOrNull()?.id,
-                savedIds = now.savedIds
+                savedIds = now.savedIds,
+                hasHidden = hiddenRecipes.any { '|' !in it || it.substringAfterLast('|') == today.year.toString() }
             )
         }
         loadJob?.cancel()
@@ -324,6 +346,8 @@ internal fun ColumnScope.ScoutReadyRows(
     onFocusMix: (String) -> Unit,
     onOpen: (String) -> Unit,
     onOwn: () -> Unit,
+    onHide: (ScoutReadyMix) -> Unit,
+    onRestore: () -> Unit,
     listEmojis: Boolean
 ) {
     Row(
@@ -335,6 +359,11 @@ internal fun ColumnScope.ScoutReadyRows(
         ScoutChip(stringResource(R.string.scout_premix_own), onClick = onOwn, modifier = focus(READY_FOCUS_OWN), icon = {
             Icon(Icons.Default.Tune, null, Modifier.size(18.dp))
         })
+        if (state.hasHidden) ScoutChip(
+            stringResource(R.string.scout_premix_restore_hidden),
+            onClick = onRestore,
+            modifier = focus("ready_restore_hidden")
+        )
     }
     val tabs = ScoutReadyTab.entries.map { ScoutTabItem(READY_TAB_PREFIX + it.name, stringResource(it.labelRes), it == state.tab) }
     ScoutTabs(
@@ -360,6 +389,7 @@ internal fun ColumnScope.ScoutReadyRows(
                     line = readyTileLine(tile),
                     height = tileHeight,
                     onClick = { onOpen(tile.mix.id) },
+                    onLongClick = { onHide(tile.mix) },
                     onFocused = { onFocusMix(tile.mix.id) },
                     modifier = focus(READY_TILE_PREFIX + tile.mix.id)
                 )

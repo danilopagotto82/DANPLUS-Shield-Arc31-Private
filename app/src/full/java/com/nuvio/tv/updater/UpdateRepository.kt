@@ -32,7 +32,11 @@ class UpdateRepository @Inject constructor(private val gitHubReleaseApi: GitHubR
             .filter { VersionUtils.isRemoteNewer(it.tagName, BuildConfig.VERSION_NAME,
                 ReleaseSelector.versionCode(it), BuildConfig.VERSION_CODE.toLong()) }
             .firstNotNullOfOrNull { release ->
-                AbiSelector.chooseBestApkAsset(release.assets, supportedAbis, debugBuild = BuildConfig.IS_DEBUG_BUILD)?.takeIf { asset ->
+                AbiSelector.chooseBestApkAsset(
+                    release.assets, supportedAbis,
+                    debugBuild = BuildConfig.IS_DEBUG_BUILD,
+                    fireChannel = BuildConfig.APPLICATION_ID == "com.danexus.tv.fire.debug"
+                )?.takeIf { asset ->
                     asset.browserDownloadUrl.startsWith(downloadPrefix) && (asset.size == null || asset.size > 0)
                 }?.let { release to it }
             } ?: throw NoEligibleUpdateException()

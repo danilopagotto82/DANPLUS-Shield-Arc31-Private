@@ -21,17 +21,16 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
 ) : BaseMPVView(context, attrs) {
 
     private var initialized = false
+    private var surfaceAttached = false
     private var appliedSoundFilterChain = ""
     private var appliedSwresampleOptions = ""
     private var soundGainDb = 0
     private var soundNightMode = NightModeLevel.OFF
     private var dialogueBoostDb = 0
     private var stereoDownmixLimited = false
-    private var hasQueuedInitialMedia = false
     private var lastMediaRequestKey: String? = null
     private var pendingInitialMediaUrl: String? = null
     private var pendingInitialStartOption: String? = null
-    private var deferredLoadUntilSurface: Boolean = false
     private var requestedMediaUrl: String? = null
     private var pathAtMediaRequest: String? = null
     private var hardwareDecodeMode: MpvHardwareDecodeMode = MpvHardwareDecodeMode.AUTO_SAFE
@@ -47,18 +46,20 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
     fun ensureInitialized() {
         if (initialized) return
         Utils.copyAssets(context)
-        initialize(
-            configDir = context.filesDir.path,
-            cacheDir = context.cacheDir.path
-        )
-        initialized = true
+        try {
+            initialize(configDir = context.filesDir.path, cacheDir = context.cacheDir.path)
+            initialized = true
+        } catch (failure: Throwable) {
+            if (mpv.isInitialized) runCatching { destroy() }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
     }
 
     fun setMedia(url: String, headers: Map<String, String>, startPositionMs: Long = 0L) {
         ensureInitialized()
         val requestKey = buildMediaRequestKey(url = url, headers = headers) +
             "#start=${startPositionMs.coerceAtLeast(0L)}"
-        if (hasQueuedInitialMedia && requestKey == lastMediaRequestKey) {
+        if (requestKey == lastMediaRequestKey) {
             return
         }
         applyHeaders(headers)
@@ -72,54 +73,46 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
                     if (hi10pGnextSoftwareFallbackActive) add("hr-seek=no")
                 }.joinToString(",")
             }
-        if (startOption != null && holder.surface?.isValid == true) {
-            ensureSurfaceAttachedIfAlreadyAvailable()
-            loadFileWithOptions(url, startOption)
-            hasQueuedInitialMedia = true
-            pendingInitialMediaUrl = null
-            pendingInitialStartOption = null
-            deferredLoadUntilSurface = false
-        } else if (startOption != null) {
-            pendingInitialMediaUrl = url
-            pendingInitialStartOption = startOption
-            deferredLoadUntilSurface = true
-            hasQueuedInitialMedia = true
-        } else if (hasQueuedInitialMedia) {
-            pendingInitialMediaUrl = null
-            pendingInitialStartOption = null
-            if (holder.surface?.isValid == true) {
-                ensureSurfaceAttachedIfAlreadyAvailable()
-                mpv.command("loadfile", url, "replace")
-                deferredLoadUntilSurface = false
-            } else {
-                playFile(url)
-                deferredLoadUntilSurface = true
-            }
-        } else {
-            pendingInitialMediaUrl = null
-            pendingInitialStartOption = null
-            playFile(url)
-            ensureSurfaceAttachedIfAlreadyAvailable()
-            deferredLoadUntilSurface = holder.surface?.isValid != true
-            hasQueuedInitialMedia = true
-        }
+        loadWhenSurfaceReady(url, startOption)
         lastMediaRequestKey = requestKey
         applyDefaultTrackSelectionForNewLoad()
         scheduleAspectModeRefresh(resetRetryCount = true)
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
+        if (!initialized || surfaceAttached || !holder.surface.isValid) return
         super.surfaceCreated(holder)
-        deferredLoadUntilSurface = false
+        surfaceAttached = true
+        super.surfaceChanged(holder, 0, holder.surfaceFrame.width(), holder.surfaceFrame.height())
+        loadPendingMedia()
+    }
+
+    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        if (initialized && surfaceAttached) super.surfaceChanged(holder, format, width, height)
+    }
+
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        if (!initialized || !surfaceAttached) return
+        surfaceAttached = false
+        super.surfaceDestroyed(holder)
+    }
+
+    private fun loadWhenSurfaceReady(url: String, startOption: String?) {
+        pendingInitialMediaUrl = url
+        pendingInitialStartOption = startOption
+        if (holder.surface?.isValid == true) {
+            // MPV may initialize after Android has already created its surface.
+            if (surfaceAttached) loadPendingMedia() else surfaceCreated(holder)
+        }
+    }
+
+    private fun loadPendingMedia() {
         val url = pendingInitialMediaUrl ?: return
         val startOption = pendingInitialStartOption
+        if (startOption == null) mpv.command("loadfile", url, "replace")
+        else loadFileWithOptions(url, startOption)
         pendingInitialMediaUrl = null
         pendingInitialStartOption = null
-        if (startOption != null) {
-            loadFileWithOptions(url, startOption)
-        } else {
-            mpv.command("loadfile", url, "replace")
-        }
     }
 
     /**
@@ -136,34 +129,10 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         val requestKey = buildMediaRequestKey(url = url, headers = headers)
         applyHeaders(headers)
         markMediaRequested(url)
-        pendingInitialMediaUrl = null
-        pendingInitialStartOption = null
-        if (holder.surface?.isValid == true) {
-            ensureSurfaceAttachedIfAlreadyAvailable()
-            mpv.command("loadfile", url, "replace")
-            deferredLoadUntilSurface = false
-        } else {
-            playFile(url)
-            deferredLoadUntilSurface = true
-        }
-        hasQueuedInitialMedia = true
+        loadWhenSurfaceReady(url, startOption = null)
         lastMediaRequestKey = requestKey
         applyDefaultTrackSelectionForNewLoad()
         scheduleAspectModeRefresh(resetRetryCount = true)
-    }
-
-    private fun ensureSurfaceAttachedIfAlreadyAvailable() {
-        if (!initialized) return
-        val currentHolder = holder
-        val currentSurface = currentHolder.surface ?: return
-        if (!currentSurface.isValid) return
-        runCatching {
-            // Some fallback transitions initialize mpv after the Surface is already alive.
-            // In that path, SurfaceHolder callback may not fire again, so force attach.
-            surfaceCreated(currentHolder)
-        }.onFailure {
-            Log.w(TAG, "Failed to force MPV surface attach: ${it.message}")
-        }
     }
 
     private fun applyDefaultTrackSelectionForNewLoad() {
@@ -219,7 +188,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
     }
 
     val hasPendingInitialMedia: Boolean
-        get() = pendingInitialMediaUrl != null || deferredLoadUntilSurface
+        get() = pendingInitialMediaUrl != null
 
     /** False while mpv still reports the path recorded at the last media request. */
     fun isPositionFromRequestedMedia(): Boolean {
@@ -502,10 +471,11 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             val subMarginY = (MPV_SUB_MARGIN_Y_MIN +
                 (normalizedOffset * (MPV_SUB_MARGIN_Y_MAX - MPV_SUB_MARGIN_Y_MIN))).toInt()
             val edges = mpvSubtitleEdges(style, isAssOrSsaSubtitleSelectedNow())
-            mpv.setPropertyString("sub-font", style.font.mpvFontName(style.bold))
+            val importedFont = com.nuvio.tv.core.player.ImportedSubtitleFonts.get(context, style.importedFontId)
+            mpv.setPropertyString("sub-font", importedFont?.family ?: style.font.mpvFontName(style.bold))
 
             mpv.setPropertyDouble("sub-scale", scale)
-            mpv.setPropertyBoolean("sub-bold", style.font.mpvBold(style.bold))
+            mpv.setPropertyBoolean("sub-bold", if (importedFont != null) style.bold else style.font.mpvBold(style.bold))
             mpv.setPropertyDouble("sub-outline-size", edges.outlineSize)
             // Subtitles sit above the controls while they are shown; the user's offset still wins below that line.
             val liftedSubPos = if (subtitleLiftFraction > 0.0) {
@@ -803,18 +773,17 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
 
     fun releasePlayer() {
         if (!initialized) return
+        initialized = false
+        surfaceAttached = false
         removeCallbacks(aspectReapplyRunnable)
         runCatching { destroy() }
             .onFailure { Log.w(TAG, "Failed to destroy libmpv view cleanly: ${it.message}") }
-        initialized = false
         appliedSoundFilterChain = ""
         appliedSwresampleOptions = ""
         stereoDownmixLimited = false
-        hasQueuedInitialMedia = false
         lastMediaRequestKey = null
         pendingInitialMediaUrl = null
         pendingInitialStartOption = null
-        deferredLoadUntilSurface = false
         requestedMediaUrl = null
         pathAtMediaRequest = null
         appliedHi10pGnextSoftwareFallback = null
@@ -847,7 +816,8 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         mpv.setOptionString("tls-ca-file", "${context.filesDir.path}/cacert.pem")
         mpv.setOptionString("input-default-bindings", "yes")
         mpv.setOptionString("demuxer-max-bytes", "${64 * 1024 * 1024}")
-        mpv.setOptionString("demuxer-max-back-bytes", "${64 * 1024 * 1024}")
+        val backBufferMb = if (com.nuvio.tv.core.player.BufferSizing.is64BitPlaybackProcess) 64 else 32
+        mpv.setOptionString("demuxer-max-back-bytes", (backBufferMb * 1024 * 1024).toString())
         mpv.setOptionString("keep-open", "yes")
         mpv.setOptionString("softvol", "yes")
         mpv.setOptionString("volume-max", MPV_MAX_VOLUME_PERCENT.toInt().toString())

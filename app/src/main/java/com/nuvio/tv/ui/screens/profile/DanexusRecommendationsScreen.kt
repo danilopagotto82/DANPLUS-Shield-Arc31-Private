@@ -4,9 +4,11 @@ package com.nuvio.tv.ui.screens.profile
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -20,8 +22,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -120,23 +128,24 @@ fun DanexusRecommendDialog(
         if (sentCount > 0) Text(stringResource(R.string.d12_send_queued, sentCount), Modifier.fillMaxWidth(), color = colors.Secondary, textAlign = TextAlign.Center)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (viewModel.remoteEnabled && (email == null || active == null || locked)) {
-                Button(onClick = { accountOpen = true }) {
+                Button(onClick = { accountOpen = true }, colors = indicationButtonColors(), border = indicationFocusBorder()) {
                     Text(stringResource(if (locked) R.string.d12_unlock_action else R.string.d12_account_action))
                 }
             }
             if (active != null && !locked && recipients.isNotEmpty()) {
-                Button(onClick = { selected = if (selected.size == recipients.size) emptySet() else recipients.map { it.id }.toSet() }) {
+                Button(onClick = { selected = if (selected.size == recipients.size) emptySet() else recipients.map { it.id }.toSet() },
+                    colors = indicationButtonColors(), border = indicationFocusBorder()) {
                     Text(stringResource(R.string.d12_all_profiles))
                 }
             }
             if (active != null && !locked) {
                 Button(onClick = {
                     confirmation = recipients.filter { it.id in selected }.associate { it.index to it.id }
-                }, enabled = canReview) {
+                }, enabled = canReview, colors = indicationButtonColors(), border = indicationFocusBorder()) {
                     Text(stringResource(R.string.d12_review_send))
                 }
             }
-            Button(onClick = onDismiss) { Text(stringResource(R.string.d12_close)) }
+            Button(onClick = onDismiss, colors = indicationButtonColors(), border = indicationFocusBorder()) { Text(stringResource(R.string.d12_close)) }
         }
     }
 
@@ -151,7 +160,8 @@ fun DanexusRecommendDialog(
             subtitle = meta.name, width = 560.dp, titleTextAlign = TextAlign.Center, solidWithoutBlur = true) {
             Text(stringResource(R.string.d12_confirm_targets, names.joinToString(", ")), Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
-                Button(onClick = { confirmation = null }, modifier = Modifier.focusRequester(cancelFocus)) {
+                Button(onClick = { confirmation = null }, modifier = Modifier.focusRequester(cancelFocus),
+                    colors = indicationButtonColors(), border = indicationFocusBorder()) {
                     Text(stringResource(R.string.d12_cancel))
                 }
                 Button(onClick = {
@@ -162,7 +172,8 @@ fun DanexusRecommendDialog(
                         error = it == 0
                         if (it > 0) selected = emptySet()
                     }.onFailure { error = true; sentCount = 0 }
-                }, enabled = targets.isNotEmpty() && names.size == targets.size) {
+                }, enabled = targets.isNotEmpty() && names.size == targets.size,
+                    colors = indicationButtonColors(), border = indicationFocusBorder()) {
                     Text(stringResource(R.string.d12_confirm_send, names.size))
                 }
             }
@@ -187,12 +198,13 @@ fun DanexusRecommendationsScreen(
     var sent by remember(active) { mutableStateOf(false) }
     var person by remember(active, sent) { mutableStateOf<Int?>(null) }
     var accountOpen by remember { mutableStateOf(false) }
-    var toRemove by remember(active) { mutableStateOf<ProfileRecommendation?>(null) }
+    var toRemove by remember(active) { mutableStateOf<List<ProfileRecommendation>?>(null) }
     val receivedFocus = remember { FocusRequester() }
     val sentFocus = remember { FocusRequester() }
-    val visible = active?.let { viewer ->
-        ProfileRecommendationRules.inbox(records, viewer.index, sent, person)
-    }.orEmpty()
+    val cards = remember(records, active, sent, person) {
+        active?.let { ProfileRecommendationRules.cards(records, it.index, sent, person) }.orEmpty()
+    }
+    val profilesByIndex = remember(profiles) { profiles.associateBy(RecommendationProfile::index) }
 
     LaunchedEffect(active) { viewModel.refresh() }
     DisposableEffect(viewModel) {
@@ -211,9 +223,17 @@ fun DanexusRecommendationsScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(
+                Modifier.widthIn(max = 920.dp).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.FavoriteBorder, null, Modifier.size(30.dp), tint = colors.Secondary)
+                    Box(
+                        Modifier.size(44.dp).background(colors.Secondary.copy(alpha = .14f), RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.FavoriteBorder, null, Modifier.size(24.dp), tint = colors.Secondary)
+                    }
                     Text(stringResource(R.string.d12_screen_title), style = MaterialTheme.typography.headlineLarge)
                 }
                 if (!viewModel.remoteEnabled) {
@@ -225,126 +245,293 @@ fun DanexusRecommendationsScreen(
                     Text(stringResource(R.string.d12_sync_retry), color = colors.TextSecondary)
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { sent = false }, modifier = Modifier.focusRequester(receivedFocus), colors = indicationButtonColors(!sent)) {
+            Row(
+                Modifier.widthIn(max = 920.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(onClick = { sent = false }, modifier = Modifier.focusRequester(receivedFocus), colors = indicationButtonColors(!sent), border = indicationFocusBorder()) {
                     Text(stringResource(R.string.d12_received))
                 }
-                Button(onClick = { sent = true }, modifier = Modifier.focusRequester(sentFocus), colors = indicationButtonColors(sent)) {
+                Button(onClick = { sent = true }, modifier = Modifier.focusRequester(sentFocus), colors = indicationButtonColors(sent), border = indicationFocusBorder()) {
                     Text(stringResource(R.string.d12_sent))
                 }
-                Button(onClick = onNewRecommendation, colors = indicationButtonColors()) {
+                Spacer(Modifier.weight(1f))
+                Button(onClick = onNewRecommendation, colors = indicationButtonColors(), border = indicationFocusBorder()) {
                     Icon(Icons.Default.Movie, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(7.dp))
                     Text(stringResource(R.string.d12_find_to_send))
                 }
-                if (viewModel.remoteEnabled && (email == null || active == null || locked)) Button(onClick = { accountOpen = true }, colors = indicationButtonColors()) {
+                if (viewModel.remoteEnabled && (email == null || active == null || locked)) Button(onClick = { accountOpen = true }, colors = indicationButtonColors(), border = indicationFocusBorder()) {
                     Text(stringResource(if (locked) R.string.d12_unlock_action else R.string.d12_account_action))
                 }
             }
             if (active != null && !locked && profiles.size > 1) {
                 androidx.compose.foundation.lazy.LazyRow(
-                    modifier = Modifier.widthIn(max = 820.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                    modifier = Modifier.widthIn(max = 920.dp).fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     item {
-                        Button(onClick = { person = null }, colors = indicationButtonColors(person == null)) {
+                        Button(onClick = { person = null }, colors = indicationButtonColors(person == null), border = indicationFocusBorder()) {
                             Text(stringResource(R.string.d12_all_profiles_filter))
                         }
                     }
                     items(profiles.filter { it.id != active?.id }, key = { it.id }) { profile ->
-                        Button(onClick = { person = profile.index }, colors = indicationButtonColors(person == profile.index)) {
+                        Button(onClick = { person = profile.index }, colors = indicationButtonColors(person == profile.index), border = indicationFocusBorder()) {
                             IndicationProfileName(profile, viewModel.localProfileFor(profile)?.id?.let(pictures::get))
                         }
                     }
                 }
             }
-            if (visible.isEmpty()) {
+            if (cards.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.d12_empty), style = MaterialTheme.typography.bodyLarge, color = colors.TextSecondary)
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.widthIn(max = 880.dp).fillMaxWidth().weight(1f),
+                    modifier = Modifier.widthIn(max = 928.dp).fillMaxWidth().weight(1f),
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 5.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(visible, key = { it.key }) { row ->
-                        val other = profiles.firstOrNull { it.index == if (sent) row.to else row.from }
-                        val watchedFlow = remember(row) { viewModel.isRecipientWatched(row) }
-                        val watchedByRecipient by watchedFlow.collectAsState(initial = false)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Button(
-                                onClick = {
-                                    if (viewModel.open(row)) onOpen(row.contentId, row.type)
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = indicationButtonColors(),
-                                shape = ButtonDefaults.shape(RoundedCornerShape(14.dp)),
-                                scale = ButtonDefaults.scale(focusedScale = 1f),
-                                border = ButtonDefaults.border(focusedBorder = Border(BorderStroke(2.dp, colors.Secondary))),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                    Box(
-                                        Modifier.size(width = 100.dp, height = 65.dp)
-                                            .clip(RoundedCornerShape(8.dp)).background(colors.Background),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.Default.Movie, null, tint = colors.TextSecondary)
-                                        (row.backdrop ?: row.poster)?.let {
-                                            AsyncImage(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                                        }
-                                    }
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text(row.title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text((if (sent) stringResource(R.string.d12_to) else stringResource(R.string.d12_from)) +
-                                            " " + (other?.name ?: "—"), color = colors.TextSecondary)
-                                        if (!sent && !row.seen) Text(stringResource(R.string.d12_unread), color = colors.Secondary)
-                                        if (row.uploadPending) Text(stringResource(R.string.d12_pending_sync), color = colors.TextSecondary)
-                                        row.synopsis?.let {
-                                            Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.TextSecondary)
-                                        }
-                                    }
-                                    if (watchedByRecipient) {
-                                        Icon(Icons.Default.Check, stringResource(R.string.d12_watched), tint = colors.Secondary)
-                                        Text(stringResource(R.string.d12_watched), color = colors.Secondary)
-                                    }
-                                }
-                            }
-                            Button(onClick = { toRemove = row }, colors = indicationButtonColors(), contentPadding = PaddingValues(12.dp)) {
-                                Icon(Icons.Default.DeleteOutline, stringResource(R.string.d12_remove))
-                            }
-                        }
+                    items(cards, key = { it.first }) { (_, rows) ->
+                        val row = rows.first()
+                        val people = rows.mapNotNull { profilesByIndex[if (sent) it.to else it.from] }
+                        val watchedFlow = remember(rows, viewModel) { viewModel.watchedRecipientCount(rows) }
+                        val watchedCount by watchedFlow.collectAsStateWithLifecycle(initialValue = 0)
+                        RecommendationCard(
+                            row = row,
+                            backdrop = viewModel.indicationBackdrop(row),
+                            people = people,
+                            pictureFor = { profile -> viewModel.localProfileFor(profile)?.id?.let(pictures::get) },
+                            sent = sent,
+                            pending = rows.any { it.uploadPending },
+                            watchedCount = watchedCount,
+                            recipientCount = rows.size,
+                            onOpen = { if (viewModel.open(row)) onOpen(row.contentId, row.type) },
+                            onRemove = { toRemove = rows }
+                        )
                     }
                 }
             }
         }
     }
 
-    toRemove?.let { row ->
+    toRemove?.let { rows ->
         val cancelFocus = remember { FocusRequester() }
-        LaunchedEffect(row.key) {
+        LaunchedEffect(rows) {
             repeat(2) { withFrameNanos { } }
             runCatching { cancelFocus.requestFocus() }
         }
         NuvioDialog(onDismiss = { toRemove = null }, title = stringResource(R.string.d12_remove),
-            subtitle = row.title, titleTextAlign = TextAlign.Center, solidWithoutBlur = true) {
-            Text(stringResource(R.string.d12_remove_confirm), Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            subtitle = rows.first().title, titleTextAlign = TextAlign.Center, solidWithoutBlur = true) {
+            val message = if (rows.size == 1) stringResource(R.string.d12_remove_confirm)
+                else stringResource(R.string.d12_remove_send_confirm, rows.size)
+            Text(message, Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
-                Button(onClick = { toRemove = null }, modifier = Modifier.focusRequester(cancelFocus)) {
+                Button(onClick = { toRemove = null }, modifier = Modifier.focusRequester(cancelFocus),
+                    colors = indicationButtonColors(), border = indicationFocusBorder()) {
                     Text(stringResource(R.string.d12_cancel))
                 }
                 Button(onClick = {
-                    viewModel.dismiss(row)
+                    rows.forEach(viewModel::dismiss)
                     toRemove = null
                     if (sent) sentFocus.requestFocus() else receivedFocus.requestFocus()
-                }) {
+                }, colors = indicationButtonColors(), border = indicationFocusBorder()) {
                     Text(stringResource(R.string.d12_remove))
                 }
             }
         }
     }
     if (accountOpen) RecommendationAccountDialog(viewModel) { accountOpen = false }
+}
+
+@Composable
+private fun RecommendationCard(
+    row: ProfileRecommendation,
+    backdrop: String?,
+    people: List<RecommendationProfile>,
+    pictureFor: (RecommendationProfile) -> String?,
+    sent: Boolean,
+    pending: Boolean,
+    watchedCount: Int,
+    recipientCount: Int,
+    onOpen: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val colors = NuvioTheme.colors
+    val shape = RoundedCornerShape(18.dp)
+    val deleteShape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Button(
+            onClick = onOpen,
+            modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.colors(
+                containerColor = colors.BackgroundCard,
+                contentColor = colors.TextPrimary,
+                focusedContainerColor = colors.Secondary.copy(alpha = .10f).compositeOver(colors.BackgroundCard),
+                focusedContentColor = colors.TextPrimary
+            ),
+            shape = ButtonDefaults.shape(shape),
+            scale = ButtonDefaults.scale(focusedScale = 1f),
+            border = ButtonDefaults.border(
+                border = Border(BorderStroke(1.dp, colors.TextSecondary.copy(alpha = .18f)), shape = shape),
+                focusedBorder = Border(BorderStroke(2.dp, colors.Secondary), shape = shape)
+            ),
+            contentPadding = PaddingValues(10.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RecommendationArtwork(backdrop, row.poster)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        row.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis
+                    )
+                    row.synopsis?.takeIf(String::isNotBlank)?.let { synopsis ->
+                        Text(
+                            synopsis, style = MaterialTheme.typography.bodySmall, maxLines = 2,
+                            overflow = TextOverflow.Ellipsis, color = colors.TextSecondary
+                        )
+                    }
+                    if (people.isNotEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Text(
+                                stringResource(if (sent) R.string.d12_to else R.string.d12_from),
+                                style = MaterialTheme.typography.labelMedium, color = colors.TextSecondary
+                            )
+                            if (people.size == 1) {
+                                val person = people.single()
+                                IndicationProfileName(person, pictureFor(person))
+                            } else {
+                                RecommendationRecipients(people, pictureFor)
+                            }
+                        }
+                    }
+                    if ((!sent && !row.seen) || pending || watchedCount > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (!sent && !row.seen) {
+                                Text(
+                                    stringResource(R.string.d12_unread),
+                                    style = MaterialTheme.typography.labelMedium, color = colors.Secondary
+                                )
+                            }
+                            if (pending) {
+                                Text(
+                                    stringResource(R.string.d12_pending_sync),
+                                    style = MaterialTheme.typography.labelMedium, color = colors.TextSecondary
+                                )
+                            }
+                            if (watchedCount > 0) {
+                                Row(
+                                    Modifier.background(colors.Secondary.copy(alpha = .15f), CircleShape)
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Icons.Default.Check, null, Modifier.size(14.dp), tint = colors.Secondary)
+                                    Text(
+                                        if (watchedCount == recipientCount) stringResource(R.string.d12_watched)
+                                        else stringResource(R.string.d12_watched_count, watchedCount, recipientCount),
+                                        color = colors.Secondary, style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Button(
+            onClick = onRemove,
+            colors = indicationButtonColors(),
+            shape = ButtonDefaults.shape(deleteShape),
+            scale = ButtonDefaults.scale(focusedScale = 1f),
+            border = ButtonDefaults.border(focusedBorder = Border(BorderStroke(2.dp, colors.Secondary), shape = deleteShape)),
+            contentPadding = PaddingValues(12.dp)
+        ) {
+            Icon(Icons.Default.DeleteOutline, stringResource(R.string.d12_remove), Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun RecommendationArtwork(backdrop: String?, poster: String?) {
+    val colors = NuvioTheme.colors
+    val shape = RoundedCornerShape(11.dp)
+    var backdropFailed by remember(backdrop) { mutableStateOf(false) }
+    var posterFailed by remember(poster) { mutableStateOf(false) }
+    Box(
+        Modifier.size(width = 160.dp, height = 90.dp).clip(shape)
+            .background(Brush.horizontalGradient(listOf(colors.Background, colors.BackgroundCard)))
+            .border(1.dp, colors.TextSecondary.copy(alpha = .18f), shape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (backdrop != null && !backdropFailed) {
+            AsyncImage(
+                backdrop, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+                onError = { backdropFailed = true }
+            )
+            Box(
+                Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .27f))))
+            )
+        } else if (!poster.isNullOrBlank() && !posterFailed) {
+            AsyncImage(
+                poster, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
+                onError = { posterFailed = true }
+            )
+        } else {
+            Icon(Icons.Default.Movie, null, Modifier.size(24.dp), tint = colors.TextSecondary)
+        }
+    }
+}
+
+@Composable
+private fun RecommendationRecipients(
+    people: List<RecommendationProfile>,
+    pictureFor: (RecommendationProfile) -> String?
+) {
+    val colors = NuvioTheme.colors
+    val names = people.joinToString(", ") { it.name }
+    val visible = people.take(5)
+    Row(
+        Modifier.clearAndSetSemantics { contentDescription = names },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy((-5).dp)
+    ) {
+        visible.forEach { person ->
+            Box(
+                Modifier.background(colors.BackgroundCard, CircleShape)
+                    .border(1.dp, colors.TextSecondary.copy(alpha = .30f), CircleShape).padding(2.dp)
+            ) {
+                ProfileAvatarCircle(
+                    name = person.name, colorHex = person.avatarColorHex, size = 26.dp,
+                    avatarImageUrl = pictureFor(person), imageCrossfade = false
+                )
+            }
+        }
+        if (people.size > visible.size) {
+            Text(
+                stringResource(R.string.d12_recipient_overflow, people.size - visible.size),
+                Modifier.padding(start = 10.dp),
+                color = colors.TextSecondary, style = MaterialTheme.typography.labelMedium
+            )
+        }
+    }
 }
 
 @Composable
@@ -360,6 +547,11 @@ internal fun IndicationProfileName(profile: RecommendationProfile, picture: Stri
         Text(profile.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
+@Composable
+private fun indicationFocusBorder() = ButtonDefaults.border(
+    focusedBorder = Border(BorderStroke(2.dp, NuvioTheme.colors.Secondary))
+)
 
 @Composable
 private fun indicationButtonColors(selected: Boolean = false): ButtonColors {

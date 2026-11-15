@@ -24,6 +24,20 @@ object BufferSizing {
 
     const val SMALL_BOX_CONNECTIONS = 2
     const val NATIVE_MEMORY_CONNECTIONS = 4
+    const val MAX_32_BIT_CONNECTIONS = NATIVE_MEMORY_CONNECTIONS
+    const val MAX_32_BIT_CHUNK_MB = 16
+    private const val MAX_32_BIT_BUFFER_MB = 250
+
+    internal val is64BitPlaybackProcess: Boolean by lazy {
+        runCatching { android.os.Process.is64Bit() }
+            .getOrElse { System.getProperty("os.arch")?.contains("64") == true }
+    }
+
+    internal fun effectiveConnectionCount(requested: Int): Int =
+        if (is64BitPlaybackProcess) requested else requested.coerceAtMost(MAX_32_BIT_CONNECTIONS)
+
+    internal fun playbackBufferLimitMb(requested: Int): Int =
+        if (is64BitPlaybackProcess) requested else requested.coerceAtMost(MAX_32_BIT_BUFFER_MB)
 
     // Kept free above Android's low-memory line, so the box does not start killing apps and swapping.
     const val SYSTEM_MARGIN_MB = 100

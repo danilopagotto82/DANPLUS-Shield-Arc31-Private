@@ -491,7 +491,7 @@ internal fun CalendarMetaLine(
 ) {
     val whenText = if (withWhen) calendarWhenLine(row, formats, today) else null
     val rest = listOfNotNull(
-        row.network,
+        calendarNetworkText(row),
         details?.let { calendarRuntimeText(it) },
         calendarRatingGenre(row.rating ?: details?.rating, row.genre ?: details?.genre)
     )
@@ -620,7 +620,7 @@ private fun CalendarShelfCard(
             overflow = TextOverflow.Ellipsis
         )
         val notAnnounced = stringResource(R.string.calendar_time_not_announced)
-        listOfNotNull(notAnnounced.takeIf { row.time == null && !row.isFilm }, row.network)
+        listOfNotNull(notAnnounced.takeIf { row.time == null && !row.isFilm }, calendarNetworkText(row))
             .joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
             Spacer(Modifier.height(3.dp))
             Text(

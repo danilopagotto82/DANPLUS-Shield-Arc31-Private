@@ -9,6 +9,10 @@ enum class SubtitleOutlineSize { OFF, THIN, NORMAL, MEDIUM, THICK }
 
 internal val DEFAULT_SUBTITLE_EDGE_STYLE = SubtitleEdgeStyle.DROP_SHADOW
 
+internal const val DEFAULT_SUBTITLE_SHADOW_DEPTH = 2
+internal const val MIN_SUBTITLE_SHADOW_DEPTH = 1
+internal const val MAX_SUBTITLE_SHADOW_DEPTH = 8
+
 internal const val DEFAULT_SUBTITLE_SHADOW_OPACITY = 70
 internal const val MIN_SUBTITLE_SHADOW_OPACITY = 10
 internal const val MAX_SUBTITLE_SHADOW_OPACITY = 100

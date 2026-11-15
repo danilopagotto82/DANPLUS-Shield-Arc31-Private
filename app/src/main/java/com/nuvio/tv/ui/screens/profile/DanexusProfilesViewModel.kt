@@ -19,6 +19,7 @@ import com.nuvio.tv.data.repository.MemberAccessRepository
 import com.nuvio.tv.domain.model.CosmeticEntitlement
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.UserProfile
+import com.nuvio.tv.domain.repository.MetaRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -53,6 +54,7 @@ class DanexusProfilesViewModel @Inject constructor(
     private val watched: WatchedItemsPreferences,
     private val sync: RecommendationSync,
     private val profileSync: ProfileSyncService,
+    private val metaRepository: MetaRepository,
     localAvatars: LocalProfileAvatars,
     avatarRepository: AvatarRepository,
     memberAccess: MemberAccessRepository,
@@ -258,11 +260,13 @@ class DanexusProfilesViewModel @Inject constructor(
     }
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    fun isRecipientWatched(row: ProfileRecommendation): Flow<Boolean> {
+    fun watchedRecipientCount(rows: List<ProfileRecommendation>): Flow<Int> {
         val history = profileManager.activeProfileId.flatMapLatest(watched::observeAllItems)
-        return combine(history, viewer, items) { items, profile, visible ->
-            row in visible && (row.remoteWatched ||
-                (profile?.id == row.toServerId && ProfileRecommendationRules.isWatched(items, row.contentId, row.type, row.episodeKeys)))
+        return combine(history, viewer, items) { watchedItems, profile, visible ->
+            rows.count { row ->
+                row in visible && (row.remoteWatched || (profile?.id == row.toServerId &&
+                    ProfileRecommendationRules.isWatched(watchedItems, row.contentId, row.type, row.episodeKeys)))
+            }
         }.distinctUntilChanged()
     }
 
@@ -325,6 +329,13 @@ class DanexusProfilesViewModel @Inject constructor(
         return profileManager.profiles.value.firstOrNull { it.serverProfileId == profile.id }
     }
 
+    internal fun indicationBackdrop(row: ProfileRecommendation): String? {
+        row.backdrop?.takeIf { it.isNotBlank() }?.let { return it }
+        val cached = metaRepository.getCachedMeta(row.type, row.contentId)
+        return cached?.background?.takeIf { it.isNotBlank() }
+            ?: cached?.landscapePoster?.takeIf { it.isNotBlank() }
+    }
+
     private fun RemoteRecommendation.toLocal(viewerId: String, profiles: Map<String, RecommendationProfile>): ProfileRecommendation? {
         val from = profiles[sender] ?: return null
         val to = profiles[recipient] ?: return null
@@ -332,8 +343,10 @@ class DanexusProfilesViewModel @Inject constructor(
         return ProfileRecommendation(
             key = id, from = from.index, to = to.index, contentId = mediaId, type = mediaType, title = title,
             poster = posterPath?.let { "https://image.tmdb.org/t/p/w342$it" }, createdAt = time,
-            seen = readAt != null, synopsis = synopsis, episodeKeys = episodeKeys,
-            fromServerId = sender, toServerId = recipient, remote = true, remoteWatched = watched, remoteViewerId = viewerId
+            seen = readAt != null, backdrop = backdropPath?.let { "https://image.tmdb.org/t/p/w780$it" },
+            synopsis = synopsis, episodeKeys = episodeKeys,
+            fromServerId = sender, toServerId = recipient, remote = true, remoteWatched = watched,
+            remoteViewerId = viewerId, sendId = sendId.takeIf { sender == viewerId }
         )
     }
 

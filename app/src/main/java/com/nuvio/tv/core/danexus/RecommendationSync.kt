@@ -25,6 +25,8 @@ internal data class RemoteRecommendation(
     @SerialName("media_type") val mediaType: String,
     val title: String,
     @SerialName("poster_path") val posterPath: String? = null,
+    @SerialName("backdrop_path") val backdropPath: String? = null,
+    @SerialName("send_id") val sendId: String? = null,
     val synopsis: String? = null,
     @SerialName("episode_keys") val episodeKeys: Set<String> = emptySet(),
     @SerialName("created_at") val createdAt: String,
@@ -87,12 +89,14 @@ class RecommendationSync @Inject constructor(
         val mediaType = if (row.type.equals("movie", ignoreCase = true)) "movie" else "series"
         rpc(owner, profileId, "send", buildJsonObject {
             put("request_id", row.key)
+            row.sendId?.let { put("send_id", it) }
             put("recipients", buildJsonArray { add(JsonPrimitive(recipient)) })
             put("media_id", row.contentId)
             put("media_type", mediaType)
             put("title", row.title.take(350))
             row.synopsis?.let { put("synopsis", it.take(2000)) }
-            row.poster?.let(::tmdbPosterPath)?.let { put("poster_path", it) }
+            row.poster?.let(::tmdbArtworkPath)?.let { put("poster_path", it) }
+            row.backdrop?.let(::tmdbArtworkPath)?.let { put("backdrop_path", it) }
             put("episode_keys", buildJsonArray { row.episodeKeys.forEach { add(JsonPrimitive(it)) } })
         })
     }
@@ -122,12 +126,12 @@ class RecommendationSync @Inject constructor(
     private suspend fun rpc(owner: String, profileId: String, operation: String, payload: JsonObject) =
         account.request(owner, operation, profileId, payload, proofFor(owner, profileId))
 
-    private fun tmdbPosterPath(url: String): String? =
-        TMDB_POSTER.matchEntire(url)?.groupValues?.get(1)
+    private fun tmdbArtworkPath(url: String): String? =
+        TMDB_ARTWORK.matchEntire(url)?.groupValues?.get(1)
 
     companion object {
         private const val LEGACY_BINDING_PREFS = "danplus_indications_bindings"
-        private val TMDB_POSTER = Regex("https://image\\.tmdb\\.org/t/p/[a-zA-Z0-9]+(/[a-zA-Z0-9_.-]{1,159})")
+        private val TMDB_ARTWORK = Regex("https://image\\.tmdb\\.org/t/p/[a-zA-Z0-9]+(/[a-zA-Z0-9_.-]{1,159})")
 
         internal fun forgetBinding(context: Context, profileId: Int) {
             val preferences = context.getSharedPreferences(LEGACY_BINDING_PREFS, Context.MODE_PRIVATE)

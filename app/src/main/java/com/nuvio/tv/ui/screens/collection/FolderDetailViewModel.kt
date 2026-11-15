@@ -70,6 +70,8 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import javax.inject.Inject
 
+internal data class FolderPreviewCredits(val director: String?, val cast: List<String>)
+
 data class FolderDetailUiState(
     val folder: CollectionFolder? = null,
     val collectionTitle: String = "",
@@ -163,6 +165,8 @@ class FolderDetailViewModel @Inject constructor(
     val enrichingItemId: StateFlow<String?> = _enrichingItemId.asStateFlow()
     private val _enrichedPreviews = MutableStateFlow<Map<String, MetaPreview>>(emptyMap())
     val enrichedPreviews: StateFlow<Map<String, MetaPreview>> = _enrichedPreviews.asStateFlow()
+    private val _previewCredits = MutableStateFlow<Map<Pair<String, String>, FolderPreviewCredits>>(emptyMap())
+    internal val previewCredits = _previewCredits.asStateFlow()
     private val _trailerPreviewUrls = MutableStateFlow<Map<String, String>>(emptyMap())
     val trailerPreviewUrls: StateFlow<Map<String, String>> = _trailerPreviewUrls.asStateFlow()
     private val _trailerPreviewAudioUrls = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -1317,6 +1321,17 @@ class FolderDetailViewModel @Inject constructor(
         return mapOf("genre" to genre)
     }
 
+    private fun savePreviewCredits(item: MetaPreview, directors: List<String>, actors: List<String>) {
+        val key = item.apiType to item.id
+        val director = directors.firstOrNull { it.isNotBlank() }
+        val cast = actors.filter { it.isNotBlank() }.distinct().take(3)
+        if (director == null && cast.isEmpty()) return
+        _previewCredits.update { previews ->
+            val previous = previews[key]
+            previews + (key to FolderPreviewCredits(previous?.director ?: director, previous?.cast?.takeIf { it.isNotEmpty() } ?: cast))
+        }
+    }
+
     fun onItemFocused(item: MetaPreview) {
         enrichFocusJob?.cancel()
         // Clear enriching for previous item immediately.
@@ -1398,6 +1413,9 @@ class FolderDetailViewModel @Inject constructor(
             // Apply TMDB enrichment if available.
             if (enrichment != null) {
                 val finalEnrichment = enrichment
+                if (previewOnly) {
+                    savePreviewCredits(item, finalEnrichment.director, finalEnrichment.castMembers.map { it.name })
+                }
 
                 updateItemInTabs(item.id) { merged ->
                     var result = merged
@@ -1470,6 +1488,9 @@ class FolderDetailViewModel @Inject constructor(
                 when {
                     metaResult is NetworkResult.Success -> {
                         val meta = metaResult.data
+                        if (previewOnly) {
+                            savePreviewCredits(item, meta.director, meta.castMembers.map { it.name }.ifEmpty { meta.cast })
+                        }
                         if (artworkStillMissing) {
                             // Only apply artwork — TMDB already provided the rest.
                             updateItemInTabs(item.id) { merged ->

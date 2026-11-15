@@ -878,7 +878,13 @@ fun ClassicHomeContent(
         ) { index, homeRow ->
             when (homeRow) {
                 is HomeRow.Catalog -> {
-                    val catalogRow = homeRow.row
+                    val sourceRow = homeRow.row
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val catalogRow = remember(sourceRow, context) {
+                        val limit = homeCatalogDisplayLimit(context)
+                        if (sourceRow.items.size <= limit) sourceRow
+                        else sourceRow.copy(items = sourceRow.items.take(limit), hasMore = true)
+                    }
                     val catalogKey = catalogRow.stableKey()
                     val currentItemKeys = catalogRow.stableItemKeys()
                     rowFocusedItemIndex[catalogKey]?.let { storedIdx ->

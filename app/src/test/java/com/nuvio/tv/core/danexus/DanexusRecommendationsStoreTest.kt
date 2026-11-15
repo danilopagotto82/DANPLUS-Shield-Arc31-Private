@@ -54,6 +54,7 @@ class DanexusRecommendationsStoreTest {
         assertEquals(setOf(2, 3), restored.map { it.to }.toSet())
         assertEquals(2, restored.size)
         assertEquals(2, restored.map { it.key }.toSet().size)
+        assertNotNull(restored.map { it.sendId }.distinct().single())
     }
 
     @Test fun resendingBatchReplacesOnlyMatchingRecommendations() {
@@ -79,6 +80,7 @@ class DanexusRecommendationsStoreTest {
         val pending = rows.single { it.uploadPending }
         assertEquals("server-row", rows.single { it.remote }.key)
         assertNotEquals(first.key, pending.key)
+        assertNotEquals(first.sendId, pending.sendId)
         f.store.cacheRemote(DanexusRecommendations.GUEST, "sender", listOf(remote), setOf(pending.key))
         assertEquals(listOf(remote), f.store.read())
     }
@@ -132,6 +134,7 @@ class DanexusRecommendationsStoreTest {
         val legacy = DanexusRecommendations(f.context).read().single()
         assertEquals("legacy", legacy.key)
         assertNull(legacy.backdrop)
+        assertNull(legacy.sendId)
         assertNull(legacy.synopsis)
         assertTrue(legacy.episodeKeys.isEmpty())
     }

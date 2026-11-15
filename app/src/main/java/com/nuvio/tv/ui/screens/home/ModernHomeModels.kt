@@ -158,7 +158,8 @@ data class HeroCarouselRow(
     val hasMore: Boolean = false,
     val isLoading: Boolean = false,
     val collectionHighlight: com.nuvio.tv.domain.model.CollectionHighlight? = null,
-    val collectionHighlightRgb: Int? = null
+    val collectionHighlightRgb: Int? = null,
+    val showCatalogOverflow: Boolean = false
 )
 
 @Immutable

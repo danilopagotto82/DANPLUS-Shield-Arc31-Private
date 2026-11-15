@@ -29,7 +29,8 @@ class CollectionSyncService @Inject constructor(
     private val authManager: AuthManager,
     private val collectionsDataStore: CollectionsDataStore,
     private val profileManager: ProfileManager,
-    private val syncClientIdentity: SyncClientIdentity
+    private val syncClientIdentity: SyncClientIdentity,
+    private val specialHighlightSync: SpecialHighlightSync
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -138,6 +139,7 @@ class CollectionSyncService @Inject constructor(
      * Trigger a debounced push to remote after a local change.
      */
     fun triggerPush() {
+        specialHighlightSync.refresh()
         if (isSyncingFromRemote) return
         if (!authManager.isAuthenticated) return
         pushJob?.cancel()
