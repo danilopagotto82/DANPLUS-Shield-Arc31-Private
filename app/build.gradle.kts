@@ -442,6 +442,15 @@ composeCompiler {
     stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose_stability_config.conf"))
 }
 
+if (buildingUnifiedOta) {
+    configurations.named("fullFireImplementation") {
+        extendsFrom(configurations.getByName("fullImplementation"))
+    }
+    configurations.named("fireOtaImplementation") {
+        extendsFrom(configurations.getByName("releaseImplementation"))
+    }
+}
+
 // Globally exclude stock media3 modules — replaced by local :nuvio-exoplayer-engine module
 configurations.all {
     exclude(group = "androidx.media3", module = "media3-exoplayer")
