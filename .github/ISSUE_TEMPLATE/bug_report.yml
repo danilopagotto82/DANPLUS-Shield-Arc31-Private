@@ -1,45 +1,43 @@
-name: Bug report
-description: Something in Nuvio Arc isn't working the way it should
+name: Problema no DanPlus
+description: Relate um defeito do DanPlus sem divulgar dados privados.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Nuvio Arc is a one-person hobby project. I read every issue but can't promise a reply or a fix.
-        Please don't report problems from this build to the official Nuvio GitHub or Discord.
-        I can't help with finding content, add-ons or providers, and issues that ask for or share links are closed.
-  - type: input
-    id: box
+        Descreva o defeito do DanPlus. Não compartilhe senhas, tokens, chaves, links de fontes, endereços privados ou dados pessoais.
+        Problemas do aplicativo upstream devem ser informados ao respectivo projeto de origem.
+  - type: dropdown
+    id: device
     attributes:
-      label: Your box
-      placeholder: e.g. Ugoos AM9 Pro, Fire TV Stick 4K Max, Nvidia Shield
+      label: Dispositivo
+      options:
+        - NVIDIA Shield / Android TV ARM64
+        - Fire TV ARMv7
+        - Outro Android TV / Google TV
+        - Não sei
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Nuvio Arc version
-      description: Settings > About
-      placeholder: e.g. 1.1.0-nt.8
+      label: Versão do DanPlus
+      description: Consulte as informações do aplicativo.
+      placeholder: Ex. 2.0.0
     validations:
       required: true
   - type: textarea
-    id: playing
+    id: steps
     attributes:
-      label: What kind of file and source?
-      description: The kind of source (media server, debrid, Usenet, peer-to-peer, plain link) and the picture and sound format if you know them (e.g. 4K Dolby Vision, TrueHD Atmos). Please leave out titles, file names, links and add-on addresses.
-  - type: textarea
-    id: what
-    attributes:
-      label: What happened?
+      label: Passos para reproduzir e comportamento observado
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: What did you expect?
+      label: Comportamento esperado
   - type: textarea
-    id: media
+    id: evidence
     attributes:
-      label: Screenshot or short video
-      description: If you can, drop one in here.
+      label: Capturas ou logs redigidos
+      description: Remova dados privados antes de anexar.

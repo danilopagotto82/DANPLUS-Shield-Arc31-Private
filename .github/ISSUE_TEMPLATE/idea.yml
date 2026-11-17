@@ -1,18 +1,27 @@
-name: Idea
-description: Something you'd like to see in Nuvio Arc
+name: Melhoria para o DanPlus
+description: Proponha uma melhoria ou novo recurso para o DanPlus.
 labels: [idea]
 body:
   - type: markdown
     attributes:
       value: |
-        Nuvio Arc is a one-person hobby project. I read every issue but can't promise a reply or that an idea gets built.
+        A proposta será analisada antes de entrar no roteiro. Não inclua dados privados ou credenciais.
   - type: textarea
     id: idea
     attributes:
-      label: What would you like?
+      label: O que deseja melhorar?
     validations:
       required: true
   - type: textarea
     id: why
     attributes:
-      label: Why would it help you?
+      label: Qual benefício esperado?
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Dispositivo-alvo
+      options:
+        - Shield / Android TV
+        - Fire TV
+        - Todas as variantes
+        - Não sei

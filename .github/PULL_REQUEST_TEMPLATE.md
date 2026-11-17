@@ -1,15 +1,26 @@
-## What this changes
+## O que muda no DanPlus?
 
-<!-- One or two sentences. -->
+Descreva objetivo, escopo e IDs MUD relacionados.
 
-## Why
+## Risco e área afetada
 
-<!-- The bug it fixes (link the issue if there is one) or the Idea issue it comes from. -->
+- [ ] Documentação e identidade, sem alterar runtime
+- [ ] Interface, foco ou navegação
+- [ ] Player, áudio, vídeo ou desempenho
+- [ ] Banco, Supabase, autenticação ou dados
+- [ ] Build, APK, assinatura ou atualização
 
-## How it was tested
+## Evidências
 
-<!-- Box model, what you played or clicked, and what you checked. -->
+- [ ] PRECHECK do HEAD, branch e status existente
+- [ ] DIFF revisado, sem segredos
+- [ ] Testes focados: comando/resultado
+- [ ] Build Shield/Fire: variante e resultado
+- [ ] Smoke físico: dispositivo e evidência
+- [ ] Plano de rollback para mudanças de risco
 
-## Screenshots
+Se não foi testado, registrar **NÃO TESTADO**. Nunca inserir tokens, URLs privadas, keystores ou dados pessoais.
 
-<!-- Before and after, for anything you can see. Delete this section if nothing visible changed. -->
+## Publicação
+
+Este PR não autoriza sozinho merge em main, release, OTA ou troca de URL do repositório. Essas operações seguem gates separados.
