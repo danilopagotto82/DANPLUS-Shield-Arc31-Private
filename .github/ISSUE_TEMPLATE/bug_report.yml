@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Descreva o defeito do DanPlus. Não compartilhe senhas, tokens, chaves, links de fontes, endereços privados ou dados pessoais.
-        Problemas do aplicativo upstream devem ser informados ao respectivo projeto de origem.
+        Problemas de aplicativos de origem devem ser informados ao projeto upstream (https://github.com/NuvioMedia/NuvioTV), não ao DanPlus.
   - type: dropdown
     id: device
     attributes:
@@ -19,10 +19,17 @@ body:
     validations:
       required: true
   - type: input
+    id: model
+    attributes:
+      label: Modelo exato do aparelho
+      placeholder: Ex. Shield TV Pro 2017 ou Fire TV Stick 4K Max 2ª geração
+    validations:
+      required: true
+  - type: input
     id: version
     attributes:
       label: Versão do DanPlus
-      description: Consulte as informações do aplicativo.
+      description: Veja Configurações > Sobre no DanPlus, ou as informações do aplicativo no sistema da TV.
       placeholder: Ex. 2.0.0
     validations:
       required: true
@@ -32,6 +39,11 @@ body:
       label: Passos para reproduzir e comportamento observado
     validations:
       required: true
+  - type: textarea
+    id: source_format
+    attributes:
+      label: Tipo de fonte e formato de áudio/vídeo (opcional)
+      description: Informe apenas o tipo (servidor, debrid ou link) e formatos (ex. Dolby Vision, Atmos), sem títulos, arquivos, links ou endereços privados.
   - type: textarea
     id: expected
     attributes:

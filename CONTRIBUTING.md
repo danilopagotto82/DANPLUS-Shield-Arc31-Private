@@ -10,7 +10,7 @@ Use [Issues](https://github.com/danilopagotto82/DANPLUS-Shield-Arc31-Private/iss
 
 ## Pull requests
 
-1. Trabalhe em branch isolada baseada na referência de desenvolvimento correta. Não sobrescreva main nem OTA.
+1. Para contribuições à versão atual, use como base a branch de código DanPlus 2.0: danplus/2.0-centralizacao-20261117. Não sobrescreva main nem OTA; reconfirme a base oficial antes de abrir PR.
 2. Descreva objetivo, escopo, arquivos afetados, limitações e risco.
 3. Preserve assinaturas, applicationId, chaves de preferência, conteúdos homologados e histórico.
 4. Registre os testes realmente executados. Para interface, compare fotos do aparelho real com o design aprovado.
@@ -20,4 +20,4 @@ Mudanças em player, áudio HD, autenticação, Supabase, assinatura, versionCod
 
 ## Licença e identidade
 
-**DanPlus** é a identidade do produto. Atribuições históricas e licenças de terceiros devem continuar visíveis nos locais apropriados, inclusive [GNU GPL-3.0](LICENSE).
+**DanPlus** é a identidade do produto. Atribuições históricas e licenças de terceiros devem continuar visíveis nos locais apropriados, inclusive [GNU GPL-3.0](LICENSE). Ao enviar um pull request, o contribuinte declara disponibilizar sua contribuição sob a mesma licença GPL-3.0, respeitados os direitos de terceiros.

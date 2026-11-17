@@ -91,6 +91,7 @@ AGENTS.md
 /.wrangler/
 /.env
 /.env.*
+!/.env.example
 /docs/*
 !/docs/danplus/
 status-page/
