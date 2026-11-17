@@ -1,40 +1,23 @@
-# Contributing to Nuvio Arc
+# Como contribuir com o DanPlus
 
-Thanks for wanting to help. Nuvio Arc is my hobby fork of [NuvioTV](https://github.com/NuvioMedia/NuvioTV), a test bench
-for new ideas, and it's a one-person project. That shapes how contributions work here.
+Obrigado pelo interesse no **DanPlus**. Este projeto reúne Android TV e Fire TV e integra código derivado de projetos anteriores.
 
-## Bugs and ideas
+## Reportar problema
 
-Use this repo's [Issues](https://github.com/ysosrs123/NuvioTV-Fork/issues) and pick **Bug report** or **Idea**. I read
-every issue, but it's a hobby, so I can't promise a reply or a fix.
+Use [Issues](https://github.com/danilopagotto82/DANPLUS-Shield-Arc31-Private/issues). Informe modelo do dispositivo, versão instalada, passos para reproduzir e comportamento esperado.
 
-For a bug, the most useful things are your box, the Nuvio Arc version (Settings > About), what you were playing and the
-source type, and what happened. For playback problems, a photo of Settings > Advanced > **Source & hardware** taken right
-after it happened helps a lot.
-
-Please don't report problems from Nuvio Arc to the official Nuvio GitHub or Discord. They can't help with changes they
-didn't make.
+**Privacidade:** não publique senhas, tokens, chaves de API, endereços de servidores privados, fontes, dados de outros usuários ou screenshots contendo dados pessoais.
 
 ## Pull requests
 
-Small pull requests are welcome:
+1. Para contribuições à versão atual, use como base a branch de código DanPlus 2.0: danplus/2.0-centralizacao-20261117. Não sobrescreva main nem OTA; reconfirme a base oficial antes de abrir PR.
+2. Descreva objetivo, escopo, arquivos afetados, limitações e risco.
+3. Preserve assinaturas, applicationId, chaves de preferência, conteúdos homologados e histórico.
+4. Registre os testes realmente executados. Para interface, compare fotos do aparelho real com o design aprovado.
+5. Abra PR seguindo o modelo, sem incluir dados sensíveis ou caches locais.
 
-- bug fixes, with a short note on how to reproduce the bug and how you tested the fix
-- translation fixes
+Mudanças em player, áudio HD, autenticação, Supabase, assinatura, versionCode ou OTA exigem gate de segurança e rollback próprios.
 
-For anything bigger, a new feature or a change to how something looks or works, please open an **Idea** issue first so
-we can talk about it before you put the time in.
+## Licença e identidade
 
-A few things to know:
-
-- Review can take a while, and not every pull request will be merged.
-- Keep each pull request to one change, and include before and after screenshots for anything you can see.
-- If your change would suit every Nuvio user, it's probably better sent to the
-  [official app](https://github.com/NuvioMedia/NuvioTV) instead, so everyone gets it.
-- Nuvio Arc follows the official app closely and merges its releases regularly, so changes to shared code may need
-  updating later.
-
-## Licence
-
-Nuvio Arc is GPL-3.0 like NuvioTV. By sending a pull request you agree that your change is released under the same
-licence.
+**DanPlus** é a identidade do produto. Atribuições históricas e licenças de terceiros devem continuar visíveis nos locais apropriados, inclusive [GNU GPL-3.0](LICENSE). Ao enviar um pull request, o contribuinte declara disponibilizar sua contribuição sob a mesma licença GPL-3.0, respeitados os direitos de terceiros.

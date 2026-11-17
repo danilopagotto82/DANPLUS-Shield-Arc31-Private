@@ -88,6 +88,11 @@ local-assets/supporter-profile-backgrounds/
 logs
 AGENTS.md
 /PR.md
-docs/
+/.wrangler/
+/.env
+/.env.*
+!/.env.example
+/docs/*
+!/docs/danplus/
 status-page/
 sentry.properties
