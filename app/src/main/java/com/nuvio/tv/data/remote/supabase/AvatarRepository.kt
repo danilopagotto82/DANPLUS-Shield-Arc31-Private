@@ -290,11 +290,11 @@ class AvatarRepository @Inject constructor(
             memberOnly = true
         )
 
-    private fun avatarImageUrl(storagePath: String): String {
-        if (storagePath.startsWith("http://") || storagePath.startsWith("https://")) return storagePath
-        val baseUrl = serverConfiguration.avatarPublicBaseUrl.orEmpty().trimEnd('/')
-        return if (baseUrl.isNotEmpty()) "$baseUrl/$storagePath" else storagePath
-    }
+    private fun avatarImageUrl(storagePath: String): String = avatarCatalogImageUrl(
+        storagePath = storagePath,
+        configuredBaseUrl = serverConfiguration.avatarPublicBaseUrl,
+        backendUrl = serverConfiguration.backendUrl
+    )
 
     private suspend fun cacheMemberAvatar(item: SupabaseMemberAvatarCatalogItem): File = withContext(Dispatchers.IO) {
         val imageFile = memberAvatarFile(item)

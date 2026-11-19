@@ -1,5 +1,7 @@
 # DanPlus
 
+> **DanPlus 2.0.2/1644: candidata local pré-homologação, compilada e assinada, mas ainda NÃO instalada nem publicada.** A versão pública permanece **2.0.0**. [Checklist para homologação e migração](docs/danplus/PONTE_OTA_2_0_2_PRE_HOMOLOGACAO.md).
+
 **Filmes, séries e bibliotecas na sua TV.** Projeto de aplicativo para Android TV e Fire TV, com navegação por controle remoto, perfis e reprodução a partir de fontes configuradas pelo próprio usuário.
 
 > **DanPlus** é a marca do produto. O nome técnico do repositório GitHub ainda contém referências legadas porque o aplicativo já instalado consulta esse endereço para atualizações. Uma mudança de URL exige teste e migração.

@@ -133,10 +133,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 24
         targetSdk = 36
-        versionCode = providers.gradleProperty("arcVersionCode").orNull?.toIntOrNull() ?: 1641
-        versionName = providers.gradleProperty("arcVersionName").orNull ?: "1.1.0-arc.6"
-        manifestPlaceholders["danplusLauncherLabel"] =
-            if (buildingUnifiedOta) "DanPlus 2.0" else "@string/app_name"
+        versionCode = providers.gradleProperty("arcVersionCode").orNull?.toIntOrNull() ?: 1644
+        versionName = providers.gradleProperty("arcVersionName").orNull ?: "2.0.2"
+        manifestPlaceholders["danplusLauncherLabel"] = "DanPlus"
         // Optional -PnuvioAppIdSuffix=.name installs a local test build next to the main app.
         providers.gradleProperty("nuvioAppIdSuffix").orNull?.takeIf { it.isNotBlank() }?.let {
             applicationIdSuffix = it

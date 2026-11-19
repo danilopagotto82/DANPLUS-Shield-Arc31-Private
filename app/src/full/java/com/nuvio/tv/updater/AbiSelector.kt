@@ -4,7 +4,7 @@ import android.os.Build
 import com.nuvio.tv.data.remote.dto.GitHubAssetDto
 
 internal object AbiSelector {
-    private val fireAssetName = Regex("""DaNexus-FireTV-[0-9][A-Za-z0-9.-]*-armeabi-v7a\.apk""")
+    private val fireAssetName = Regex("""(?:DaNexus|DanPlus)-FireTV-[0-9][A-Za-z0-9.-]*-armeabi-v7a\.apk""")
 
     /**
      * The device's ABIs with the kind this install runs as first, so an update keeps the APK type that is
@@ -26,12 +26,16 @@ internal object AbiSelector {
     ): GitHubAssetDto? {
         if (fireChannel) {
             if (debugBuild || "armeabi-v7a" !in supportedAbis) return null
-            return assets.singleOrNull { fireAssetName.matches(it.name) }
+            val matches = assets.filter { fireAssetName.matches(it.name) }
+            // The old name wins when both transition names are present; duplicates remain ambiguous.
+            val legacy = matches.filter { it.name.startsWith("DaNexus-") }
+            return if (legacy.isNotEmpty()) legacy.singleOrNull() else matches.singleOrNull()
         }
         val buildType = if (debugBuild) "debug" else "release"
         for (abi in supportedAbis) {
-            assets.firstOrNull { it.name == "app-full-$abi-$buildType.apk" }?.let { return it }
+            val matches = assets.filter { it.name == "app-full-$abi-$buildType.apk" }
+            if (matches.isNotEmpty()) return matches.singleOrNull()
         }
-        return assets.firstOrNull { it.name == "app-full-universal-$buildType.apk" }
+        return assets.filter { it.name == "app-full-universal-$buildType.apk" }.singleOrNull()
     }
 }

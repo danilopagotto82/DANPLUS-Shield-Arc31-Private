@@ -96,3 +96,12 @@ AGENTS.md
 !/docs/danplus/
 status-page/
 sentry.properties
+# DanPlus: signing material and machine-specific secrets (P0 GitHub)
+# Important: .gitignore does NOT remove files already tracked by Git.
+*.jks
+*.keystore
+keystore.properties
+key.properties
+signing.properties
+*.p12
+*.pfx
